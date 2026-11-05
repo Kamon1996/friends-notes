@@ -135,7 +135,7 @@ function FriendForm() {
               placeholderTextColor={colors.muted}
               style={[styles.input, { marginBottom: 14 }]}
             />
-            <DateField mode="date" label="Дата" value={d.date} onChange={(v) => updateDate(d.id, { date: v })} />
+            <DateField mode="date" label="Дата" value={d.date} noYear={!hasYear(d.date)} onChange={(v) => updateDate(d.id, { date: v })} />
             <SwitchRow label="Повторять каждый год" value={d.yearly} onChange={(v) => updateDate(d.id, { yearly: v })} />
             <Button title="Удалить дату" variant="danger" onPress={() => set('dates', f.dates.filter((x) => x.id !== d.id))} />
           </Card>

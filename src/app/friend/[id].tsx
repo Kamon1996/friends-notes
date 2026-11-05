@@ -93,7 +93,7 @@ export default function FriendScreen() {
             <View style={{ flex: 1 }}>
               <Text style={styles.title}>{d.title}</Text>
               <Text style={styles.muted}>
-                {formatDate(d.date)}
+                {formatDate(d.date, hasYear(d.date))}
                 {d.yearly ? ' · каждый год' : ''}
               </Text>
             </View>

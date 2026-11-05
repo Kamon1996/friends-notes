@@ -1,0 +1,49 @@
+/// <reference types="node" />
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+
+import { candidateToFriend, contactDateToISO, phoneKey, toCandidates, type RawContact } from '../contactsImport';
+import type { Friend } from '../types';
+
+test('даты из контактов', () => {
+  assert.equal(contactDateToISO({ year: 1995, month: 11, day: 8 }), '1995-11-08');
+  assert.equal(contactDateToISO({ month: 2, day: 29 }), '1904-02-29');
+  assert.equal(contactDateToISO({ month: 13, day: 1 }), null);
+  assert.equal(contactDateToISO({ year: 2026, month: 2, day: 30 }), null);
+  assert.equal(contactDateToISO(null), null);
+});
+
+test('номера сравниваются по последним 10 цифрам', () => {
+  assert.equal(phoneKey('+7 (999) 123-45-67'), phoneKey('8 999 1234567'));
+});
+
+const existing: Friend[] = [
+  { id: 'f', name: 'Аня', emoji: '🌸', birthday: null, phone: '+7 999 123-45-67', food: '', flowers: '', gifts: '', notes: '', dates: [], createdAt: 0 },
+];
+
+test('кандидаты: имя, дубликаты, даты, сортировка', () => {
+  const raw: RawContact[] = [
+    { id: '1', givenName: 'Дима', familyName: 'Петров', phones: [{ number: '+7 985 777-66-55' }], birthday: { year: 1993, month: 12, day: 30 },
+      dates: [{ label: '_$!<Anniversary>!$_', date: { year: 2018, month: 6, day: 15 } }, { label: 'birthday', date: { year: 1993, month: 12, day: 30 } }] },
+    { id: '2', fullName: 'Анна', phones: [{ number: '8 (999) 123-45-67' }] },
+    { id: '3', fullName: '  ', phones: [{ number: '+7 900 000-00-00' }] },
+    { id: '4', fullName: 'аня' },
+    { id: '5', fullName: 'Борис', note: ' любит джаз ' },
+    { id: '6', fullName: 'Борис' },
+  ];
+  const c = toCandidates(raw, existing);
+  assert.deepEqual(c.map((x) => x.name), ['Анна', 'аня', 'Борис', 'Дима Петров']);
+  assert.equal(c[0].duplicateOf, 'Аня'); // совпал телефон
+  assert.equal(c[1].duplicateOf, 'Аня'); // совпало имя
+  assert.equal(c[2].duplicateOf, null);
+  assert.equal(c[2].note, 'любит джаз');
+  const dima = c[3];
+  assert.equal(dima.birthday, '1993-12-30');
+  assert.deepEqual(dima.dates, [{ title: 'Годовщина', date: '2018-06-15' }]);
+
+  let n = 0;
+  const f = candidateToFriend(dima, 'id1', () => `d${++n}`);
+  assert.equal(f.phone, '+7 985 777-66-55');
+  assert.equal(f.dates[0].yearly, true);
+  assert.equal(f.dates[0].id, 'd1');
+});

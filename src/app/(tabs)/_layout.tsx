@@ -34,7 +34,18 @@ export default function TabsLayout() {
           ),
         }}
       />
-      <Tabs.Screen name="friends" options={{ title: 'Друзья', tabBarIcon: icon('👥') }} />
+      <Tabs.Screen
+        name="friends"
+        options={{
+          title: 'Друзья',
+          tabBarIcon: icon('👥'),
+          headerRight: () => (
+            <Link href="/import" style={{ fontSize: 16, fontWeight: '600', color: colors.primary, paddingHorizontal: 16 }}>
+              📇 Импорт
+            </Link>
+          ),
+        }}
+      />
       <Tabs.Screen name="reminders" options={{ title: 'Напоминания', tabBarIcon: icon('⏰') }} />
     </Tabs>
   );

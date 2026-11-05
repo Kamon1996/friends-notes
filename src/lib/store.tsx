@@ -16,6 +16,7 @@ interface Store {
   ready: boolean;
   data: AppData;
   saveFriend: (f: Friend) => void;
+  addFriends: (list: Friend[]) => void;
   deleteFriend: (id: string) => void;
   saveReminder: (r: Reminder) => void;
   deleteReminder: (id: string) => void;
@@ -66,6 +67,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const addFriends = useCallback((list: Friend[]) => {
+    setData((d) => ({ ...d, friends: [...d.friends, ...list] }));
+  }, []);
+
   const deleteFriend = useCallback((id: string) => {
     setData((d) => ({
       ...d,
@@ -102,8 +107,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ ready, data, saveFriend, deleteFriend, saveReminder, deleteReminder, toggleReminderDone, updateSettings }),
-    [ready, data, saveFriend, deleteFriend, saveReminder, deleteReminder, toggleReminderDone, updateSettings],
+    () => ({ ready, data, saveFriend, addFriends, deleteFriend, saveReminder, deleteReminder, toggleReminderDone, updateSettings }),
+    [ready, data, saveFriend, addFriends, deleteFriend, saveReminder, deleteReminder, toggleReminderDone, updateSettings],
   );
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

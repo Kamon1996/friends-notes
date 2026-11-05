@@ -1,0 +1,229 @@
+import { router } from 'expo-router';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, FlatList, Linking, Platform, Pressable, Text, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { Button, Card, Checkbox, Chip, Empty, colors, styles } from '@/components/ui';
+import { loadContacts, pickMoreContacts } from '@/lib/contacts';
+import { candidateToFriend, toCandidates, type ImportCandidate } from '@/lib/contactsImport';
+import { formatDate, hasYear } from '@/lib/dates';
+import { newId, useStore } from '@/lib/store';
+
+type State =
+  | { kind: 'loading' }
+  | { kind: 'denied'; canAskAgain: boolean }
+  | { kind: 'error'; message: string }
+  | { kind: 'ready'; candidates: ImportCandidate[]; limited: boolean; sample: boolean };
+
+type Filter = 'all' | 'birthday';
+
+export default function ImportScreen() {
+  const { data, ready, addFriends } = useStore();
+  const insets = useSafeAreaInsets();
+  const [state, setState] = useState<State>({ kind: 'loading' });
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState<Filter>('all');
+
+  const load = useCallback(async () => {
+    setState({ kind: 'loading' });
+    try {
+      const res = await loadContacts();
+      if (res.status === 'denied') {
+        setState({ kind: 'denied', canAskAgain: res.canAskAgain });
+        return;
+      }
+      const candidates = toCandidates(res.contacts, data.friends);
+      setState({ kind: 'ready', candidates, limited: res.limited, sample: res.sample });
+      // По умолчанию отмечаем новых людей, у которых указан день рождения.
+      setSelected(new Set(candidates.filter((c) => !c.duplicateOf && c.birthday).map((c) => c.key)));
+    } catch (e) {
+      setState({ kind: 'error', message: e instanceof Error ? e.message : String(e) });
+    }
+    // Дубликаты считаем по списку друзей на момент открытия экрана.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (ready) load();
+  }, [ready, load]);
+
+  const all = state.kind === 'ready' ? state.candidates : [];
+  const withBirthday = useMemo(() => all.filter((c) => c.birthday).length, [all]);
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return all.filter(
+      (c) =>
+        (filter === 'all' || c.birthday) &&
+        (!q || c.name.toLowerCase().includes(q) || c.phone.replace(/\D/g, '').includes(q.replace(/\D/g, '') || '—')),
+    );
+  }, [all, query, filter]);
+
+  const selectable = visible.filter((c) => !c.duplicateOf);
+  const allVisibleSelected = selectable.length > 0 && selectable.every((c) => selected.has(c.key));
+
+  const toggle = (key: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+
+  const toggleAllVisible = () =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const c of selectable) {
+        if (allVisibleSelected) next.delete(c.key);
+        else next.add(c.key);
+      }
+      return next;
+    });
+
+  const doImport = () => {
+    const chosen = all.filter((c) => selected.has(c.key) && !c.duplicateOf);
+    if (!chosen.length) return;
+    addFriends(chosen.map((c) => candidateToFriend(c, newId(), newId)));
+    router.back();
+  };
+
+  if (state.kind === 'loading') {
+    return (
+      <View style={[styles.screen, { alignItems: 'center', justifyContent: 'center', gap: 12 }]}>
+        <ActivityIndicator color={colors.primary} />
+        <Text style={styles.muted}>Читаю контакты…</Text>
+      </View>
+    );
+  }
+
+  if (state.kind === 'denied') {
+    return (
+      <View style={[styles.screen, styles.content]}>
+        <Empty
+          emoji="🔒"
+          title="Нет доступа к контактам"
+          text="Разреши приложению читать контакты — оно возьмёт только имена, телефоны и дни рождения. Ничего не отправляется в интернет."
+        />
+        {state.canAskAgain ? (
+          <Button title="Разрешить доступ" onPress={load} />
+        ) : (
+          <Button title="Открыть настройки" onPress={() => Linking.openSettings()} />
+        )}
+      </View>
+    );
+  }
+
+  if (state.kind === 'error') {
+    return (
+      <View style={[styles.screen, styles.content]}>
+        <Empty emoji="⚠️" title="Не получилось прочитать контакты" text={state.message} />
+        <Button title="Попробовать ещё раз" onPress={load} />
+      </View>
+    );
+  }
+
+  const count = all.filter((c) => selected.has(c.key) && !c.duplicateOf).length;
+
+  return (
+    <View style={styles.screen}>
+      <FlatList
+        data={visible}
+        keyExtractor={(c) => c.key}
+        extraData={selected}
+        contentContainerStyle={[styles.content, { paddingBottom: 110 + insets.bottom }]}
+        keyboardShouldPersistTaps="handled"
+        ListHeaderComponent={
+          <View style={{ gap: 12 }}>
+            {state.sample && (
+              <Card style={{ backgroundColor: colors.amberSoft, borderColor: colors.amberSoft }}>
+                <Text style={{ color: colors.amber, lineHeight: 20 }}>
+                  Это пример: в браузере нет доступа к телефонной книге. В приложении на телефоне здесь будут твои
+                  контакты.
+                </Text>
+              </Card>
+            )}
+            {state.limited && Platform.OS === 'ios' && (
+              <Card style={{ gap: 8 }}>
+                <Text style={styles.muted}>Приложению доступны только выбранные контакты.</Text>
+                <Button title="Выбрать ещё контакты" variant="secondary" onPress={() => pickMoreContacts().then(load)} />
+              </Card>
+            )}
+            <TextInput
+              value={query}
+              onChangeText={setQuery}
+              placeholder="🔍  Имя или телефон"
+              placeholderTextColor={colors.muted}
+              style={styles.input}
+            />
+            <View style={[styles.chips, { alignItems: 'center' }]}>
+              <Chip label={`Все · ${all.length}`} selected={filter === 'all'} onPress={() => setFilter('all')} />
+              <Chip
+                label={`🎂 С днём рождения · ${withBirthday}`}
+                selected={filter === 'birthday'}
+                onPress={() => setFilter('birthday')}
+              />
+            </View>
+            {selectable.length > 0 && (
+              <Pressable onPress={toggleAllVisible} style={[styles.row, { paddingVertical: 4, paddingHorizontal: 4 }]}>
+                <Checkbox checked={allVisibleSelected} onPress={toggleAllVisible} />
+                <Text style={styles.title}>{allVisibleSelected ? 'Снять все' : 'Выбрать все'}</Text>
+              </Pressable>
+            )}
+          </View>
+        }
+        renderItem={({ item }) => (
+          <ContactRow candidate={item} checked={selected.has(item.key)} onToggle={() => toggle(item.key)} />
+        )}
+        ListEmptyComponent={
+          <Empty
+            emoji="📇"
+            title={all.length ? 'Никого не нашлось' : 'Контактов нет'}
+            text={all.length ? 'Попробуй другой запрос или фильтр.' : 'В телефонной книге пока пусто.'}
+          />
+        }
+      />
+      <View
+        style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          bottom: 0,
+          padding: 16,
+          paddingBottom: 16 + insets.bottom,
+          backgroundColor: colors.bg,
+          borderTopWidth: 1,
+          borderTopColor: colors.border,
+        }}
+      >
+        <Button
+          title={count ? `Добавить (${count})` : 'Отметь, кого добавить'}
+          onPress={doImport}
+          style={!count && { opacity: 0.5 }}
+        />
+      </View>
+    </View>
+  );
+}
+
+function ContactRow({ candidate: c, checked, onToggle }: { candidate: ImportCandidate; checked: boolean; onToggle: () => void }) {
+  const dup = !!c.duplicateOf;
+  const details = [
+    c.birthday && `🎂 ${formatDate(c.birthday, hasYear(c.birthday))}`,
+    ...c.dates.map((d) => `📅 ${d.title}`),
+  ].filter(Boolean);
+
+  return (
+    <Pressable
+      onPress={dup ? undefined : onToggle}
+      style={({ pressed }) => [styles.card, styles.row, { paddingVertical: 12 }, dup && { opacity: 0.5 }, pressed && !dup && { opacity: 0.7 }]}
+    >
+      {dup ? <View style={{ width: 26 }} /> : <Checkbox checked={checked} onPress={onToggle} />}
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text style={styles.title}>{c.name}</Text>
+        {!!c.phone && <Text style={styles.muted}>{c.phone}</Text>}
+        {details.length > 0 && <Text style={[styles.muted, { color: colors.text }]}>{details.join('  ')}</Text>}
+        {dup && <Text style={[styles.muted, { fontSize: 13 }]}>Уже есть: {c.duplicateOf}</Text>}
+      </View>
+    </Pressable>
+  );
+}

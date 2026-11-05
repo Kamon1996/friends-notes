@@ -36,7 +36,7 @@ export function upcomingItems(data: AppData, horizonDays = 60, today: ISODate = 
     for (const d of friend.dates) {
       const date = d.yearly ? nextAnniversary(d.date, today) : d.date;
       if (date >= today && date <= limit) {
-        const years = d.yearly ? parseISODate(date).getFullYear() - parseISODate(d.date).getFullYear() : null;
+        const years = d.yearly && hasYear(d.date) ? parseISODate(date).getFullYear() - parseISODate(d.date).getFullYear() : null;
         items.push({ kind: 'date', key: `d-${d.id}`, date, friend, title: d.title, years: years || null });
       }
     }

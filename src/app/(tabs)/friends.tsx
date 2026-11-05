@@ -2,7 +2,7 @@ import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { FlatList, Pressable, Text, TextInput, View } from 'react-native';
 
-import { Empty, Fab, colors, styles } from '@/components/ui';
+import { Button, Empty, Fab, colors, styles } from '@/components/ui';
 import { formatDate, hasYear, nextAnniversary, relativeDay } from '@/lib/dates';
 import { useStore } from '@/lib/store';
 import type { Friend } from '@/lib/types';
@@ -38,7 +38,14 @@ export default function FriendsScreen() {
         renderItem={({ item }) => <FriendRow friend={item} />}
         ListEmptyComponent={
           data.friends.length === 0 ? (
-            <Empty emoji="🫂" title="Пока никого" text="Нажми «+», чтобы добавить друга, его день рождения и предпочтения." />
+            <View style={{ gap: 12 }}>
+              <Empty
+                emoji="🫂"
+                title="Пока никого"
+                text="Импортируй друзей из контактов телефона — вместе с днями рождения. Или нажми «+», чтобы добавить вручную."
+              />
+              <Button title="📇 Импорт из контактов" onPress={() => router.push('/import')} />
+            </View>
           ) : (
             <Empty emoji="🤷" title="Никого не нашлось" text="Попробуй другой запрос." />
           )
