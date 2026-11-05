@@ -24,6 +24,7 @@ export function tgToRawContact(p: TgPerson): RawContact {
     phones: phone ? [{ number: phone }] : [],
     birthday: p.birthdate ? { day: p.birthdate.day, month: p.birthdate.month, year: p.birthdate.year || undefined } : null,
     note: notes.join('\n'),
+    links: { telegramId: p.id },
   };
 }
 

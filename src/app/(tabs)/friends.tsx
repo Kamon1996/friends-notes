@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { FlatList, Pressable, Text, TextInput, View } from 'react-native';
 
+import { Avatar } from '@/components/Avatar';
 import { Button, Empty, Fab, colors, styles } from '@/components/ui';
 import { formatDate, hasYear, nextAnniversary, relativeDay } from '@/lib/dates';
 import { useStore } from '@/lib/store';
@@ -69,20 +70,19 @@ function FriendRow({ friend }: { friend: Friend }) {
       onPress={() => router.push(`/friend/${friend.id}`)}
       style={({ pressed }) => [styles.card, styles.row, pressed && { opacity: 0.7 }]}
     >
-      <View
-        style={{
-          width: 48,
-          height: 48,
-          borderRadius: 24,
-          backgroundColor: colors.primarySoft,
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <Text style={{ fontSize: 26 }}>{friend.emoji}</Text>
-      </View>
+      <Avatar friend={friend} size={48} />
       <View style={{ flex: 1, gap: 2 }}>
-        <Text style={styles.title}>{friend.name}</Text>
+        <Text style={styles.title}>
+          {friend.name}
+          {(friend.telegramId || friend.whatsapp || friend.viber) && (
+            <Text style={{ fontSize: 13 }}>
+              {'  '}
+              {friend.telegramId ? '✈️' : ''}
+              {friend.whatsapp ? '💬' : ''}
+              {friend.viber ? '🟣' : ''}
+            </Text>
+          )}
+        </Text>
         {next && friend.birthday && (
           <Text style={styles.muted}>
             🎂 {formatDate(friend.birthday, hasYear(friend.birthday))} · {relativeDay(next)}

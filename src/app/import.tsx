@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Linking, Platform, Pressable, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { Avatar } from '@/components/Avatar';
 import { Button, Card, Checkbox, Chip, Empty, colors, styles } from '@/components/ui';
 import { loadContacts, pickMoreContacts } from '@/lib/contacts';
 import { candidateToFriend, toCandidates, type ImportCandidate } from '@/lib/contactsImport';
@@ -253,6 +254,9 @@ function ContactRow({ candidate: c, checked, onToggle }: { candidate: ImportCand
   const details = [
     c.birthday && `🎂 ${formatDate(c.birthday, hasYear(c.birthday))}`,
     ...c.dates.map((d) => `📅 ${d.title}`),
+    c.links.telegramId && '✈️',
+    c.links.whatsapp && '💬',
+    c.links.viber && '🟣',
   ].filter(Boolean);
 
   return (
@@ -261,6 +265,7 @@ function ContactRow({ candidate: c, checked, onToggle }: { candidate: ImportCand
       style={({ pressed }) => [styles.card, styles.row, { paddingVertical: 12 }, dup && { opacity: 0.5 }, pressed && !dup && { opacity: 0.7 }]}
     >
       {dup ? <View style={{ width: 26 }} /> : <Checkbox checked={checked} onPress={onToggle} />}
+      {c.photoUri && <Avatar friend={{ emoji: '🙂', photoUri: c.photoUri }} size={36} />}
       <View style={{ flex: 1, gap: 2 }}>
         <Text style={styles.title}>{c.name}</Text>
         {!!c.phone && <Text style={styles.muted}>{c.phone}</Text>}

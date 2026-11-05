@@ -5,10 +5,25 @@ import { Alert, Linking, Platform, ScrollView, Text } from 'react-native';
 import { DateField } from '@/components/DateField';
 import { Button, Card, SectionTitle, SwitchRow, colors, styles } from '@/components/ui';
 import { notificationsAllowed, sendTestNotification, setupNotifications } from '@/lib/notifications';
+import { loadEnrichment } from '@/lib/contacts';
+import { applyEnrichment } from '@/lib/enrich';
 import { useStore } from '@/lib/store';
 
 export default function SettingsScreen() {
-  const { data, updateSettings } = useStore();
+  const { data, updateSettings, updateFriends } = useStore();
+  const [enrichStatus, setEnrichStatus] = useState<string | null>(null);
+
+  const enrich = async () => {
+    setEnrichStatus('…');
+    try {
+      const map = await loadEnrichment();
+      const { friends, changed } = applyEnrichment(data.friends, map);
+      if (changed) updateFriends((f) => friends.find((x) => x.id === f.id) ?? f);
+      setEnrichStatus(changed ? `Обновлено друзей: ${changed}` : 'Ничего нового не нашлось');
+    } catch (e) {
+      setEnrichStatus(e instanceof Error ? e.message : String(e));
+    }
+  };
   const [allowed, setAllowed] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -63,6 +78,20 @@ export default function SettingsScreen() {
           onChange={(v) => updateSettings({ eventDayBefore: v })}
         />
       </Card>
+
+      {Platform.OS === 'android' && (
+        <>
+          <SectionTitle>Друзья</SectionTitle>
+          <Card style={{ gap: 10 }}>
+            <Text style={[styles.muted, { lineHeight: 20 }]}>
+              Найти в контактах телефона Telegram, WhatsApp, Viber и фото для уже добавленных друзей (по номеру
+              телефона).
+            </Text>
+            <Button title={enrichStatus === '…' ? 'Ищу…' : '🔄 Подтянуть мессенджеры и фото'} variant="secondary" onPress={enrich} />
+            {enrichStatus && enrichStatus !== '…' && <Text style={styles.muted}>{enrichStatus}</Text>}
+          </Card>
+        </>
+      )}
 
       <SectionTitle>Для разработки</SectionTitle>
       <Button

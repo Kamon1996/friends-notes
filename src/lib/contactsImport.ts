@@ -1,5 +1,8 @@
 import { UNKNOWN_YEAR } from './dates';
+import { isServiceNumber, phoneKey, type Links } from './messengers';
 import type { Friend, ISODate } from './types';
+
+export { phoneKey };
 
 /** Контакт из телефонной книги — только то, что нам нужно. */
 export interface RawContact {
@@ -11,6 +14,13 @@ export interface RawContact {
   birthday?: { year?: number | null; month: number; day: number } | null;
   dates?: { label?: string | null; date?: { year?: number | null; month: number; day: number } | null }[] | null;
   note?: string | null;
+  /** Нормализованные номера (+375…) из телефонной книги Android. */
+  normalizedPhones?: string[];
+  /** Мессенджеры, в которых есть человек. */
+  links?: Links;
+  photoUri?: string | null;
+  /** Это ты сам (своя запись Telegram в телефонной книге). */
+  isSelf?: boolean;
 }
 
 type LooseDate = { year?: number; month: number; day: number };
@@ -86,6 +96,8 @@ export interface ImportCandidate {
   note: string;
   /** Имя друга, который уже есть в приложении (по имени или телефону). */
   duplicateOf: string | null;
+  links: Links;
+  photoUri: string | null;
 }
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -115,28 +127,37 @@ function dateTitle(label: string | null | undefined): string {
   return known ?? raw.charAt(0).toUpperCase() + raw.slice(1);
 }
 
-/** Последние 10 цифр номера — чтобы +7 999… и 8 999… считались одним номером. */
-export function phoneKey(phone: string): string {
-  return phone.replace(/\D/g, '').slice(-10);
-}
-
 const nameKey = (name: string) => name.trim().toLowerCase().replace(/\s+/g, ' ');
+
+const hasLetters = (s: string) => /\p{L}/u.test(s);
+
+/** Номера контакта без служебных; нормализованные (+375…) — в приоритете. */
+function personPhones(c: RawContact): { valid: string[]; hadAny: boolean } {
+  const all = [...(c.normalizedPhones ?? []), ...(c.phones ?? []).map((p) => p.number?.trim() ?? '')].filter(Boolean);
+  return { valid: all.filter((p) => !isServiceNumber(p)), hadAny: all.length > 0 };
+}
 
 export function toCandidates(raw: RawContact[], friends: Friend[]): ImportCandidate[] {
   const byName = new Map(friends.map((f) => [nameKey(f.name), f.name]));
   const byPhone = new Map(friends.filter((f) => phoneKey(f.phone).length >= 7).map((f) => [phoneKey(f.phone), f.name]));
   const seen = new Set<string>();
   const out: ImportCandidate[] = [];
+  const byPhoneIndex = new Map<string, ImportCandidate>();
   const contactName = (c: RawContact) => (c.fullName || [c.givenName, c.familyName].filter(Boolean).join(' ')).trim();
-  const hasPhone = (c: RawContact) => (c.phones ?? []).some((p) => p.number?.trim());
+  const hasPhone = (c: RawContact) => personPhones(c).valid.length > 0;
   // Мессенджеры добавляют в книгу свои копии людей без номера. Если тот же человек есть с номером — копию пропускаем.
   const namesWithPhone = new Set(raw.filter(hasPhone).map((c) => nameKey(contactName(c))));
 
   for (const c of raw) {
-    if (!hasPhone(c) && namesWithPhone.has(nameKey(contactName(c)))) continue;
-    const name = (c.fullName || [c.givenName, c.familyName].filter(Boolean).join(' ')).trim();
+    if (c.isSelf) continue;
+    const { valid, hadAny } = personPhones(c);
+    // Только служебные номера («Баланс *100#», «Скорая 101») — это не человек.
+    if (hadAny && !valid.length) continue;
+    if (!valid.length && namesWithPhone.has(nameKey(contactName(c)))) continue;
+    const name = contactName(c);
     if (!name) continue;
-    const phone = (c.phones ?? []).map((p) => p.number?.trim() ?? '').find(Boolean) ?? '';
+    if (!hasLetters(name) && !valid.length) continue;
+    const phone = valid[0] ?? '';
     // На Android день рождения приходит как дата с меткой «birthday».
     const birthdayDate = c.birthday ?? (c.dates ?? []).find((d) => isBirthdayLabel(d.label))?.date;
     const birthday = contactDateToISO(birthdayDate);
@@ -151,12 +172,27 @@ export function toCandidates(raw: RawContact[], friends: Friend[]): ImportCandid
     seen.add(dedupe);
 
     const pk = phoneKey(phone);
+    const links = c.links ?? {};
+    const photoUri = c.photoUri ?? null;
+
+    // Тот же номер уже встречался (копия из Google/Telegram/WhatsApp) — дополняем первую запись.
+    const same = pk.length >= 7 ? byPhoneIndex.get(pk) : undefined;
+    if (same) {
+      same.links = { ...links, ...same.links };
+      same.photoUri = same.photoUri ?? photoUri;
+      same.birthday = same.birthday ?? birthday;
+      if (!hasLetters(same.name) && hasLetters(name)) same.name = name;
+      continue;
+    }
+
     const duplicateOf = byName.get(nameKey(name)) ?? (pk.length >= 7 ? byPhone.get(pk) : undefined) ?? null;
-    out.push({ key: c.id, name, phone, birthday, dates, note: c.note?.trim() ?? '', duplicateOf });
+    const candidate: ImportCandidate = { key: c.id, name, phone, birthday, dates, note: c.note?.trim() ?? '', duplicateOf, links, photoUri };
+    if (pk.length >= 7) byPhoneIndex.set(pk, candidate);
+    out.push(candidate);
   }
 
   // Контакты без имени (вместо имени номер) — в конец списка.
-  const noName = (c: ImportCandidate) => !/\p{L}/u.test(c.name);
+  const noName = (c: ImportCandidate) => !hasLetters(c.name);
   return out.sort((a, b) => Number(noName(a)) - Number(noName(b)) || a.name.localeCompare(b.name, 'ru'));
 }
 
@@ -177,5 +213,9 @@ export function candidateToFriend(c: ImportCandidate, id: string, idFor: () => s
     notes: c.note,
     dates: c.dates.map((d) => ({ id: idFor(), title: d.title, date: d.date, yearly: true })),
     createdAt: Date.now(),
+    telegramId: c.links.telegramId ?? null,
+    whatsapp: c.links.whatsapp ?? null,
+    viber: c.links.viber ?? null,
+    photoUri: c.photoUri,
   };
 }

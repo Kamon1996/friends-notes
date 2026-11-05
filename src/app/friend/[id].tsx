@@ -1,6 +1,8 @@
 import { Stack, router, useLocalSearchParams } from 'expo-router';
-import { Linking, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { Platform, Pressable, ScrollView, Text, View } from 'react-native';
 
+import { Avatar } from '@/components/Avatar';
+import { ContactButtons } from '@/components/ContactButtons';
 import { ReminderRow } from '@/components/ReminderRow';
 import { Button, Card, Empty, SectionTitle, colors, styles } from '@/components/ui';
 import { ageOn, formatDate, hasYear, nextAnniversary, plural, relativeDay, todayISO } from '@/lib/dates';
@@ -41,25 +43,15 @@ export default function FriendScreen() {
         }}
       />
 
-      <View style={{ alignItems: 'center', gap: 6, marginBottom: 8 }}>
-        <View
-          style={{
-            width: 96,
-            height: 96,
-            borderRadius: 48,
-            backgroundColor: colors.primarySoft,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Text style={{ fontSize: 52 }}>{friend.emoji}</Text>
-        </View>
-        <Text style={{ fontSize: 24, fontWeight: '800', color: colors.text }}>{friend.name}</Text>
+      <View style={{ alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <Avatar friend={friend} size={96} />
+        <Text style={{ fontSize: 24, fontWeight: '800', color: colors.text, textAlign: 'center' }}>{friend.name}</Text>
         {friend.phone ? (
-          <Pressable onPress={() => Linking.openURL(`tel:${friend.phone.replace(/[^\d+]/g, '')}`)}>
-            <Text style={{ color: colors.blue, fontSize: 16 }}>📞 {friend.phone}</Text>
-          </Pressable>
+          <Text style={{ color: colors.muted, fontSize: 15 }} selectable>
+            {friend.phone}
+          </Text>
         ) : null}
+        <ContactButtons friend={friend} />
       </View>
 
       {friend.birthday && nextBirthday && (

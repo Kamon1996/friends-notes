@@ -19,9 +19,27 @@ export interface RawDump {
   items: RawDumpItem[];
 }
 
+/** Строка таблицы data нужного типа с привязкой к склеенному контакту и аккаунту. */
+export interface DataRow {
+  contactId: string;
+  mimetype: string;
+  data1: string;
+  data4: string;
+  accountName: string;
+  sync1: string;
+}
+
+export interface ContactPhoto {
+  contactId: string;
+  photoUri: string;
+  thumbUri: string;
+}
+
 interface NativeContactsRaw {
   getAccounts(): Promise<RawAccount[]>;
   dump(accountType: string | null, limit: number): Promise<RawDump>;
+  dataRows(mimetypes: string[]): Promise<DataRow[]>;
+  contactPhotos(): Promise<ContactPhoto[]>;
 }
 
 /** Есть только в собранном Android-приложении (не в Expo Go, не на iOS и не в браузере). */
@@ -37,4 +55,14 @@ export function getAccounts(): Promise<RawAccount[]> {
 export function dumpAccount(accountType: string | null, limit = 300): Promise<RawDump> {
   if (!native) return Promise.reject(new Error('Модуль ContactsRaw недоступен на этой платформе'));
   return native.dump(accountType, limit);
+}
+
+export function dataRows(mimetypes: string[]): Promise<DataRow[]> {
+  if (!native) return Promise.reject(new Error('Модуль ContactsRaw недоступен на этой платформе'));
+  return native.dataRows(mimetypes);
+}
+
+export function contactPhotos(): Promise<ContactPhoto[]> {
+  if (!native) return Promise.reject(new Error('Модуль ContactsRaw недоступен на этой платформе'));
+  return native.contactPhotos();
 }

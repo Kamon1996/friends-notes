@@ -2,6 +2,7 @@ package expo.modules.contactsraw
 
 import android.content.ContentResolver
 import android.database.Cursor
+import android.provider.ContactsContract.Contacts
 import android.provider.ContactsContract.Data
 import android.provider.ContactsContract.RawContacts
 import expo.modules.kotlin.exception.Exceptions
@@ -119,6 +120,71 @@ class ContactsRawModule : Module() {
         mapOf("raw" to raw, "data" to (dataByRaw[id] ?: emptyList<Map<String, Any>>()))
       }
       mapOf("accountType" to (accountType ?: "*"), "total" to total, "items" to items)
+    }
+
+    /**
+     * Строки данных нужных типов (телефоны, профили Telegram/WhatsApp/Viber) с привязкой
+     * к склеенному контакту и аккаунту, из которого они пришли.
+     */
+    AsyncFunction("dataRows") { mimetypes: List<String> ->
+      val accounts = HashMap<Long, Pair<String, String>>()
+      resolver.query(
+        RawContacts.CONTENT_URI,
+        arrayOf(RawContacts._ID, RawContacts.ACCOUNT_NAME, RawContacts.SYNC1),
+        "${RawContacts.DELETED} = 0",
+        null,
+        null
+      )?.use { c ->
+        while (c.moveToNext()) {
+          accounts[c.getLong(0)] = Pair(c.getString(1) ?: "", c.getString(2) ?: "")
+        }
+      }
+
+      val rows = ArrayList<Map<String, String>>()
+      if (mimetypes.isEmpty()) return@AsyncFunction rows
+      val placeholders = mimetypes.joinToString(",") { "?" }
+      resolver.query(
+        Data.CONTENT_URI,
+        arrayOf(Data.CONTACT_ID, Data.RAW_CONTACT_ID, Data.MIMETYPE, Data.DATA1, Data.DATA4),
+        "${Data.MIMETYPE} IN ($placeholders)",
+        mimetypes.toTypedArray(),
+        null
+      )?.use { c ->
+        while (c.moveToNext()) {
+          val account = accounts[c.getLong(1)]
+          rows.add(
+            mapOf(
+              "contactId" to c.getLong(0).toString(),
+              "mimetype" to (c.getString(2) ?: ""),
+              "data1" to (c.getString(3) ?: ""),
+              "data4" to (c.getString(4) ?: ""),
+              "accountName" to (account?.first ?: ""),
+              "sync1" to (account?.second ?: "")
+            )
+          )
+        }
+      }
+      rows
+    }
+
+    /** Фото склеенных контактов: content:// ссылки на полноразмерное фото и миниатюру. */
+    AsyncFunction("contactPhotos") {
+      val photos = ArrayList<Map<String, String>>()
+      resolver.query(
+        Contacts.CONTENT_URI,
+        arrayOf(Contacts._ID, Contacts.PHOTO_URI, Contacts.PHOTO_THUMBNAIL_URI),
+        "${Contacts.PHOTO_URI} IS NOT NULL",
+        null,
+        null
+      )?.use { c ->
+        while (c.moveToNext()) {
+          val uri = c.getString(1)
+          if (uri != null) {
+            photos.add(mapOf("contactId" to c.getLong(0).toString(), "photoUri" to uri, "thumbUri" to (c.getString(2) ?: uri)))
+          }
+        }
+      }
+      photos
     }
   }
 

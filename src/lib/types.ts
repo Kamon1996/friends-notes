@@ -23,6 +23,14 @@ export interface Friend {
   notes: string;
   dates: ImportantDate[];
   createdAt: number;
+  /** ID пользователя Telegram — для кнопки «Написать в Telegram». */
+  telegramId?: number | null;
+  /** Номер WhatsApp (цифры в международном формате). */
+  whatsapp?: string | null;
+  /** Номер Viber (цифры в международном формате). */
+  viber?: string | null;
+  /** Фото из контактов телефона (content://…). */
+  photoUri?: string | null;
 }
 
 export type RepeatUnit = 'day' | 'week' | 'month' | 'year';

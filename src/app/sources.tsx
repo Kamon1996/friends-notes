@@ -4,7 +4,7 @@ import { ActivityIndicator, Platform, Pressable, ScrollView, Share, Text, View }
 
 import { Button, Card, SectionTitle, colors, styles } from '@/components/ui';
 import { contactsRawAvailable, dumpAccount, getAccounts, type RawAccount, type RawDump } from '../../modules/contacts-raw';
-import { SOURCES, accountsFor, formatDump, mimeStats, otherAccounts, type SourceDef } from '@/lib/sources';
+import { SOURCES, accountsFor, filterDumpsByMime, formatDump, mimeStats, otherAccounts, type SourceDef } from '@/lib/sources';
 import { plural } from '@/lib/dates';
 import { SAMPLE_ACCOUNTS, SAMPLE_DUMPS } from '@/lib/sourcesSample';
 
@@ -63,12 +63,13 @@ export default function SourcesScreen() {
     if (contactsRawAvailable || isSample) init();
   }, [init]);
 
-  const open = async (title: string, list: RawAccount[]) => {
+  const open = async (title: string, list: RawAccount[], mime?: RegExp) => {
     setBusy(title);
     setResult(null);
     try {
       const types = [...new Set(list.map((a) => a.accountType))];
-      const dumps = await Promise.all(types.map(loadDump));
+      let dumps = await Promise.all(types.map(loadDump));
+      if (mime) dumps = filterDumpsByMime(dumps, mime);
       setResult({ title, dumps, text: formatDump(title, dumps) });
     } catch (e) {
       setResult({ title, dumps: [], text: `Ошибка: ${e instanceof Error ? e.message : String(e)}` });
@@ -92,13 +93,15 @@ export default function SourcesScreen() {
   }
 
   const sourceButton = (s: SourceDef) => {
-    const found = accounts ? accountsFor(s, accounts) : [];
+    // Источник без своего аккаунта (Viber) ищем по типам данных во всех аккаунтах.
+    const byMime = !!s.mime && !!accounts?.length && !(accounts && accountsFor(s, accounts).length);
+    const found = accounts ? (byMime ? accounts : accountsFor(s, accounts)) : [];
     const count = found.reduce((n, a) => n + a.rawContacts, 0);
     return (
       <Pressable
         key={s.key}
         disabled={!found.length || !!busy}
-        onPress={() => open(s.title, found)}
+        onPress={() => open(s.title, found, s.mime)}
         style={({ pressed }) => [
           styles.card,
           styles.row,
@@ -111,7 +114,11 @@ export default function SourcesScreen() {
         <View style={{ flex: 1, gap: 2 }}>
           <Text style={styles.title}>{s.title}</Text>
           <Text style={styles.muted}>
-            {found.length ? `${count} ${plural(count, 'запись', 'записи', 'записей')} · ${found.map((a) => a.accountType || 'без аккаунта').join(', ')}` : 'не найдено на телефоне'}
+            {byMime
+              ? 'своего аккаунта нет — ищу его записи во всех контактах'
+              : found.length
+                ? `${count} ${plural(count, 'запись', 'записи', 'записей')} · ${found.map((a) => a.accountType || 'без аккаунта').join(', ')}`
+                : 'не найдено на телефоне'}
           </Text>
           {!found.length && s.note && <Text style={[styles.muted, { fontSize: 12 }]}>{s.note}</Text>}
         </View>

@@ -6,6 +6,11 @@ export interface SourceDef {
   emoji: string;
   /** Какие типы аккаунтов Android относятся к источнику. */
   match: (accountType: string) => boolean;
+  /**
+   * Приложение не заводит свой аккаунт, а дописывает строки в чужие контакты (так делает Viber):
+   * ищем записи с такими типами данных во всех аккаунтах.
+   */
+  mime?: RegExp;
   note?: string;
 }
 
@@ -19,7 +24,7 @@ export const SOURCES: SourceDef[] = [
   { key: 'google', title: 'Google', emoji: '🔵', match: (t) => t === 'com.google' },
   { key: 'telegram', title: 'Telegram', emoji: '✈️', match: (t) => /telegram|challegram/i.test(t) },
   { key: 'whatsapp', title: 'WhatsApp', emoji: '💬', match: (t) => /whatsapp/i.test(t) },
-  { key: 'viber', title: 'Viber', emoji: '💜', match: (t) => /viber/i.test(t) },
+  { key: 'viber', title: 'Viber', emoji: '💜', match: (t) => /viber/i.test(t), mime: /viber/i },
   { key: 'vk', title: 'ВКонтакте', emoji: '🟦', match: (t) => /vkontakte|^com\.vk\b|^com\.vk\./i.test(t) },
   { key: 'signal', title: 'Signal', emoji: '🔷', match: (t) => /thoughtcrime|signal/i.test(t) },
   {
@@ -72,4 +77,14 @@ export function formatDump(title: string, dumps: RawDump[]): string {
     for (const d of it.data) lines.push(`  - ${shortMime(d.mimetype)}: ${fmtFields(d, ['mimetype'])}`);
   });
   return lines.join('\n');
+}
+
+/** Оставляет только контакты, в которых есть строки с подходящим типом данных. */
+export function filterDumpsByMime(dumps: RawDump[], re: RegExp): RawDump[] {
+  return dumps
+    .map((d) => {
+      const items = d.items.filter((it) => it.data.some((row) => re.test(String(row.mimetype ?? ''))));
+      return { ...d, total: items.length, items };
+    })
+    .filter((d) => d.items.length > 0);
 }

@@ -13,8 +13,10 @@ test('даты из контактов', () => {
   assert.equal(contactDateToISO(null), null);
 });
 
-test('номера сравниваются по последним 10 цифрам', () => {
+test('номера сравниваются по номеру абонента', () => {
   assert.equal(phoneKey('+7 (999) 123-45-67'), phoneKey('8 999 1234567'));
+  assert.equal(phoneKey('+375 29 111-22-33'), phoneKey('80 29 111-22-33'));
+  assert.equal(phoneKey('+380 95 111 22 33'), phoneKey('095 111 22 33'));
 });
 
 const existing: Friend[] = [
