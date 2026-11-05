@@ -25,6 +25,8 @@ export function TelegramBanner() {
   } else if (tg.resultReady) {
     text = `Контакты Telegram загружены (${tg.imp.done}) · Выбрать`;
     target = () => router.push({ pathname: '/import', params: { source: 'telegram' } });
+  } else if (tg.auth.state === 'waitOtherDeviceConfirmation') {
+    text = 'Telegram: покажи QR-код другому устройству · Открыть';
   } else if (tg.signingIn && tg.auth.state !== 'starting') {
     text = 'Вход в Telegram ждёт тебя · Открыть';
   }

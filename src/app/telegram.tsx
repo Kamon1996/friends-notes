@@ -2,6 +2,7 @@ import { Stack, router } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 
+import { QrCode } from '@/components/QrCode';
 import { Button, Card, Field, SectionTitle, colors, styles } from '@/components/ui';
 import { telegramAvailable, telegramConfigured } from '@/lib/telegramClient';
 import { tgErrorText } from '@/lib/telegramImport';
@@ -15,7 +16,6 @@ const UNSUPPORTED: Record<string, string> = {
   waitEmailAddress: 'Telegram просит привязать почту ко входу. Сделай это в самом Telegram и попробуй снова.',
   waitEmailCode: 'Telegram прислал код на почту. Такой вход пока не поддерживается — войди через код из Telegram или SMS.',
   waitRegistration: 'На этот номер нет аккаунта Telegram.',
-  waitOtherDeviceConfirmation: 'Telegram просит подтвердить вход на другом устройстве. Попробуй ещё раз позже.',
   waitPremiumPurchase: 'Telegram требует Premium для входа с этого номера.',
 };
 
@@ -159,16 +159,40 @@ export default function TelegramImportScreen() {
           )}
 
           {s === 'waitPhoneNumber' && (
-            <Card>
-              <Field
-                label="Номер телефона, привязанный к Telegram"
-                value={phone}
-                onChangeText={(v) => setPhone('+' + v.replace(/[^\d]/g, ''))}
-                keyboardType="phone-pad"
-                autoFocus
-                placeholder="+7 999 123 45 67"
-              />
-              <Button title={busy ? 'Отправляю…' : 'Получить код'} onPress={() => run(() => Telegram!.setPhoneNumber(phone))} />
+            <>
+              <Card>
+                <Field
+                  label="Номер телефона, привязанный к Telegram"
+                  value={phone}
+                  onChangeText={(v) => setPhone('+' + v.replace(/[^\d]/g, ''))}
+                  keyboardType="phone-pad"
+                  autoFocus
+                  placeholder="+7 999 123 45 67"
+                />
+                <Button title={busy ? 'Отправляю…' : 'Получить код'} onPress={() => run(() => Telegram!.setPhoneNumber(phone))} />
+              </Card>
+              <Card style={{ gap: 8 }}>
+                <Text style={styles.title}>📷 Или QR-код — без ввода кода и пароля</Text>
+                <Text style={[styles.muted, { lineHeight: 20 }]}>
+                  Если есть второй телефон или планшет, где ты уже вошёл в Telegram: покажи QR-код здесь и отсканируй его
+                  там. Подтверждение происходит в твоём Telegram, ничего вводить в это приложение не нужно. На этом же
+                  телефоне QR отсканировать нельзя — Telegram так не умеет.
+                </Text>
+                <Button title={busy ? 'Готовлю QR-код…' : 'Показать QR-код'} variant="secondary" onPress={() => run(() => Telegram!.requestQrCode())} />
+              </Card>
+            </>
+          )}
+
+          {s === 'waitOtherDeviceConfirmation' && (
+            <Card style={{ gap: 12, alignItems: 'center' }}>
+              {auth.link ? <QrCode value={auth.link} size={240} /> : <ActivityIndicator color={colors.primary} />}
+              <View style={{ gap: 6, alignSelf: 'stretch' }}>
+                <Line icon="1️⃣">На втором телефоне или планшете открой Telegram → Настройки → Устройства.</Line>
+                <Line icon="2️⃣">Нажми «Подключить устройство» (сканировать QR) и наведи камеру на этот код.</Line>
+                <Line icon="3️⃣">{`Telegram покажет вход «${SESSION_NAME}» — подтверди его. Если включён облачный пароль, его попросят здесь.`}</Line>
+              </View>
+              <Text style={[styles.muted, { alignSelf: 'stretch' }]}>Код обновляется сам каждые ~30 секунд, так что просто держи экран открытым.</Text>
+              <Button title="Ввести номер вместо этого" variant="secondary" onPress={() => run(tg.restart)} style={{ alignSelf: 'stretch' }} />
             </Card>
           )}
 
@@ -239,6 +263,7 @@ export default function TelegramImportScreen() {
           Не читает: сообщения, чаты и группы, файлы и фото из переписок. Таких функций в приложении нет — даже по ошибке их не вызвать.
         </Line>
         <Line icon="🔒">Сразу после загрузки выходит из аккаунта. Своего сервера нет — всё остаётся на этом телефоне.</Line>
+        <Line icon="📷">Войти можно по номеру с кодом или по QR-коду со второго устройства — тогда код и пароль в это приложение вводить не нужно.</Line>
         <Line icon="👀">{`В Telegram → Настройки → Устройства вход виден как «${SESSION_NAME}» и пропадёт после выхода.`}</Line>
         <Pressable onPress={() => Linking.openURL(SOURCE_URL).catch(() => {})} hitSlop={6}>
           <Text style={{ color: colors.blue }}>Исходный код модуля Telegram →</Text>

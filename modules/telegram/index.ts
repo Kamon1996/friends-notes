@@ -3,6 +3,8 @@ import { requireOptionalNativeModule, type EventSubscription } from 'expo';
 /** Состояние авторизации TDLib: waitPhoneNumber, waitCode, waitPassword, ready, loggingOut, closed… */
 export interface TgAuthState {
   state: string;
+  /** waitOtherDeviceConfirmation: ссылка tg://login?token=… для QR-кода; обновляется каждые ~30 с. */
+  link?: string;
   codeType?: string;
   phone?: string;
   passwordHint?: string;
@@ -46,6 +48,8 @@ interface NativeTelegram {
   getState(): TgAuthState;
   getImportState(): TgImportState;
   start(apiId: number, apiHash: string, appVersion: string): Promise<TgAuthState>;
+  /** Вход по QR-коду (сканируется другим устройством с Telegram). Работает из состояния waitPhoneNumber. */
+  requestQrCode(): Promise<boolean>;
   setPhoneNumber(phone: string): Promise<boolean>;
   checkCode(code: string): Promise<boolean>;
   checkPassword(password: string): Promise<boolean>;

@@ -116,6 +116,11 @@ class TelegramModule : Module() {
       }
     }
 
+    /** Вход по QR-коду: TDLib пришлёт состояние waitOtherDeviceConfirmation со ссылкой tg://login?token=… */
+    AsyncFunction("requestQrCode") { promise: Promise ->
+      send(TdApi.RequestQrCodeAuthentication(LongArray(0)), promise)
+    }
+
     AsyncFunction("setPhoneNumber") { phone: String, promise: Promise ->
       send(TdApi.SetAuthenticationPhoneNumber(phone, null), promise)
     }
@@ -483,6 +488,7 @@ class TelegramModule : Module() {
     when (st) {
       is TdApi.AuthorizationStateWaitPhoneNumber -> context?.let { TelegramImportService.show(it, "Вход в Telegram: введите номер в приложении «Друзья»", null) }
       is TdApi.AuthorizationStateWaitCode -> context?.let { TelegramImportService.show(it, "Вход в Telegram: введите код в приложении «Друзья»", null) }
+      is TdApi.AuthorizationStateWaitOtherDeviceConfirmation -> context?.let { TelegramImportService.show(it, "Вход в Telegram: отсканируйте QR-код другим устройством", null) }
       is TdApi.AuthorizationStateWaitPassword -> context?.let { TelegramImportService.show(it, "Вход в Telegram: введите облачный пароль", null) }
       is TdApi.AuthorizationStateReady -> {
         // Вход выполнен — сразу загружаем контакты (или выходим, если пользователь уже отменил).
@@ -508,6 +514,7 @@ class TelegramModule : Module() {
         info["phone"] = st.codeInfo?.phoneNumber
       }
       is TdApi.AuthorizationStateWaitPassword -> info["passwordHint"] = st.passwordHint
+      is TdApi.AuthorizationStateWaitOtherDeviceConfirmation -> info["link"] = st.link
       else -> {}
     }
     emitState(info)

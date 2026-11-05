@@ -15,13 +15,15 @@ interface TelegramSession {
   resultReady: boolean;
   begin: () => Promise<void>;
   cancel: () => Promise<void>;
+  /** Начать вход заново (например, сменить QR-код на номер — TDLib не умеет переключаться без перезапуска). */
+  restart: () => Promise<void>;
   /** Забыть загруженные контакты (после выбора). */
   clearResult: () => Promise<void>;
 }
 
 const Ctx = createContext<TelegramSession | null>(null);
 
-const SIGN_IN_STATES = new Set(['starting', 'waitTdlibParameters', 'waitPhoneNumber', 'waitCode', 'waitPassword']);
+const SIGN_IN_STATES = new Set(['starting', 'waitTdlibParameters', 'waitPhoneNumber', 'waitOtherDeviceConfirmation', 'waitCode', 'waitPassword']);
 
 /**
  * Состояние импорта из Telegram для всего приложения: сама загрузка идёт в нативном модуле
@@ -62,6 +64,19 @@ export function TelegramSessionProvider({ children }: { children: ReactNode }) {
     sync();
   }, [sync]);
 
+  const restart = useCallback(async () => {
+    if (!Telegram) return;
+    await Telegram.cancel();
+    // Ждём, пока TDLib закроется (состояние closed), иначе start() вернёт старую сессию.
+    for (let i = 0; i < 25; i++) {
+      const s = Telegram.getState().state;
+      if (s === 'closed' || s === 'none') break;
+      await new Promise((r) => setTimeout(r, 200));
+    }
+    setImp({ phase: 'idle' });
+    setAuth(await startTelegram());
+  }, []);
+
   const clearResult = useCallback(async () => {
     await Telegram?.clearImportResult();
     sync();
@@ -76,9 +91,10 @@ export function TelegramSessionProvider({ children }: { children: ReactNode }) {
       resultReady: (imp.phase === 'done' || imp.phase === 'cancelled') && (imp.done ?? 0) > 0,
       begin,
       cancel,
+      restart,
       clearResult,
     }),
-    [auth, imp, begin, cancel, clearResult],
+    [auth, imp, begin, cancel, restart, clearResult],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
