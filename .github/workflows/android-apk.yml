@@ -33,7 +33,7 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Free disk space
-        run: sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/local/share/boost "$AGENT_TOOLSDIRECTORY" || true
+        run: sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/local/share/boost || true
       - name: Generate native Android project
         run: npx expo prebuild --platform android --no-install
       # Полная сборка React Native (C++ под все архитектуры) не помещается в обычную машину GitHub.
