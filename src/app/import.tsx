@@ -15,7 +15,7 @@ type State =
   | { kind: 'error'; message: string }
   | { kind: 'ready'; candidates: ImportCandidate[]; limited: boolean; sample: boolean };
 
-type Filter = 'all' | 'birthday';
+type Filter = 'all' | 'phone' | 'birthday';
 
 export default function ImportScreen() {
   const { data, ready, addFriends } = useStore();
@@ -50,11 +50,12 @@ export default function ImportScreen() {
 
   const all = state.kind === 'ready' ? state.candidates : [];
   const withBirthday = useMemo(() => all.filter((c) => c.birthday).length, [all]);
+  const withPhone = useMemo(() => all.filter((c) => c.phone).length, [all]);
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     return all.filter(
       (c) =>
-        (filter === 'all' || c.birthday) &&
+        (filter === 'all' || (filter === 'birthday' ? c.birthday : c.phone)) &&
         (!q || c.name.toLowerCase().includes(q) || c.phone.replace(/\D/g, '').includes(q.replace(/\D/g, '') || '—')),
     );
   }, [all, query, filter]);
@@ -160,6 +161,7 @@ export default function ImportScreen() {
             />
             <View style={[styles.chips, { alignItems: 'center' }]}>
               <Chip label={`Все · ${all.length}`} selected={filter === 'all'} onPress={() => setFilter('all')} />
+              <Chip label={`📞 С номером · ${withPhone}`} selected={filter === 'phone'} onPress={() => setFilter('phone')} />
               <Chip
                 label={`🎂 С днём рождения · ${withBirthday}`}
                 selected={filter === 'birthday'}

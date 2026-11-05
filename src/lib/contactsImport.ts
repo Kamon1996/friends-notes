@@ -127,8 +127,13 @@ export function toCandidates(raw: RawContact[], friends: Friend[]): ImportCandid
   const byPhone = new Map(friends.filter((f) => phoneKey(f.phone).length >= 7).map((f) => [phoneKey(f.phone), f.name]));
   const seen = new Set<string>();
   const out: ImportCandidate[] = [];
+  const contactName = (c: RawContact) => (c.fullName || [c.givenName, c.familyName].filter(Boolean).join(' ')).trim();
+  const hasPhone = (c: RawContact) => (c.phones ?? []).some((p) => p.number?.trim());
+  // Мессенджеры добавляют в книгу свои копии людей без номера. Если тот же человек есть с номером — копию пропускаем.
+  const namesWithPhone = new Set(raw.filter(hasPhone).map((c) => nameKey(contactName(c))));
 
   for (const c of raw) {
+    if (!hasPhone(c) && namesWithPhone.has(nameKey(contactName(c)))) continue;
     const name = (c.fullName || [c.givenName, c.familyName].filter(Boolean).join(' ')).trim();
     if (!name) continue;
     const phone = (c.phones ?? []).map((p) => p.number?.trim() ?? '').find(Boolean) ?? '';
