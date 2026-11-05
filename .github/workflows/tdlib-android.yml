@@ -1,0 +1,93 @@
+name: TDLib for Android (official sources)
+
+# Собирает официальную библиотеку Telegram TDLib из https://github.com/tdlib/td
+# на зафиксированном коммите официальными скриптами example/android и кладёт результат
+# (libtdjni.so для arm64-v8a + сгенерированные Client.java / TdApi.java) в modules/telegram.
+# Запуск: коммит со словом «[tdlib]» в сообщении или вручную (Actions → Run workflow).
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, claude/mobile-project-creation-pgqs46]
+
+permissions:
+  contents: write
+
+env:
+  TDLIB_REPO: https://github.com/tdlib/td.git
+  # TDLib 1.8.69, master от 2026-10-27
+  TDLIB_COMMIT: 4c6377aa7386c39217878a9a56d581922ad37ca4
+  ABIS: arm64-v8a
+  ANDROID_API_LEVEL: '24'
+
+jobs:
+  build:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[tdlib]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -yq gperf php-cli perl make unzip wget
+
+      - name: Fetch official TDLib sources
+        run: |
+          git clone "$TDLIB_REPO" td
+          cd td
+          git checkout "$TDLIB_COMMIT"
+          git log -1 --format='%H %cd %s'
+
+      - name: Fetch Android SDK and NDK (official script)
+        working-directory: td/example/android
+        run: ./fetch-sdk.sh
+
+      - name: Build OpenSSL (official script, arm64-v8a only)
+        working-directory: td/example/android
+        run: |
+          # Единственная правка: собираем OpenSSL только под нужную архитектуру — в 4 раза быстрее.
+          sed -i 's/for ABI in arm64-v8a armeabi-v7a x86_64 x86 ;/for ABI in arm64-v8a ;/' build-openssl.sh
+          grep -n "for ABI in" build-openssl.sh
+          ./build-openssl.sh
+
+      - name: Build TDLib with Java interface (official script)
+        working-directory: td/example/android
+        run: ./build-tdlib.sh '' '' '' '' 'Java' "$ANDROID_API_LEVEL" "$ABIS"
+
+      - name: Copy artifacts into modules/telegram
+        run: |
+          OUT=td/example/android/tdlib
+          DEST=modules/telegram/android/src/main
+          mkdir -p "$DEST/jniLibs/arm64-v8a" "$DEST/java/org/drinkless/tdlib"
+          cp "$OUT/libs/arm64-v8a/libtdjni.so" "$DEST/jniLibs/arm64-v8a/"
+          cp "$OUT/java/org/drinkless/tdlib/Client.java" "$OUT/java/org/drinkless/tdlib/TdApi.java" "$DEST/java/org/drinkless/tdlib/"
+          VERSION=$(grep -o 'project(TDLib VERSION [0-9.]*' td/CMakeLists.txt | awk '{print $3}')
+          SHA=$(sha256sum "$DEST/jniLibs/arm64-v8a/libtdjni.so" | awk '{print $1}')
+          cat > modules/telegram/android/TDLIB_BUILD.md <<EOF
+          # TDLib build provenance
+
+          - TDLib version: $VERSION
+          - Source: $TDLIB_REPO @ $TDLIB_COMMIT
+          - Built by: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          - Scripts: td/example/android/fetch-sdk.sh, build-openssl.sh (arm64-v8a only), build-tdlib.sh (Java interface, API $ANDROID_API_LEVEL, ABIs: $ABIS)
+          - libtdjni.so sha256: $SHA
+          EOF
+          cat modules/telegram/android/TDLIB_BUILD.md
+          ls -la "$DEST/jniLibs/arm64-v8a" "$DEST/java/org/drinkless/tdlib"
+
+      - name: Commit artifacts
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add modules/telegram/android
+          git commit -m "Add official TDLib build for Android (tdlib/td@${TDLIB_COMMIT:0:7})" -m "Built by ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          for i in 1 2 3; do
+            git pull --rebase origin "${GITHUB_REF_NAME}" && git push origin "HEAD:${GITHUB_REF_NAME}" && break
+            sleep 5
+          done
