@@ -20,7 +20,7 @@ jobs:
   compile:
     if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[apk]')
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -32,11 +32,15 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Free disk space
+        run: sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/local/share/boost "$AGENT_TOOLSDIRECTORY" || true
       - name: Generate native Android project
         run: npx expo prebuild --platform android --no-install
-      - name: Compile debug APK
+      # Полная сборка React Native (C++ под все архитектуры) не помещается в обычную машину GitHub.
+      # Проверяем только Kotlin наших локальных модулей — быстро, а полную сборку делает EAS.
+      - name: Compile local native modules
         working-directory: android
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
+        run: ./gradlew :contacts-raw:compileDebugKotlin --no-daemon --stacktrace -PreactNativeArchitectures=arm64-v8a
 
   build:
     needs: compile
