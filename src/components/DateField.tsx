@@ -2,16 +2,12 @@ import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/d
 import { useState } from 'react';
 import { Modal, Platform, Pressable, Text, View } from 'react-native';
 
-import { combine, formatDate, parseISODate, toISODate, toTime } from '@/lib/dates';
-import type { ISODate, TimeOfDay } from '@/lib/types';
-import { Button, Label, colors, styles } from './ui';
+import { combine, parseISODate, toISODate, toTime } from '@/lib/dates';
+import { DateFieldBase, pickerButtonStyle, type DateFieldProps } from './DateFieldBase';
+import { Button, colors } from './ui';
 
-type Props =
-  | { mode: 'date'; label: string; value: ISODate | null; onChange: (v: ISODate) => void; placeholder?: string }
-  | { mode: 'time'; label: string; value: TimeOfDay; onChange: (v: TimeOfDay) => void; placeholder?: string };
-
-/** Поле выбора даты/времени с нативным пикером (Android — диалог, iOS — колесо в модалке). */
-export function DateField(props: Props) {
+/** Поле даты/времени: ввод цифрами + кнопка нативного пикера (Android — диалог, iOS — колесо в модалке). */
+export function DateField(props: DateFieldProps) {
   const [iosOpen, setIosOpen] = useState(false);
   const [draft, setDraft] = useState(new Date());
 
@@ -41,17 +37,15 @@ export function DateField(props: Props) {
     }
   };
 
-  const text = props.mode === 'date' ? (props.value ? formatDate(props.value) : '') : props.value;
-
-  return (
-    <View style={styles.field}>
-      <Label>{props.label}</Label>
-      <Pressable onPress={open} style={styles.input}>
-        <Text style={{ fontSize: 16, color: text ? colors.text : colors.muted }}>
-          {text || props.placeholder || 'Выбрать'}
-        </Text>
+  const picker = (
+    <>
+      <Pressable
+        onPress={open}
+        accessibilityLabel={props.mode === 'date' ? 'Выбрать в календаре' : 'Выбрать время'}
+        style={({ pressed }) => [pickerButtonStyle, pressed && { opacity: 0.6 }]}
+      >
+        <Text style={{ fontSize: 20 }}>{props.mode === 'date' ? '📅' : '🕐'}</Text>
       </Pressable>
-
       {Platform.OS === 'ios' && (
         <Modal visible={iosOpen} transparent animationType="slide" onRequestClose={() => setIosOpen(false)}>
           <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.3)' }} onPress={() => setIosOpen(false)} />
@@ -73,6 +67,8 @@ export function DateField(props: Props) {
           </View>
         </Modal>
       )}
-    </View>
+    </>
   );
+
+  return <DateFieldBase {...props} picker={picker} />;
 }

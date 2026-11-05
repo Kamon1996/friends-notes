@@ -108,7 +108,7 @@ function FriendForm() {
           ))}
         </View>
 
-        <DateField mode="date" label="День рождения" value={f.birthday} onChange={setBirthday} placeholder="Не указан" />
+        <DateField mode="date" label="День рождения" value={f.birthday} onChange={setBirthday} noYear={yearUnknown} />
         {f.birthday && (
           <Card style={{ paddingVertical: 4, marginTop: -6, marginBottom: 14 }}>
             <SwitchRow label="Год рождения неизвестен" value={yearUnknown} onChange={toggleYearUnknown} />
