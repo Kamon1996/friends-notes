@@ -121,3 +121,28 @@ test('копии людей без номера от мессенджеров п
   );
   assert.deepEqual(list.map((x) => [x.name, x.phone]), [['Олег Иванов', '+7 900 111-22-33'], ['Только в мессенджере', '']]);
 });
+
+test('Telegram: преобразование контакта и разбор ошибок', async () => {
+  const { tgToRawContact, floodWaitSeconds, tgErrorText } = await import('../telegramImport');
+  const raw = tgToRawContact({
+    id: 42,
+    firstName: 'Лена',
+    lastName: 'Ким',
+    phoneNumber: '79991112233',
+    usernames: ['lena_k'],
+    birthdate: { day: 5, month: 3, year: 0 },
+    bio: 'Люблю горы',
+  });
+  assert.equal(raw.id, 'tg-42');
+  assert.equal(raw.fullName, 'Лена Ким');
+  assert.deepEqual(raw.phones, [{ number: '+79991112233' }]);
+  assert.deepEqual(raw.birthday, { day: 5, month: 3, year: undefined });
+  assert.equal(raw.note, 'Telegram: @lena_k\nО себе: Люблю горы');
+  const [c] = toCandidates([raw], []);
+  assert.equal(c.birthday, '1904-03-05'); // год скрыт
+
+  assert.equal(floodWaitSeconds('Too Many Requests: retry after 17'), 17);
+  assert.equal(floodWaitSeconds('FLOOD_WAIT_300'), 300);
+  assert.equal(floodWaitSeconds('PHONE_CODE_INVALID'), null);
+  assert.match(tgErrorText(new Error('PHONE_CODE_INVALID')), /Неверный код/);
+});

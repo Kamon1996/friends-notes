@@ -40,7 +40,7 @@ jobs:
       # Проверяем только Kotlin наших локальных модулей — быстро, а полную сборку делает EAS.
       - name: Compile local native modules
         working-directory: android
-        run: ./gradlew :contacts-raw:compileDebugKotlin --no-daemon --stacktrace -PreactNativeArchitectures=arm64-v8a
+        run: ./gradlew :contacts-raw:compileDebugKotlin :telegram:compileDebugKotlin --no-daemon --stacktrace -PreactNativeArchitectures=arm64-v8a
 
   build:
     needs: compile
@@ -76,7 +76,26 @@ jobs:
       - name: Link EAS project
         run: npx eas-cli@latest init --non-interactive --force
 
+      # Ключи Telegram API попадают в конфиг приложения только в момент сборки и не коммитятся.
+      - name: Inject Telegram API keys
+        env:
+          TG_API_ID: ${{ secrets.TG_API_ID }}
+          TG_API_HASH: ${{ secrets.TG_API_HASH }}
+        run: |
+          node -e '
+            const fs = require("fs");
+            const a = JSON.parse(fs.readFileSync("app.json", "utf8"));
+            const apiId = Number(process.env.TG_API_ID || 0);
+            const apiHash = process.env.TG_API_HASH || "";
+            a.expo.extra = { ...a.expo.extra, telegram: { apiId, apiHash } };
+            fs.writeFileSync("app.json", JSON.stringify(a, null, 2));
+            console.log("Telegram keys:", apiId && apiHash ? "set" : "MISSING");
+          '
+
       - name: Start Android build
+        env:
+          # Загружаем рабочую папку как есть (с подставленными ключами), а не последний коммит.
+          EAS_NO_VCS: '1'
         run: |
           npx eas-cli@latest build --platform android --profile preview --non-interactive --no-wait --json > build.json
           cat build.json

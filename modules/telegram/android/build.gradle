@@ -1,0 +1,20 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'expo.modules.telegram'
+version = '0.1.0'
+
+android {
+  namespace "expo.modules.telegram"
+  defaultConfig {
+    versionCode 1
+    versionName '0.1.0'
+  }
+}
+
+dependencies {
+  // Сгенерированный TdApi.java использует аннотации androidx (@Nullable, @IntDef).
+  implementation 'androidx.annotation:annotation:1.9.1'
+}

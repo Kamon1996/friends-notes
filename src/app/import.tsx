@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Linking, Platform, Pressable, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -8,18 +8,22 @@ import { loadContacts, pickMoreContacts } from '@/lib/contacts';
 import { candidateToFriend, toCandidates, type ImportCandidate } from '@/lib/contactsImport';
 import { formatDate, hasYear } from '@/lib/dates';
 import { newId, useStore } from '@/lib/store';
+import { telegramAvailable } from '@/lib/telegramClient';
+import { getPendingImport, setPendingImport } from '@/lib/telegramImport';
 
 type State =
   | { kind: 'loading' }
   | { kind: 'denied'; canAskAgain: boolean }
   | { kind: 'error'; message: string }
-  | { kind: 'ready'; candidates: ImportCandidate[]; limited: boolean; sample: boolean };
+  | { kind: 'ready'; candidates: ImportCandidate[]; limited: boolean; sample: boolean; partial?: boolean };
 
 type Filter = 'all' | 'phone' | 'birthday';
 
 export default function ImportScreen() {
   const { data, ready, addFriends } = useStore();
   const insets = useSafeAreaInsets();
+  const { source } = useLocalSearchParams<{ source?: string }>();
+  const fromTelegram = source === 'telegram';
   const [state, setState] = useState<State>({ kind: 'loading' });
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState('');
@@ -28,6 +32,18 @@ export default function ImportScreen() {
   const load = useCallback(async () => {
     setState({ kind: 'loading' });
     try {
+      if (fromTelegram) {
+        // Контакты уже загружены на экране входа в Telegram.
+        const pending = getPendingImport();
+        if (!pending) {
+          setState({ kind: 'error', message: 'Нет загруженных контактов Telegram — начни импорт заново.' });
+          return;
+        }
+        const candidates = toCandidates(pending.contacts, data.friends);
+        setState({ kind: 'ready', candidates, limited: false, sample: false, partial: pending.partial });
+        setSelected(new Set(candidates.filter((c) => !c.duplicateOf && c.birthday).map((c) => c.key)));
+        return;
+      }
       const res = await loadContacts();
       if (res.status === 'denied') {
         setState({ kind: 'denied', canAskAgain: res.canAskAgain });
@@ -85,6 +101,7 @@ export default function ImportScreen() {
     const chosen = all.filter((c) => selected.has(c.key) && !c.duplicateOf);
     if (!chosen.length) return;
     addFriends(chosen.map((c) => candidateToFriend(c, newId(), newId)));
+    if (fromTelegram) setPendingImport(null);
     router.back();
   };
 
@@ -135,6 +152,27 @@ export default function ImportScreen() {
         keyboardShouldPersistTaps="handled"
         ListHeaderComponent={
           <View style={{ gap: 12 }}>
+            <Stack.Screen options={{ title: fromTelegram ? 'Контакты Telegram' : 'Импорт контактов' }} />
+            {!fromTelegram && telegramAvailable && (
+              <Pressable
+                onPress={() => router.push('/telegram')}
+                style={({ pressed }) => [styles.card, styles.row, { borderColor: colors.blue }, pressed && { opacity: 0.7 }]}
+              >
+                <Text style={{ fontSize: 28 }}>✈️</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.title}>Импорт из Telegram</Text>
+                  <Text style={styles.muted}>Контакты вместе с днями рождения</Text>
+                </View>
+                <Text style={styles.muted}>›</Text>
+              </Pressable>
+            )}
+            {state.partial && (
+              <Card style={{ backgroundColor: colors.amberSoft, borderColor: colors.amberSoft }}>
+                <Text style={{ color: colors.amber, lineHeight: 20 }}>
+                  Telegram попросил сделать паузу, поэтому дни рождения загружены не у всех. Можно повторить импорт позже.
+                </Text>
+              </Card>
+            )}
             {state.sample && (
               <Card style={{ backgroundColor: colors.amberSoft, borderColor: colors.amberSoft }}>
                 <Text style={{ color: colors.amber, lineHeight: 20 }}>
@@ -149,9 +187,9 @@ export default function ImportScreen() {
                 <Button title="Выбрать ещё контакты" variant="secondary" onPress={() => pickMoreContacts().then(load)} />
               </Card>
             )}
-            <Pressable onPress={() => router.push('/sources')} hitSlop={8}>
+            {!fromTelegram && <Pressable onPress={() => router.push('/sources')} hitSlop={8}>
               <Text style={{ color: colors.blue }}>🧪 Что лежит в контактах от Telegram, WhatsApp, Viber… →</Text>
-            </Pressable>
+            </Pressable>}
             <TextInput
               value={query}
               onChangeText={setQuery}

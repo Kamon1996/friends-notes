@@ -5,6 +5,7 @@ import { FlatList, Pressable, Text, TextInput, View } from 'react-native';
 import { Button, Empty, Fab, colors, styles } from '@/components/ui';
 import { formatDate, hasYear, nextAnniversary, relativeDay } from '@/lib/dates';
 import { useStore } from '@/lib/store';
+import { telegramAvailable } from '@/lib/telegramClient';
 import type { Friend } from '@/lib/types';
 
 export default function FriendsScreen() {
@@ -45,6 +46,9 @@ export default function FriendsScreen() {
                 text="Импортируй друзей из контактов телефона — вместе с днями рождения. Или нажми «+», чтобы добавить вручную."
               />
               <Button title="📇 Импорт из контактов" onPress={() => router.push('/import')} />
+              {telegramAvailable && (
+                <Button title="✈️ Импорт из Telegram" variant="secondary" onPress={() => router.push('/telegram')} />
+              )}
             </View>
           ) : (
             <Empty emoji="🤷" title="Никого не нашлось" text="Попробуй другой запрос." />
