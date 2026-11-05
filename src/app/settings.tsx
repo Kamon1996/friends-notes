@@ -65,6 +65,11 @@ export default function SettingsScreen() {
       </Card>
 
       <SectionTitle>Для разработки</SectionTitle>
+      <Button
+        title="🧪 Данные из приложений (Telegram, WhatsApp…)"
+        variant="secondary"
+        onPress={() => router.push('/sources')}
+      />
       <Button title="🔬 Диагностика контактов" variant="secondary" onPress={() => router.push('/contacts-debug')} />
 
       <Text style={[styles.muted, { textAlign: 'center', marginTop: 16 }]}>

@@ -148,8 +148,8 @@ export default function ImportScreen() {
                 <Button title="Выбрать ещё контакты" variant="secondary" onPress={() => pickMoreContacts().then(load)} />
               </Card>
             )}
-            <Pressable onPress={() => router.push('/contacts-debug')} hitSlop={8}>
-              <Text style={{ color: colors.blue }}>🔬 Что приложение видит в контактах →</Text>
+            <Pressable onPress={() => router.push('/sources')} hitSlop={8}>
+              <Text style={{ color: colors.blue }}>🧪 Что лежит в контактах от Telegram, WhatsApp, Viber… →</Text>
             </Pressable>
             <TextInput
               value={query}

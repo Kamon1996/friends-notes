@@ -49,6 +49,7 @@ export default function RootLayout() {
         <Stack.Screen name="settings" options={{ title: 'Настройки' }} />
         <Stack.Screen name="import" options={{ presentation: 'modal', title: 'Импорт контактов' }} />
         <Stack.Screen name="contacts-debug" options={{ title: 'Диагностика контактов' }} />
+        <Stack.Screen name="sources" options={{ title: 'Данные из приложений' }} />
       </Stack>
     </StoreProvider>
   );
