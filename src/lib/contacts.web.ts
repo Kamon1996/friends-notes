@@ -21,7 +21,7 @@ export async function loadContacts(): Promise<ContactsResult> {
 
 export async function pickMoreContacts(): Promise<void> {}
 
-export type Enrichment = Map<string, { links: { telegramId?: number; whatsapp?: string; viber?: string }; photoUri: string | null }>;
+export type Enrichment = Map<string, { links: { telegramId?: number; whatsapp?: string; viber?: string }; photoUri: string | null; thumbUri?: string | null }>;
 
 /** В браузере телефонной книги нет. */
 export async function loadEnrichment(): Promise<Enrichment> {

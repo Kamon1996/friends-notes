@@ -112,21 +112,24 @@ export default function ImportScreen() {
     const dups = all.filter((c) => c.duplicateOf);
 
     // Аватарки из Telegram лежат во временной папке: оставляем только нужные.
-    let kept: Record<string, string> = {};
+    let kept: Record<string, { photoUri?: string; thumbUri?: string }> = {};
     if (fromTelegram && Telegram) {
       const ids = [...chosen, ...dups].map((c) => c.links.telegramId).filter((id): id is number => !!id);
       kept = await Telegram.finalizeImport(ids);
     }
-    const photoOf = (c: ImportCandidate) =>
-      fromTelegram ? (c.links.telegramId ? kept[String(c.links.telegramId)] ?? null : null) : c.photoUri;
+    const photosOf = (c: ImportCandidate) => {
+      if (!fromTelegram) return { photoUri: c.photoUri, thumbUri: c.thumbUri };
+      const k = c.links.telegramId ? kept[String(c.links.telegramId)] : undefined;
+      return { photoUri: k?.photoUri ?? k?.thumbUri ?? null, thumbUri: k?.thumbUri ?? k?.photoUri ?? null };
+    };
 
-    addFriends(chosen.map((c) => ({ ...candidateToFriend(c, newId(), newId), photoUri: photoOf(c) })));
+    addFriends(chosen.map((c) => ({ ...candidateToFriend(c, newId(), newId), ...photosOf(c) })));
 
     // Уже добавленных друзей (совпали по номеру) дополняем фото и мессенджерами — заполненное не трогаем.
-    const map = new Map<string, { links: ImportCandidate['links']; photoUri: string | null }>();
+    const map = new Map<string, { links: ImportCandidate['links']; photoUri: string | null; thumbUri: string | null }>();
     for (const c of dups) {
       const key = phoneKey(c.phone);
-      if (key.length >= 7) map.set(key, { links: c.links, photoUri: photoOf(c) });
+      if (key.length >= 7) map.set(key, { links: c.links, ...photosOf(c) });
     }
     if (map.size) {
       const { friends, changed } = applyEnrichment(data.friends, map);
@@ -296,7 +299,7 @@ function ContactRow({ candidate: c, checked, onToggle }: { candidate: ImportCand
       style={({ pressed }) => [styles.card, styles.row, { paddingVertical: 12 }, dup && { opacity: 0.5 }, pressed && !dup && { opacity: 0.7 }]}
     >
       {dup ? <View style={{ width: 26 }} /> : <Checkbox checked={checked} onPress={onToggle} />}
-      {c.photoUri && <Avatar friend={{ emoji: '🙂', photoUri: c.photoUri }} size={36} />}
+      {(c.thumbUri || c.photoUri) && <Avatar friend={{ emoji: '🙂', photoUri: c.photoUri, thumbUri: c.thumbUri }} size={36} />}
       <View style={{ flex: 1, gap: 2 }}>
         <Text style={styles.title}>{c.name}</Text>
         {!!c.phone && <Text style={styles.muted}>{c.phone}</Text>}

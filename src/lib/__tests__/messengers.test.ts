@@ -58,7 +58,7 @@ test('импорт: себя и служебные номера пропуска
       { id: '1', fullName: 'Баланс', phones: [{ number: '*100#' }] },
       { id: '2', fullName: 'Я сам', phones: [{ number: '+375250000000' }], isSelf: true },
       { id: '3', fullName: '+375291112233', phones: [{ number: '+375291112233' }], links: { whatsapp: '375291112233' } },
-      { id: '4', fullName: 'Олег', phones: [{ number: '80 29 111-22-33' }], normalizedPhones: ['+375291112233'], links: { telegramId: 555 }, photoUri: 'content://photo/4' },
+      { id: '4', fullName: 'Олег', phones: [{ number: '80 29 111-22-33' }], normalizedPhones: ['+375291112233'], links: { telegramId: 555 }, photoUri: 'content://photo/4', thumbUri: 'content://thumb/4' },
       { id: '5', fullName: 'Без номера', links: { telegramId: 777 } },
     ],
     [],
@@ -68,10 +68,12 @@ test('импорт: себя и служебные номера пропуска
   assert.equal(oleg.phone, '+375291112233'); // нормализованный номер в приоритете
   assert.deepEqual(oleg.links, { telegramId: 555, whatsapp: '375291112233' });
   assert.equal(oleg.photoUri, 'content://photo/4');
+  assert.equal(oleg.thumbUri, 'content://thumb/4');
   const f = candidateToFriend(oleg, 'f1', () => 'd');
   assert.equal(f.telegramId, 555);
   assert.equal(f.whatsapp, '375291112233');
   assert.equal(f.viber, null);
+  assert.equal(f.thumbUri, 'content://thumb/4');
 });
 
 test('автоподтягивание для уже добавленных друзей', () => {
@@ -82,6 +84,7 @@ test('автоподтягивание для уже добавленных др
   assert.equal(friends[0].telegramId, 555);
   assert.equal(friends[0].viber, '375291112233');
   assert.equal(friends[0].photoUri, 'content://p');
+  assert.equal(friends[0].thumbUri, 'content://p'); // миниатюры нет — берём то же фото
   // уже заполненное не трогаем, повторный запуск ничего не меняет
   assert.equal(applyEnrichment(friends, map).changed, 0);
 });

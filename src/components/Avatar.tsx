@@ -5,7 +5,7 @@ import type { Friend } from '@/lib/types';
 import { colors } from './ui';
 
 /** Фото из контактов, а если его нет или оно не открылось — эмодзи. */
-export function Avatar({ friend, size }: { friend: Pick<Friend, 'emoji' | 'photoUri'>; size: number }) {
+export function Avatar({ friend, size }: { friend: Pick<Friend, 'emoji' | 'photoUri' | 'thumbUri'>; size: number }) {
   const [failed, setFailed] = useState(false);
   const box = {
     width: size,
@@ -16,10 +16,12 @@ export function Avatar({ friend, size }: { friend: Pick<Friend, 'emoji' | 'photo
     justifyContent: 'center' as const,
     overflow: 'hidden' as const,
   };
-  if (friend.photoUri && !failed) {
+  // В списках — маленькая версия (быстрее и легче), в карточке — большая.
+  const uri = size <= 64 ? (friend.thumbUri ?? friend.photoUri) : (friend.photoUri ?? friend.thumbUri);
+  if (uri && !failed) {
     return (
       <View style={box}>
-        <Image source={{ uri: friend.photoUri }} style={{ width: size, height: size }} onError={() => setFailed(true)} />
+        <Image source={{ uri }} style={{ width: size, height: size }} onError={() => setFailed(true)} />
       </View>
     );
   }

@@ -19,8 +19,10 @@ export interface TgPerson {
   /** year = 0, если год скрыт. */
   birthdate: { day: number; month: number; year: number } | null;
   bio: string | null;
-  /** Текущая аватарка (file://…), скачанная во временную папку; null — фото нет или скрыто. */
+  /** Текущая аватарка 640×640 (file://…) во временной папке; null — фото нет или скрыто. */
   photoUri: string | null;
+  /** Та же аватарка 160×160 — для списков. */
+  thumbUri: string | null;
 }
 
 /** Состояние фоновой загрузки контактов. */
@@ -49,8 +51,8 @@ interface NativeTelegram {
   checkPassword(password: string): Promise<boolean>;
   getImportResult(): Promise<TgPerson[]>;
   clearImportResult(): Promise<boolean>;
-  /** Оставить аватарки выбранных людей (по id Telegram) и стереть остальное. Возвращает { id → file://… }. */
-  finalizeImport(keepIds: number[]): Promise<Record<string, string>>;
+  /** Оставить аватарки выбранных людей (по id Telegram) и стереть остальное. */
+  finalizeImport(keepIds: number[]): Promise<Record<string, { photoUri?: string; thumbUri?: string }>>;
   /** Отменить вход или загрузку: модуль выйдет из аккаунта / сотрёт незавершённый вход. */
   cancel(): Promise<boolean>;
   /** Последний записанный Java-сбой и хвост лога TDLib. */

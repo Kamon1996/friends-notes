@@ -1,7 +1,7 @@
 import { phoneKey } from './messengers';
 import type { Friend } from './types';
 
-type EnrichmentMap = Map<string, { links: { telegramId?: number; whatsapp?: string; viber?: string }; photoUri: string | null }>;
+type EnrichmentMap = Map<string, { links: { telegramId?: number; whatsapp?: string; viber?: string }; photoUri: string | null; thumbUri?: string | null }>;
 
 /** Дополняет друзей мессенджерами и фото по номеру телефона. Уже заполненное не перезаписывается. */
 export function applyEnrichment(friends: Friend[], map: EnrichmentMap): { friends: Friend[]; changed: number } {
@@ -16,6 +16,8 @@ export function applyEnrichment(friends: Friend[], map: EnrichmentMap): { friend
       whatsapp: f.whatsapp ?? found.links.whatsapp ?? null,
       viber: f.viber ?? found.links.viber ?? null,
       photoUri: f.photoUri ?? found.photoUri ?? null,
+      // Миниатюру берём вместе с фото, чтобы они были одного человека.
+      thumbUri: f.photoUri ? (f.thumbUri ?? null) : (found.thumbUri ?? found.photoUri ?? null),
     };
     const differs =
       next.telegramId !== (f.telegramId ?? null) ||

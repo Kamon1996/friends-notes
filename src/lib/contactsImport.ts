@@ -19,6 +19,7 @@ export interface RawContact {
   /** Мессенджеры, в которых есть человек. */
   links?: Links;
   photoUri?: string | null;
+  thumbUri?: string | null;
   /** Это ты сам (своя запись Telegram в телефонной книге). */
   isSelf?: boolean;
 }
@@ -98,6 +99,7 @@ export interface ImportCandidate {
   duplicateOf: string | null;
   links: Links;
   photoUri: string | null;
+  thumbUri: string | null;
 }
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -174,19 +176,23 @@ export function toCandidates(raw: RawContact[], friends: Friend[]): ImportCandid
     const pk = phoneKey(phone);
     const links = c.links ?? {};
     const photoUri = c.photoUri ?? null;
+    const thumbUri = c.thumbUri ?? photoUri;
 
     // Тот же номер уже встречался (копия из Google/Telegram/WhatsApp) — дополняем первую запись.
     const same = pk.length >= 7 ? byPhoneIndex.get(pk) : undefined;
     if (same) {
       same.links = { ...links, ...same.links };
-      same.photoUri = same.photoUri ?? photoUri;
+      if (!same.photoUri && photoUri) {
+        same.photoUri = photoUri;
+        same.thumbUri = thumbUri;
+      }
       same.birthday = same.birthday ?? birthday;
       if (!hasLetters(same.name) && hasLetters(name)) same.name = name;
       continue;
     }
 
     const duplicateOf = byName.get(nameKey(name)) ?? (pk.length >= 7 ? byPhone.get(pk) : undefined) ?? null;
-    const candidate: ImportCandidate = { key: c.id, name, phone, birthday, dates, note: c.note?.trim() ?? '', duplicateOf, links, photoUri };
+    const candidate: ImportCandidate = { key: c.id, name, phone, birthday, dates, note: c.note?.trim() ?? '', duplicateOf, links, photoUri, thumbUri };
     if (pk.length >= 7) byPhoneIndex.set(pk, candidate);
     out.push(candidate);
   }
@@ -217,5 +223,6 @@ export function candidateToFriend(c: ImportCandidate, id: string, idFor: () => s
     whatsapp: c.links.whatsapp ?? null,
     viber: c.links.viber ?? null,
     photoUri: c.photoUri,
+    thumbUri: c.thumbUri,
   };
 }

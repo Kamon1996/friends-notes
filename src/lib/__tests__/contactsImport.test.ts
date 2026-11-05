@@ -142,8 +142,10 @@ test('Telegram: преобразование контакта и разбор о
   assert.equal(raw.note, 'Telegram: @lena_k\nО себе: Люблю горы');
   assert.deepEqual(raw.links, { telegramId: 42 });
   assert.equal(raw.photoUri, null);
-  const withPhoto = tgToRawContact({ id: 7, firstName: 'Ира', lastName: '', phoneNumber: '', usernames: [], birthdate: null, bio: null, photoUri: 'file:///x/7.jpg' });
-  assert.equal(toCandidates([withPhoto], [])[0].photoUri, 'file:///x/7.jpg');
+  const withPhoto = tgToRawContact({ id: 7, firstName: 'Ира', lastName: '', phoneNumber: '', usernames: [], birthdate: null, bio: null, photoUri: 'file:///x/7_big.jpg', thumbUri: 'file:///x/7.jpg' });
+  const ira = toCandidates([withPhoto], [])[0];
+  assert.equal(ira.photoUri, 'file:///x/7_big.jpg');
+  assert.equal(ira.thumbUri, 'file:///x/7.jpg');
   const [c] = toCandidates([raw], []);
   assert.equal(c.birthday, '1904-03-05'); // год скрыт
 

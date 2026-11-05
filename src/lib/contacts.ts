@@ -69,7 +69,7 @@ export async function pickMoreContacts(): Promise<void> {
 /** Данные из телефонной книги Android по нашему модулю: нормализованные номера, мессенджеры, фото. */
 async function loadPhoneData() {
   const [rows, photos] = await Promise.all([dataRows(LINK_MIMETYPES), contactPhotos()]);
-  return { index: buildPhoneIndex(rows), photos: new Map(photos.map((p) => [p.contactId, p.photoUri])) };
+  return { index: buildPhoneIndex(rows), photos: new Map(photos.map((p) => [p.contactId, p])) };
 }
 
 /** Дополняет контакты (id = id склеенного контакта Android) номерами, мессенджерами и фото. */
@@ -84,7 +84,8 @@ async function attachPhoneData(contacts: RawContact[]): Promise<RawContact[]> {
         ...c,
         normalizedPhones,
         links: { ...byPhone, ...index.byContact.get(c.id) },
-        photoUri: photos.get(c.id) ?? null,
+        photoUri: photos.get(c.id)?.photoUri ?? null,
+        thumbUri: photos.get(c.id)?.thumbUri ?? null,
         isSelf: index.selfContactIds.has(c.id),
       };
     });
@@ -94,7 +95,7 @@ async function attachPhoneData(contacts: RawContact[]): Promise<RawContact[]> {
   }
 }
 
-export type Enrichment = Map<string, { links: Links; photoUri: string | null }>;
+export type Enrichment = Map<string, { links: Links; photoUri: string | null; thumbUri?: string | null }>;
 
 /**
  * Мессенджеры и фото по номеру телефона (последние 9 цифр) — чтобы дополнить друзей,
@@ -112,7 +113,8 @@ export async function loadEnrichment(): Promise<Enrichment> {
       const prev = out.get(key);
       out.set(key, {
         links: { ...index.byPhone.get(key), ...index.byContact.get(contactId), ...prev?.links },
-        photoUri: prev?.photoUri ?? photos.get(contactId) ?? null,
+        photoUri: prev?.photoUri ?? photos.get(contactId)?.photoUri ?? null,
+        thumbUri: prev?.thumbUri ?? photos.get(contactId)?.thumbUri ?? null,
       });
     }
   }

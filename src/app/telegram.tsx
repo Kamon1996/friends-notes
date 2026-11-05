@@ -86,7 +86,7 @@ export default function TelegramImportScreen() {
           <Line icon="📒">{`Список контактов: ${imp.requestsContacts ?? 0}`}</Line>
           <Line icon="👤">{`Профили (имя, телефон, @username): ${imp.requestsUsers ?? 0}`}</Line>
           <Line icon="🎂">{`Полные профили (день рождения, «о себе»): ${imp.requestsProfiles ?? 0}`}</Line>
-          <Line icon="📷">{`Аватарки (уменьшенная копия): ${imp.requestsPhotos ?? 0}`}</Line>
+          <Line icon="📷">{`Аватарки (маленькая и большая версии): ${imp.requestsPhotos ?? 0}`}</Line>
           <Line icon="💬">{`Сообщения и чаты: ${imp.requestsMessages ?? 0} — в приложении нет такой функции`}</Line>
         </Card>
 

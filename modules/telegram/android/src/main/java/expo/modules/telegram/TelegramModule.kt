@@ -147,20 +147,25 @@ class TelegramModule : Module() {
 
     /**
      * Пользователь выбрал, кого добавить: аватарки этих людей переносим в постоянную папку,
-     * остальные удаляем вместе с загруженными данными. Возвращает { id Telegram → file://… }.
+     * остальные удаляем вместе с загруженными данными.
+     * Возвращает { id Telegram → { photoUri: большая, thumbUri: маленькая } }.
      */
     AsyncFunction("finalizeImport") { keepIds: List<Double> ->
       val keep = keepIds.map { it.toLong().toString() }.toSet()
-      val kept = HashMap<String, String>()
+      val kept = HashMap<String, HashMap<String, String>>()
       val pending = pendingAvatarDir()
       val permanent = context?.let { File(it.filesDir, AVATARS_DIR).apply { mkdirs() } }
+      val stamp = System.currentTimeMillis()
       pending?.listFiles()?.forEach { f ->
-        val id = f.nameWithoutExtension
+        // Файлы: <id>.jpg — маленькая, <id>_big.jpg — большая.
+        val name = f.nameWithoutExtension
+        val id = name.substringBefore('_')
+        val big = name.endsWith("_big")
         if (id in keep && permanent != null) {
-          val dest = File(permanent, "tg-$id-${System.currentTimeMillis()}.jpg")
+          val dest = File(permanent, "tg-$id-$stamp${if (big) "-big" else ""}.jpg")
           try {
             f.copyTo(dest, overwrite = true)
-            kept[id] = "file://${dest.absolutePath}"
+            kept.getOrPut(id) { HashMap() }[if (big) "photoUri" else "thumbUri"] = "file://${dest.absolutePath}"
           } catch (t: Throwable) {
             Log.w(TAG, "Could not keep avatar", t)
           }
@@ -255,14 +260,10 @@ class TelegramModule : Module() {
           }
           Thread.sleep(120)
         }
-        // Текущая аватарка (уменьшенная копия 160×160) — копируем к себе до выхода из аккаунта.
-        val avatar = try {
-          downloadAvatar(user)?.also { requestsPhotos++ }
-        } catch (e: Throwable) {
-          Log.w(TAG, "Avatar download failed", e)
-          null
-        }
-        synchronized(people) { people.add(personMap(user, full, avatar)) }
+        // Текущая аватарка в двух размерах — копируем к себе до выхода из аккаунта.
+        val thumb = downloadAvatar(user, big = false)?.also { requestsPhotos++ }
+        val photo = downloadAvatar(user, big = true)?.also { requestsPhotos++ }
+        synchronized(people) { people.add(personMap(user, full, photo ?: thumb, thumb ?: photo)) }
         progress("loading", index + 1)
         context?.let { TelegramImportService.show(it, "Загружаю контакты: ${index + 1} из $total", Pair(index + 1, total)) }
       }
@@ -286,29 +287,44 @@ class TelegramModule : Module() {
     }
   }
 
-  /** Скачивает маленькую аватарку пользователя и копирует во временную папку приложения. */
-  private fun downloadAvatar(user: TdApi.User): String? {
-    val small = user.profilePhoto?.small ?: return null
-    val file = if (small.local?.isDownloadingCompleted == true) {
-      small
+  /**
+   * Скачивает аватарку пользователя (маленькую 160×160 или большую 640×640) и копирует
+   * во временную папку приложения. Ошибка скачивания не прерывает импорт.
+   */
+  private fun downloadAvatar(user: TdApi.User, big: Boolean): String? = try {
+    val photo = user.profilePhoto
+    val source = if (big) photo?.big else photo?.small
+    if (source == null) {
+      null
     } else {
-      call(TdApi.DownloadFile(small.id, 1, 0, 0, true), 30) as TdApi.File
+      val file = if (source.local?.isDownloadingCompleted == true) {
+        source
+      } else {
+        call(TdApi.DownloadFile(source.id, 1, 0, 0, true), 45) as TdApi.File
+      }
+      val path = file.local?.path
+      val dir = pendingAvatarDir()
+      if (path.isNullOrEmpty() || dir == null) {
+        null
+      } else {
+        dir.mkdirs()
+        val dest = File(dir, "${user.id}${if (big) "_big" else ""}.jpg")
+        File(path).copyTo(dest, overwrite = true)
+        "file://${dest.absolutePath}"
+      }
     }
-    val path = file.local?.path
-    if (path.isNullOrEmpty()) return null
-    val dir = pendingAvatarDir() ?: return null
-    dir.mkdirs()
-    val dest = File(dir, "${user.id}.jpg")
-    File(path).copyTo(dest, overwrite = true)
-    return "file://${dest.absolutePath}"
+  } catch (e: Throwable) {
+    Log.w(TAG, "Avatar download failed", e)
+    null
   }
 
   private fun pendingAvatarDir(): File? = context?.let { File(it.noBackupFilesDir, PENDING_AVATARS_DIR) }
 
-  private fun personMap(u: TdApi.User, f: TdApi.UserFullInfo?, photoUri: String?): Map<String, Any?> {
+  private fun personMap(u: TdApi.User, f: TdApi.UserFullInfo?, photoUri: String?, thumbUri: String?): Map<String, Any?> {
     val b = f?.birthdate
     return mapOf(
       "photoUri" to photoUri,
+      "thumbUri" to thumbUri,
       "id" to u.id.toDouble(),
       "firstName" to u.firstName,
       "lastName" to u.lastName,
@@ -345,6 +361,7 @@ class TelegramModule : Module() {
         o.put("usernames", JSONArray(p["usernames"] as List<*>))
         o.put("bio", p["bio"] ?: JSONObject.NULL)
         o.put("photoUri", p["photoUri"] ?: JSONObject.NULL)
+        o.put("thumbUri", p["thumbUri"] ?: JSONObject.NULL)
         val b = p["birthdate"] as Map<*, *>?
         o.put("birthdate", if (b != null) JSONObject(b) else JSONObject.NULL)
         arr.put(o)
@@ -375,7 +392,8 @@ class TelegramModule : Module() {
             "usernames" to (0 until (usernames?.length() ?: 0)).map { usernames!!.getString(it) },
             "birthdate" to (if (b != null) mapOf("day" to b.getInt("day"), "month" to b.getInt("month"), "year" to b.getInt("year")) else null),
             "bio" to (if (o.isNull("bio")) null else o.optString("bio")),
-            "photoUri" to (if (o.isNull("photoUri")) null else o.optString("photoUri"))
+            "photoUri" to (if (o.isNull("photoUri")) null else o.optString("photoUri")),
+            "thumbUri" to (if (o.isNull("thumbUri")) null else o.optString("thumbUri"))
           )
         )
       }

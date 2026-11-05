@@ -29,8 +29,10 @@ export interface Friend {
   whatsapp?: string | null;
   /** Номер Viber (цифры в международном формате). */
   viber?: string | null;
-  /** Фото из контактов телефона (content://…). */
+  /** Фото для карточки (большое): из контактов телефона (content://…) или аватарка Telegram (file://…). */
   photoUri?: string | null;
+  /** Маленькая версия фото для списков. */
+  thumbUri?: string | null;
 }
 
 export type RepeatUnit = 'day' | 'week' | 'month' | 'year';
