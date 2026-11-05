@@ -1,0 +1,64 @@
+name: Android APK (EAS Build)
+
+# Запуск:
+#  - вручную: вкладка Actions → «Android APK (EAS Build)» → Run workflow
+#    (кнопка появляется, когда этот файл есть в ветке по умолчанию);
+#  - коммитом, в сообщении которого есть «[apk]».
+# Нужен секрет репозитория EXPO_TOKEN (Settings → Secrets and variables → Actions).
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, claude/mobile-project-creation-pgqs46]
+
+concurrency:
+  group: eas-build-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[apk]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    steps:
+      - name: Check EXPO_TOKEN
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "### ❌ Не задан секрет EXPO_TOKEN" >> "$GITHUB_STEP_SUMMARY"
+            echo "Добавь его: Settings → Secrets and variables → Actions → New repository secret." >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::EXPO_TOKEN secret is not set"
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck and tests
+        run: |
+          npm run typecheck
+          npm test
+
+      - name: Link EAS project
+        run: npx eas-cli@latest init --non-interactive --force
+
+      - name: Start Android build
+        run: |
+          npx eas-cli@latest build --platform android --profile preview --non-interactive --no-wait --json > build.json
+          cat build.json
+          BUILD_ID=$(node -e 'const b=JSON.parse(require("fs").readFileSync("build.json","utf8"));console.log((Array.isArray(b)?b[0]:b).id)')
+          URL="https://expo.dev/accounts/kamon1996/projects/friends-notes/builds/$BUILD_ID"
+          {
+            echo "### ✅ Сборка APK запущена"
+            echo ""
+            echo "Открой на телефоне: $URL"
+            echo ""
+            echo "Когда статус станет **Finished**, нажми **Install** / **Download** и установи APK."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "Build page: $URL"

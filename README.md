@@ -26,7 +26,15 @@ npm run typecheck
 npm test
 ```
 
-## Сборка приложения
+## Сборка APK без компьютера (GitHub Actions + EAS)
+
+1. Создай токен на https://expo.dev/settings/access-tokens.
+2. Добавь его в репозиторий: **Settings → Secrets and variables → Actions → New repository secret**, имя `EXPO_TOKEN`.
+3. Запусти workflow **Android APK (EAS Build)** (вкладка Actions → Run workflow / Re-run)
+   или сделай коммит со словом `[apk]` в сообщении.
+4. В итогах запуска будет ссылка на сборку на expo.dev — оттуда скачивается APK.
+
+## Сборка вручную
 
 Через EAS (облачная сборка, Xcode/Android Studio не нужны):
 

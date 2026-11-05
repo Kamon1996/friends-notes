@@ -2,6 +2,7 @@
   "expo": {
     "name": "Друзья",
     "slug": "friends-notes",
+    "owner": "kamon1996",
     "scheme": "friendsnotes",
     "version": "1.0.0",
     "orientation": "portrait",
