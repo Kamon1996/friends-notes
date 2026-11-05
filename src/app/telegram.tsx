@@ -1,13 +1,15 @@
 import { Stack, router } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
+import { useState } from 'react';
+import { ActivityIndicator, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 
-import { Button, Card, Field, colors, styles } from '@/components/ui';
-import { Telegram, fetchTelegramPeople, startTelegram, telegramAvailable, telegramConfigured } from '@/lib/telegramClient';
-import { setPendingImport, tgErrorText, tgToRawContact } from '@/lib/telegramImport';
-import type { TgAuthState } from '../../modules/telegram';
+import { Button, Card, Field, SectionTitle, colors, styles } from '@/components/ui';
+import { telegramAvailable, telegramConfigured } from '@/lib/telegramClient';
+import { tgErrorText } from '@/lib/telegramImport';
+import { useTelegramSession } from '@/lib/telegramSession';
+import { Telegram } from '../../modules/telegram';
 
-type Phase = 'intro' | 'auth' | 'loading' | 'finishing';
+const SESSION_NAME = 'Друзья · импорт контактов';
+const SOURCE_URL = 'https://github.com/Kamon1996/friends-notes/tree/claude/mobile-project-creation-pgqs46/modules/telegram';
 
 const UNSUPPORTED: Record<string, string> = {
   waitEmailAddress: 'Telegram просит привязать почту ко входу. Сделай это в самом Telegram и попробуй снова.',
@@ -17,69 +19,22 @@ const UNSUPPORTED: Record<string, string> = {
   waitPremiumPurchase: 'Telegram требует Premium для входа с этого номера.',
 };
 
+function Line({ icon, children }: { icon: string; children: string }) {
+  return (
+    <View style={{ flexDirection: 'row', gap: 8 }}>
+      <Text style={{ width: 22 }}>{icon}</Text>
+      <Text style={{ flex: 1, color: colors.text, lineHeight: 20 }}>{children}</Text>
+    </View>
+  );
+}
+
 export default function TelegramImportScreen() {
-  const [phase, setPhase] = useState<Phase>('intro');
-  const [auth, setAuth] = useState<TgAuthState>({ state: 'none' });
+  const tg = useTelegramSession();
   const [phone, setPhone] = useState('+');
   const [code, setCode] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [progress, setProgress] = useState<[number, number] | null>(null);
-
-  const started = useRef(false);
-  const done = useRef(false);
-  const cancelled = useRef(false);
-  const authRef = useRef(auth);
-  authRef.current = auth;
-
-  // Подписка на смену состояния входа.
-  useEffect(() => {
-    if (!Telegram) return;
-    const sub = Telegram.addListener('onAuthState', (s) => setAuth(s));
-    return () => sub.remove();
-  }, []);
-
-  /** Выйти/стереть сессию — вызывается при отмене, ошибке и уходе с экрана. */
-  const cleanup = useCallback(async () => {
-    if (!Telegram || !started.current) return;
-    started.current = false;
-    try {
-      if (authRef.current.state === 'ready') await Telegram.logOut();
-      else if (authRef.current.state !== 'closed') await Telegram.destroy();
-    } catch {
-      // уже закрыт
-    }
-  }, []);
-
-  useEffect(
-    () => () => {
-      cancelled.current = true;
-      if (!done.current) cleanup();
-    },
-    [cleanup],
-  );
-
-  // Когда вход завершён — загружаем контакты и сразу выходим.
-  useEffect(() => {
-    if (auth.state !== 'ready' || phase === 'loading' || phase === 'finishing') return;
-    setPhase('loading');
-    (async () => {
-      try {
-        const { people, partial } = await fetchTelegramPeople((d, t) => setProgress([d, t]), () => cancelled.current);
-        if (cancelled.current) return;
-        setPendingImport({ label: 'Telegram', contacts: people.map(tgToRawContact), partial });
-        setPhase('finishing');
-        await cleanup();
-        done.current = true;
-        router.replace({ pathname: '/import', params: { source: 'telegram' } });
-      } catch (e) {
-        setError(tgErrorText(e));
-        setPhase('auth');
-        await cleanup();
-      }
-    })();
-  }, [auth.state, phase, cleanup]);
 
   const run = async (fn: () => Promise<unknown>) => {
     setBusy(true);
@@ -93,148 +48,211 @@ export default function TelegramImportScreen() {
     }
   };
 
-  const begin = () =>
-    run(async () => {
-      started.current = true;
-      setPhase('auth');
-      const s = await startTelegram();
-      setAuth((prev) => (prev.state === 'none' ? s : prev));
-    });
+  const loginPossible = telegramAvailable && telegramConfigured;
+  const { auth, imp } = tg;
+  const finished = imp.phase === 'done' || imp.phase === 'cancelled' || imp.phase === 'error';
+  const unsupported = UNSUPPORTED[auth.state];
 
-  const cancel = async () => {
-    cancelled.current = true;
-    await cleanup();
-    done.current = true;
-    router.back();
-  };
-
-  if (!telegramAvailable || !telegramConfigured) {
+  // ---------- Загрузка идёт ----------
+  if (tg.working) {
+    const done = imp.done ?? 0;
+    const total = imp.total ?? 0;
     return (
-      <View style={[styles.screen, styles.content]}>
-        <Card style={{ gap: 8 }}>
-          <Text style={styles.title}>Импорт из Telegram недоступен</Text>
-          <Text style={styles.muted}>
-            {!telegramAvailable
-              ? 'Нужна Android-версия приложения с библиотекой Telegram (TDLib). В браузере, Expo Go и на iOS её пока нет.'
-              : 'В этой сборке не заданы ключи Telegram API (TG_API_ID и TG_API_HASH).'}
+      <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+        <Stack.Screen options={{ title: 'Импорт из Telegram' }} />
+        <Card style={{ gap: 10 }}>
+          <View style={styles.row}>
+            <ActivityIndicator color={colors.primary} />
+            <Text style={[styles.title, { flex: 1 }]}>
+              {imp.phase === 'finishing' ? 'Выхожу из аккаунта Telegram…' : total ? `Загружаю контакты: ${done} из ${total}` : 'Получаю список контактов…'}
+            </Text>
+          </View>
+          {total > 0 && (
+            <View style={{ height: 8, borderRadius: 4, backgroundColor: colors.bg, overflow: 'hidden' }}>
+              <View style={{ width: `${Math.round((done / total) * 100)}%`, height: 8, backgroundColor: colors.primary }} />
+            </View>
+          )}
+          {!!imp.waitingSeconds && (
+            <Text style={styles.muted}>Telegram попросил паузу на {imp.waitingSeconds} с — продолжу автоматически.</Text>
+          )}
+          <Text style={[styles.muted, { lineHeight: 20 }]}>
+            Можно свернуть приложение или открыть другие вкладки — загрузка продолжится. Прогресс виден в уведомлении и
+            внизу экрана.
           </Text>
         </Card>
-      </View>
+
+        <SectionTitle>Что запрошено у Telegram</SectionTitle>
+        <Card style={{ gap: 6 }}>
+          <Line icon="📒">{`Список контактов: ${imp.requestsContacts ?? 0}`}</Line>
+          <Line icon="👤">{`Профили (имя, телефон, @username): ${imp.requestsUsers ?? 0}`}</Line>
+          <Line icon="🎂">{`Полные профили (день рождения, «о себе»): ${imp.requestsProfiles ?? 0}`}</Line>
+          <Line icon="💬">{`Сообщения и чаты: ${imp.requestsMessages ?? 0} — в приложении нет такой функции`}</Line>
+        </Card>
+
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <Button title="К друзьям" variant="secondary" onPress={() => router.back()} style={{ flex: 1 }} />
+          {imp.phase === 'loading' && <Button title="Остановить" variant="danger" onPress={tg.cancel} style={{ flex: 1 }} />}
+        </View>
+      </ScrollView>
     );
   }
 
-  const s = auth.state;
-  const unsupported = UNSUPPORTED[s];
-
-  return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <Stack.Screen options={{ title: 'Импорт из Telegram' }} />
-      <ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        {phase === 'intro' && (
-          <>
-            <Card style={{ gap: 10 }}>
-              <Text style={{ fontSize: 40, textAlign: 'center' }}>✈️</Text>
-              <Text style={[styles.title, { textAlign: 'center', fontSize: 18 }]}>Контакты и дни рождения из Telegram</Text>
-              <Text style={[styles.muted, { lineHeight: 20 }]}>
-                Войди в свой Telegram — приложение загрузит контакты с их днями рождения (у кого они открыты), а потом
-                ты выберешь, кого добавить.
-              </Text>
-            </Card>
-            <Card style={{ gap: 6 }}>
-              <Text style={styles.title}>🔒 Что происходит с аккаунтом</Text>
-              <Text style={[styles.muted, { lineHeight: 20 }]}>
-                • Используется официальная библиотека Telegram (TDLib).{'\n'}• Читаются только контакты и их профили —
-                не сообщения и не чаты.{'\n'}• Сразу после загрузки приложение выходит из аккаунта, сессия не
-                сохраняется.{'\n'}• Telegram может прислать уведомление о входе с нового устройства — это нормально.
-              </Text>
-            </Card>
-            <Button title="Войти в Telegram" onPress={begin} />
-          </>
-        )}
-
-        {phase === 'auth' && (
-          <>
-            {(s === 'none' || s === 'starting' || s === 'waitTdlibParameters') && !error && (
-              <View style={{ alignItems: 'center', gap: 8, marginTop: 24 }}>
-                <ActivityIndicator color={colors.primary} />
-                <Text style={styles.muted}>Подключаюсь к Telegram…</Text>
-              </View>
-            )}
-
-            {s === 'waitPhoneNumber' && (
-              <Card>
-                <Field
-                  label="Номер телефона, привязанный к Telegram"
-                  value={phone}
-                  onChangeText={(v) => setPhone('+' + v.replace(/[^\d]/g, ''))}
-                  keyboardType="phone-pad"
-                  autoFocus
-                  placeholder="+7 999 123 45 67"
-                />
-                <Button title={busy ? 'Отправляю…' : 'Получить код'} onPress={() => run(() => Telegram!.setPhoneNumber(phone))} />
-              </Card>
-            )}
-
-            {s === 'waitCode' && (
-              <Card>
-                <Text style={[styles.muted, { marginBottom: 12, lineHeight: 20 }]}>
-                  {auth.codeType?.includes('TelegramMessage')
-                    ? 'Код пришёл в приложение Telegram (чат «Telegram»). Не пересылай его никому.'
-                    : 'Код отправлен по SMS или в Telegram.'}
-                </Text>
-                <Field
-                  label="Код"
-                  value={code}
-                  onChangeText={(v) => setCode(v.replace(/\D/g, ''))}
-                  keyboardType="number-pad"
-                  autoFocus
-                  maxLength={8}
-                />
-                <Button title={busy ? 'Проверяю…' : 'Войти'} onPress={() => run(() => Telegram!.checkCode(code))} />
-              </Card>
-            )}
-
-            {s === 'waitPassword' && (
-              <Card>
-                <Text style={[styles.muted, { marginBottom: 12 }]}>
-                  Включена двухэтапная аутентификация — введи облачный пароль Telegram.
-                  {auth.passwordHint ? `\nПодсказка: ${auth.passwordHint}` : ''}
-                </Text>
-                <Field label="Облачный пароль" value={password} onChangeText={setPassword} secureTextEntry autoFocus />
-                <Button title={busy ? 'Проверяю…' : 'Войти'} onPress={() => run(() => Telegram!.checkPassword(password))} />
-              </Card>
-            )}
-
-            {unsupported && (
-              <Card>
-                <Text style={{ color: colors.danger, lineHeight: 20 }}>{unsupported}</Text>
-              </Card>
-            )}
-          </>
-        )}
-
-        {(phase === 'loading' || phase === 'finishing') && (
-          <Card style={{ alignItems: 'center', gap: 10 }}>
-            <ActivityIndicator color={colors.primary} />
-            <Text style={styles.title}>
-              {phase === 'finishing' ? 'Выхожу из аккаунта…' : 'Загружаю контакты и дни рождения…'}
+  // ---------- Готово: сессия завершена ----------
+  if (finished) {
+    const count = imp.done ?? 0;
+    return (
+      <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+        <Stack.Screen options={{ title: 'Импорт из Telegram' }} />
+        {imp.loggedOut ? (
+          <Card style={{ gap: 8, backgroundColor: colors.greenSoft, borderColor: colors.greenSoft }}>
+            <Text style={[styles.title, { color: colors.green }]}>✓ Сессия Telegram завершена</Text>
+            <Text style={{ color: colors.text, lineHeight: 20 }}>
+              Приложение вышло из аккаунта и стёрло данные входа. Проверь сам: Telegram → Настройки → Устройства —
+              сессии «{SESSION_NAME}» там больше нет.
             </Text>
-            {progress && (
-              <Text style={styles.muted}>
-                {progress[0]} из {progress[1]}
-              </Text>
-            )}
+          </Card>
+        ) : (
+          <Card style={{ gap: 8, backgroundColor: colors.amberSoft, borderColor: colors.amberSoft }}>
+            <Text style={[styles.title, { color: colors.amber }]}>⚠️ Проверь, что сессия завершена</Text>
+            <Text style={{ color: colors.text, lineHeight: 20 }}>
+              Не удалось подтвердить выход из аккаунта. Открой Telegram → Настройки → Устройства и, если там есть
+              «{SESSION_NAME}», нажми «Завершить сеанс».
+            </Text>
           </Card>
         )}
 
-        {error && (
+        {imp.phase === 'error' && (
           <Card style={{ borderColor: colors.danger }}>
-            <Text style={{ color: colors.danger, lineHeight: 20 }}>{error}</Text>
+            <Text style={{ color: colors.danger, lineHeight: 20 }}>Загрузка прервалась: {tgErrorText(imp.error)}</Text>
           </Card>
         )}
+        {imp.partial && (
+          <Text style={styles.muted}>Telegram попросил сделать паузу, поэтому дни рождения загружены не у всех.</Text>
+        )}
 
-        {phase !== 'intro' && phase !== 'finishing' && <Button title="Отмена" variant="danger" onPress={cancel} />}
+        {count > 0 ? (
+          <Button
+            title={`Выбрать, кого добавить (${count})`}
+            onPress={() => router.replace({ pathname: '/import', params: { source: 'telegram' } })}
+          />
+        ) : (
+          <Text style={styles.muted}>Контакты не загружены.</Text>
+        )}
+        <Button title="Начать заново" variant="secondary" onPress={tg.clearResult} />
       </ScrollView>
-    </KeyboardAvoidingView>
+    );
+  }
+
+  // ---------- Вход ----------
+  if (tg.signingIn || unsupported) {
+    const s = auth.state;
+    return (
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <Stack.Screen options={{ title: 'Вход в Telegram' }} />
+        <ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          {(s === 'starting' || s === 'waitTdlibParameters') && (
+            <View style={{ alignItems: 'center', gap: 8, marginTop: 24 }}>
+              <ActivityIndicator color={colors.primary} />
+              <Text style={styles.muted}>Подключаюсь к Telegram…</Text>
+            </View>
+          )}
+
+          {s === 'waitPhoneNumber' && (
+            <Card>
+              <Field
+                label="Номер телефона, привязанный к Telegram"
+                value={phone}
+                onChangeText={(v) => setPhone('+' + v.replace(/[^\d]/g, ''))}
+                keyboardType="phone-pad"
+                autoFocus
+                placeholder="+7 999 123 45 67"
+              />
+              <Button title={busy ? 'Отправляю…' : 'Получить код'} onPress={() => run(() => Telegram!.setPhoneNumber(phone))} />
+            </Card>
+          )}
+
+          {s === 'waitCode' && (
+            <Card>
+              <Text style={[styles.muted, { marginBottom: 12, lineHeight: 20 }]}>
+                {auth.codeType?.includes('TelegramMessage')
+                  ? 'Код пришёл в приложение Telegram (чат «Telegram»). Можно свернуть «Друзья», посмотреть код и вернуться — вход не прервётся. Никому не пересылай этот код.'
+                  : 'Код отправлен по SMS или в Telegram.'}
+              </Text>
+              <Field label="Код" value={code} onChangeText={(v) => setCode(v.replace(/\D/g, ''))} keyboardType="number-pad" autoFocus maxLength={8} />
+              <Button title={busy ? 'Проверяю…' : 'Войти'} onPress={() => run(() => Telegram!.checkCode(code))} />
+            </Card>
+          )}
+
+          {s === 'waitPassword' && (
+            <Card>
+              <Text style={[styles.muted, { marginBottom: 12 }]}>
+                Включена двухэтапная аутентификация — введи облачный пароль Telegram.
+                {auth.passwordHint ? `\nПодсказка: ${auth.passwordHint}` : ''}
+              </Text>
+              <Field label="Облачный пароль" value={password} onChangeText={setPassword} secureTextEntry autoFocus />
+              <Button title={busy ? 'Проверяю…' : 'Войти'} onPress={() => run(() => Telegram!.checkPassword(password))} />
+            </Card>
+          )}
+
+          {unsupported && (
+            <Card>
+              <Text style={{ color: colors.danger, lineHeight: 20 }}>{unsupported}</Text>
+            </Card>
+          )}
+          {error && (
+            <Card style={{ borderColor: colors.danger }}>
+              <Text style={{ color: colors.danger, lineHeight: 20 }}>{error}</Text>
+            </Card>
+          )}
+          <Button title="Отменить вход" variant="danger" onPress={tg.cancel} />
+        </ScrollView>
+      </KeyboardAvoidingView>
+    );
+  }
+
+  // ---------- Выбор способа ----------
+  return (
+    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+      <Stack.Screen options={{ title: 'Импорт из Telegram' }} />
+
+      <Card style={{ gap: 8 }}>
+        <Text style={[styles.title, { fontSize: 17 }]}>📒 Без входа — быстро и безопасно</Text>
+        <Text style={[styles.muted, { lineHeight: 20 }]}>
+          Возьмём из телефонной книги контакты, которые туда добавил Telegram: имя, номер и кнопку «Написать в
+          Telegram». Ни кода, ни пароля не нужно. Дней рождения так не получить.
+        </Text>
+        <Button title="Выбрать контакты из Telegram" onPress={() => router.push({ pathname: '/import', params: { source: 'tgbook' } })} />
+      </Card>
+
+      <SectionTitle>С днями рождения</SectionTitle>
+      <Card style={{ gap: 10 }}>
+        <Text style={[styles.title, { fontSize: 17 }]}>🎂 Через вход в Telegram</Text>
+        <View style={{ backgroundColor: colors.amberSoft, borderRadius: 12, padding: 12 }}>
+          <Text style={{ color: colors.text, lineHeight: 20 }}>
+            ⚠️ Telegram не умеет давать ограниченный доступ: любой вход по коду — это полный доступ к аккаунту, как у
+            любого приложения-клиента Telegram. Поэтому «Друзья» устроены так:
+          </Text>
+        </View>
+        <Line icon="✅">Читает: список контактов, имена и телефоны, @username, дни рождения, «о себе».</Line>
+        <Line icon="❌">
+          Не читает: сообщения, чаты и группы, файлы и фото. Таких функций в приложении нет — даже по ошибке их не вызвать.
+        </Line>
+        <Line icon="🔒">Сразу после загрузки выходит из аккаунта. Своего сервера нет — всё остаётся на этом телефоне.</Line>
+        <Line icon="👀">{`В Telegram → Настройки → Устройства вход виден как «${SESSION_NAME}» и пропадёт после выхода.`}</Line>
+        <Pressable onPress={() => Linking.openURL(SOURCE_URL).catch(() => {})} hitSlop={6}>
+          <Text style={{ color: colors.blue }}>Исходный код модуля Telegram →</Text>
+        </Pressable>
+        {loginPossible ? (
+          <Button title={busy ? 'Подключаюсь…' : 'Войти в Telegram'} onPress={() => run(tg.begin)} />
+        ) : (
+          <Text style={styles.muted}>
+            {telegramAvailable
+              ? 'В этой сборке не заданы ключи Telegram API (TG_API_ID и TG_API_HASH).'
+              : 'Вход доступен только в Android-приложении.'}
+          </Text>
+        )}
+        {error && <Text style={{ color: colors.danger }}>{error}</Text>}
+      </Card>
+    </ScrollView>
   );
 }

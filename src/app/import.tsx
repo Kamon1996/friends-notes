@@ -10,7 +10,9 @@ import { candidateToFriend, toCandidates, type ImportCandidate } from '@/lib/con
 import { formatDate, hasYear } from '@/lib/dates';
 import { newId, useStore } from '@/lib/store';
 import { telegramAvailable } from '@/lib/telegramClient';
-import { getPendingImport, setPendingImport } from '@/lib/telegramImport';
+import { tgToRawContact } from '@/lib/telegramImport';
+import { useTelegramSession } from '@/lib/telegramSession';
+import { Telegram } from '../../modules/telegram';
 
 type State =
   | { kind: 'loading' }
@@ -24,7 +26,10 @@ export default function ImportScreen() {
   const { data, ready, addFriends } = useStore();
   const insets = useSafeAreaInsets();
   const { source } = useLocalSearchParams<{ source?: string }>();
+  // telegram — загружено через вход в Telegram; tgbook — контакты Telegram из телефонной книги, без входа.
   const fromTelegram = source === 'telegram';
+  const fromTgBook = source === 'tgbook';
+  const tg = useTelegramSession();
   const [state, setState] = useState<State>({ kind: 'loading' });
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState('');
@@ -34,14 +39,14 @@ export default function ImportScreen() {
     setState({ kind: 'loading' });
     try {
       if (fromTelegram) {
-        // Контакты уже загружены на экране входа в Telegram.
-        const pending = getPendingImport();
-        if (!pending) {
+        // Контакты уже загружены в фоне модулем Telegram.
+        const people = (await Telegram?.getImportResult()) ?? [];
+        if (!people.length) {
           setState({ kind: 'error', message: 'Нет загруженных контактов Telegram — начни импорт заново.' });
           return;
         }
-        const candidates = toCandidates(pending.contacts, data.friends);
-        setState({ kind: 'ready', candidates, limited: false, sample: false, partial: pending.partial });
+        const candidates = toCandidates(people.map(tgToRawContact), data.friends);
+        setState({ kind: 'ready', candidates, limited: false, sample: false, partial: !!tg.imp.partial });
         setSelected(new Set(candidates.filter((c) => !c.duplicateOf && c.birthday).map((c) => c.key)));
         return;
       }
@@ -50,7 +55,9 @@ export default function ImportScreen() {
         setState({ kind: 'denied', canAskAgain: res.canAskAgain });
         return;
       }
-      const candidates = toCandidates(res.contacts, data.friends);
+      // Без входа: только те, кого Telegram добавил в телефонную книгу.
+      const list = fromTgBook ? res.contacts.filter((c) => c.links?.telegramId) : res.contacts;
+      const candidates = toCandidates(list, data.friends);
       setState({ kind: 'ready', candidates, limited: res.limited, sample: res.sample });
       // По умолчанию отмечаем новых людей, у которых указан день рождения.
       setSelected(new Set(candidates.filter((c) => !c.duplicateOf && c.birthday).map((c) => c.key)));
@@ -102,7 +109,7 @@ export default function ImportScreen() {
     const chosen = all.filter((c) => selected.has(c.key) && !c.duplicateOf);
     if (!chosen.length) return;
     addFriends(chosen.map((c) => candidateToFriend(c, newId(), newId)));
-    if (fromTelegram) setPendingImport(null);
+    if (fromTelegram) tg.clearResult();
     router.back();
   };
 
@@ -153,8 +160,8 @@ export default function ImportScreen() {
         keyboardShouldPersistTaps="handled"
         ListHeaderComponent={
           <View style={{ gap: 12 }}>
-            <Stack.Screen options={{ title: fromTelegram ? 'Контакты Telegram' : 'Импорт контактов' }} />
-            {!fromTelegram && telegramAvailable && (
+            <Stack.Screen options={{ title: fromTelegram || fromTgBook ? 'Контакты Telegram' : 'Импорт контактов' }} />
+            {!fromTelegram && !fromTgBook && telegramAvailable && (
               <Pressable
                 onPress={() => router.push('/telegram')}
                 style={({ pressed }) => [styles.card, styles.row, { borderColor: colors.blue }, pressed && { opacity: 0.7 }]}
@@ -162,7 +169,7 @@ export default function ImportScreen() {
                 <Text style={{ fontSize: 28 }}>✈️</Text>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.title}>Импорт из Telegram</Text>
-                  <Text style={styles.muted}>Контакты вместе с днями рождения</Text>
+                  <Text style={styles.muted}>Без входа — или с днями рождения через вход</Text>
                 </View>
                 <Text style={styles.muted}>›</Text>
               </Pressable>
@@ -188,7 +195,7 @@ export default function ImportScreen() {
                 <Button title="Выбрать ещё контакты" variant="secondary" onPress={() => pickMoreContacts().then(load)} />
               </Card>
             )}
-            {!fromTelegram && <Pressable onPress={() => router.push('/sources')} hitSlop={8}>
+            {!fromTelegram && !fromTgBook && <Pressable onPress={() => router.push('/sources')} hitSlop={8}>
               <Text style={{ color: colors.blue }}>🧪 Что лежит в контактах от Telegram, WhatsApp, Viber… →</Text>
             </Pressable>}
             <TextInput

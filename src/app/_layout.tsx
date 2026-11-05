@@ -6,7 +6,9 @@ import { Platform } from 'react-native';
 
 import { colors } from '@/components/ui';
 import { setupNotifications } from '@/lib/notifications';
+import { TelegramBanner } from '@/components/TelegramBanner';
 import { StoreProvider } from '@/lib/store';
+import { TelegramSessionProvider } from '@/lib/telegramSession';
 
 /** Переход по нажатию на уведомление. */
 function useNotificationNavigation() {
@@ -31,6 +33,7 @@ export default function RootLayout() {
 
   return (
     <StoreProvider>
+      <TelegramSessionProvider>
       <StatusBar style="dark" />
       <Stack
         screenOptions={{
@@ -53,6 +56,8 @@ export default function RootLayout() {
         <Stack.Screen name="telegram" options={{ presentation: 'modal', title: 'Импорт из Telegram' }} />
         <Stack.Screen name="diagnostics" options={{ title: 'Отчёт об ошибке' }} />
       </Stack>
+      <TelegramBanner />
+      </TelegramSessionProvider>
     </StoreProvider>
   );
 }

@@ -48,14 +48,3 @@ export function tgErrorText(e: unknown): string {
   const msg = e instanceof Error ? e.message : String(e);
   return RU_ERRORS.find(([re]) => re.test(msg))?.[1] ?? msg;
 }
-
-/** Данные, переданные с экрана входа в Telegram на экран выбора контактов. */
-let pending: { label: string; contacts: RawContact[]; partial: boolean } | null = null;
-
-export function setPendingImport(value: typeof pending) {
-  pending = value;
-}
-
-export function getPendingImport() {
-  return pending;
-}
