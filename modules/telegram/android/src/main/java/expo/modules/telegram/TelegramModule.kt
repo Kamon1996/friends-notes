@@ -1,6 +1,7 @@
 package expo.modules.telegram
 
 import android.os.Build
+import android.util.Log
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
@@ -25,24 +26,65 @@ class TelegramModule : Module() {
 
     Events("onAuthState")
 
+    // Записываем Java-сбои в файл, чтобы после перезапуска показать их в «Отчёте об ошибке».
+    OnCreate {
+      val dir = appContext.reactContext?.filesDir
+      if (dir != null) {
+        val previous = Thread.getDefaultUncaughtExceptionHandler()
+        if (previous !is CrashRecorder) {
+          Thread.setDefaultUncaughtExceptionHandler(CrashRecorder(File(dir, CRASH_FILE), previous))
+        }
+      }
+    }
+
+    /** Последний записанный сбой и хвост лога TDLib. */
+    AsyncFunction("getDiagnostics") {
+      val dir = appContext.reactContext?.filesDir
+      mapOf(
+        "lastCrash" to (dir?.let { readTail(File(it, CRASH_FILE), 20_000) } ?: ""),
+        "tdlibLog" to (dir?.let { readTail(File(it, TDLIB_LOG_FILE), 30_000) } ?: "")
+      )
+    }
+
+    AsyncFunction("clearDiagnostics") {
+      appContext.reactContext?.filesDir?.let {
+        File(it, CRASH_FILE).delete()
+        File(it, TDLIB_LOG_FILE).delete()
+      }
+      true
+    }
+
     /** Последнее известное состояние авторизации. */
     Function("getState") { lastState }
 
     /** Запускает TDLib. Дальше состояние приходит событиями onAuthState. */
-    AsyncFunction("start") { apiId: Int, apiHash: String, appVersion: String ->
-      if (client == null) {
-        cfgApiId = apiId
-        cfgApiHash = apiHash
-        cfgAppVersion = appVersion
-        try {
-          Client.execute(TdApi.SetLogVerbosityLevel(1))
-        } catch (e: Exception) {
-          // логирование не критично
+    AsyncFunction("start") { apiId: Int, apiHash: String, appVersion: String, promise: Promise ->
+      if (client != null) {
+        promise.resolve(lastState)
+        return@AsyncFunction
+      }
+      cfgApiId = apiId
+      cfgApiHash = apiHash
+      cfgAppVersion = appVersion
+      try {
+        // Лог TDLib (в т.ч. фатальные ошибки) — в файл, чтобы его можно было посмотреть в приложении.
+        appContext.reactContext?.filesDir?.let { dir ->
+          val logPath = File(dir, TDLIB_LOG_FILE).absolutePath
+          try {
+            Client.execute(TdApi.SetLogStream(TdApi.LogStreamFile(logPath, 1_000_000L, true)))
+            Client.execute(TdApi.SetLogVerbosityLevel(2))
+          } catch (e: Client.ExecutionException) {
+            Log.w(TAG, "TDLib log setup failed", e)
+          }
         }
         lastState = mapOf("state" to "starting")
         client = Client.create(Client.ResultHandler { onUpdate(it) }, null, null)
+        promise.resolve(lastState)
+      } catch (t: Throwable) {
+        // Например, UnsatisfiedLinkError, если libtdjni.so не загрузилась, — не роняем приложение.
+        Log.e(TAG, "TDLib start failed", t)
+        promise.reject("TG_START", "${t.javaClass.simpleName}: ${t.message}", t)
       }
-      lastState
     }
 
     AsyncFunction("setPhoneNumber") { phone: String, promise: Promise ->
@@ -101,23 +143,57 @@ class TelegramModule : Module() {
     }
   }
 
+  companion object {
+    private const val TAG = "FriendsTelegram"
+    private const val CRASH_FILE = "last-crash.txt"
+    private const val TDLIB_LOG_FILE = "tdlib.log"
+
+    private fun readTail(file: File, maxChars: Int): String {
+      if (!file.exists()) return ""
+      return try {
+        val text = file.readText()
+        if (text.length > maxChars) text.substring(text.length - maxChars) else text
+      } catch (t: Throwable) {
+        "read error: ${t.message}"
+      }
+    }
+  }
+
+  private class CrashRecorder(
+    private val file: File,
+    private val next: Thread.UncaughtExceptionHandler?
+  ) : Thread.UncaughtExceptionHandler {
+    override fun uncaughtException(thread: Thread, error: Throwable) {
+      try {
+        file.writeText("${java.util.Date()}\nthread: ${thread.name}\n${Log.getStackTraceString(error)}")
+      } catch (t: Throwable) {
+        // не мешаем системной обработке сбоя
+      }
+      next?.uncaughtException(thread, error)
+    }
+  }
+
   private fun send(fn: TdApi.Function<*>, promise: Promise, map: (TdApi.Object) -> Any?) {
     val c = client
     if (c == null) {
       promise.reject("TG_NO_CLIENT", "Telegram не запущен", null)
       return
     }
-    c.send(fn, Client.ResultHandler { result ->
-      if (result is TdApi.Error) {
-        promise.reject("TG_${result.code}", result.message, null)
-      } else {
-        try {
-          promise.resolve(map(result))
-        } catch (e: Exception) {
-          promise.reject("TG_RESULT", e.message ?: "Unexpected TDLib result", e)
+    try {
+      c.send(fn, Client.ResultHandler { result ->
+        if (result is TdApi.Error) {
+          promise.reject("TG_${result.code}", result.message, null)
+        } else {
+          try {
+            promise.resolve(map(result))
+          } catch (e: Throwable) {
+            promise.reject("TG_RESULT", e.message ?: "Unexpected TDLib result", e)
+          }
         }
-      }
-    })
+      })
+    } catch (t: Throwable) {
+      promise.reject("TG_SEND", "${t.javaClass.simpleName}: ${t.message}", t)
+    }
   }
 
   private fun onUpdate(update: TdApi.Object) {

@@ -35,6 +35,9 @@ interface NativeTelegram {
   getUserFullInfo(userId: number): Promise<TgUserFullInfo>;
   logOut(): Promise<null>;
   destroy(): Promise<null>;
+  /** Последний записанный Java-сбой и хвост лога TDLib. */
+  getDiagnostics(): Promise<{ lastCrash: string; tdlibLog: string }>;
+  clearDiagnostics(): Promise<boolean>;
   addListener(event: 'onAuthState', listener: (s: TgAuthState) => void): EventSubscription;
 }
 

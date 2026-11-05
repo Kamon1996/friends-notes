@@ -51,6 +51,7 @@ export default function RootLayout() {
         <Stack.Screen name="contacts-debug" options={{ title: 'Диагностика контактов' }} />
         <Stack.Screen name="sources" options={{ title: 'Данные из приложений' }} />
         <Stack.Screen name="telegram" options={{ presentation: 'modal', title: 'Импорт из Telegram' }} />
+        <Stack.Screen name="diagnostics" options={{ title: 'Отчёт об ошибке' }} />
       </Stack>
     </StoreProvider>
   );

@@ -71,6 +71,7 @@ export default function SettingsScreen() {
         onPress={() => router.push('/sources')}
       />
       <Button title="🔬 Диагностика контактов" variant="secondary" onPress={() => router.push('/contacts-debug')} />
+      <Button title="🩺 Отчёт об ошибке" variant="secondary" onPress={() => router.push('/diagnostics')} />
 
       <Text style={[styles.muted, { textAlign: 'center', marginTop: 16 }]}>
         Все данные хранятся только на этом телефоне.
