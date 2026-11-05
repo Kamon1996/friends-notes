@@ -47,7 +47,8 @@ test('индекс мессенджеров: Telegram, себя, WhatsApp, Viber
 });
 
 test('ссылки на чаты', () => {
-  assert.equal(telegramUrl(555), 'tg://user?id=555');
+  assert.equal(telegramUrl(555), 'tg://openmessage?user_id=555');
+  assert.equal(telegramUrl(555, 'ios'), 'tg://user?id=555');
   assert.equal(whatsappUrl('375291112233'), 'https://wa.me/375291112233');
   assert.equal(viberUrl('+375 44 777-88-99'), 'viber://chat?number=%2B375447778899');
 });

@@ -109,8 +109,13 @@ export function buildPhoneIndex(rows: DataRowLike[]): PhoneIndex {
   return { byContact, phonesByContact, byPhone, selfContactIds };
 }
 
-/** Ссылки для открытия чатов. */
-export const telegramUrl = (id: number) => `tg://user?id=${id}`;
+/**
+ * Ссылки для открытия чатов.
+ * Telegram для Android не понимает tg://user?id=… (это формат iOS) — он открывает чат по
+ * tg://openmessage?user_id=…, той же ссылкой пользуется кнопка «Сообщение» в системных контактах.
+ */
+export const telegramUrl = (id: number, os: string = 'android') =>
+  os === 'android' ? `tg://openmessage?user_id=${id}` : `tg://user?id=${id}`;
 export const whatsappUrl = (number: string) => `https://wa.me/${digits(number)}`;
 export const viberUrl = (number: string) => `viber://chat?number=%2B${digits(number)}`;
 export const phoneUrl = (phone: string) => `tel:${phone.replace(/[^\d+]/g, '')}`;

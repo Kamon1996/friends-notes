@@ -1,4 +1,4 @@
-import { Alert, Linking, Pressable, Text, View } from 'react-native';
+import { Alert, Linking, Platform, Pressable, Text, View } from 'react-native';
 
 import { phoneUrl, telegramUrl, viberUrl, whatsappUrl } from '@/lib/messengers';
 import type { Friend } from '@/lib/types';
@@ -16,7 +16,7 @@ async function open(url: string, app: string) {
 export function ContactButtons({ friend }: { friend: Friend }) {
   const buttons = [
     friend.phone && { key: 'call', icon: '📞', label: 'Позвонить', onPress: () => open(phoneUrl(friend.phone), 'звонилку') },
-    friend.telegramId && { key: 'tg', icon: '✈️', label: 'Telegram', onPress: () => open(telegramUrl(friend.telegramId!), 'Telegram') },
+    friend.telegramId && { key: 'tg', icon: '✈️', label: 'Telegram', onPress: () => open(telegramUrl(friend.telegramId!, Platform.OS), 'Telegram') },
     friend.whatsapp && { key: 'wa', icon: '💬', label: 'WhatsApp', onPress: () => open(whatsappUrl(friend.whatsapp!), 'WhatsApp') },
     friend.viber && { key: 'vb', icon: '🟣', label: 'Viber', onPress: () => open(viberUrl(friend.viber!), 'Viber') },
   ].filter(Boolean) as { key: string; icon: string; label: string; onPress: () => void }[];
