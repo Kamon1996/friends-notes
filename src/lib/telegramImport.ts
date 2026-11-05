@@ -9,6 +9,7 @@ export interface TgPerson {
   usernames: string[];
   birthdate: { day: number; month: number; year: number } | null;
   bio: string | null;
+  photoUri?: string | null;
 }
 
 /** Контакт Telegram → формат общего импорта. */
@@ -25,6 +26,7 @@ export function tgToRawContact(p: TgPerson): RawContact {
     birthday: p.birthdate ? { day: p.birthdate.day, month: p.birthdate.month, year: p.birthdate.year || undefined } : null,
     note: notes.join('\n'),
     links: { telegramId: p.id },
+    photoUri: p.photoUri ?? null,
   };
 }
 

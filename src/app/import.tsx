@@ -6,7 +6,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Avatar } from '@/components/Avatar';
 import { Button, Card, Checkbox, Chip, Empty, colors, styles } from '@/components/ui';
 import { loadContacts, pickMoreContacts } from '@/lib/contacts';
-import { candidateToFriend, toCandidates, type ImportCandidate } from '@/lib/contactsImport';
+import { candidateToFriend, phoneKey, toCandidates, type ImportCandidate } from '@/lib/contactsImport';
+import { applyEnrichment } from '@/lib/enrich';
 import { formatDate, hasYear } from '@/lib/dates';
 import { newId, useStore } from '@/lib/store';
 import { telegramAvailable } from '@/lib/telegramClient';
@@ -23,7 +24,7 @@ type State =
 type Filter = 'all' | 'phone' | 'birthday';
 
 export default function ImportScreen() {
-  const { data, ready, addFriends } = useStore();
+  const { data, ready, addFriends, updateFriends } = useStore();
   const insets = useSafeAreaInsets();
   const { source } = useLocalSearchParams<{ source?: string }>();
   // telegram — загружено через вход в Telegram; tgbook — контакты Telegram из телефонной книги, без входа.
@@ -105,10 +106,33 @@ export default function ImportScreen() {
       return next;
     });
 
-  const doImport = () => {
+  const doImport = async () => {
     const chosen = all.filter((c) => selected.has(c.key) && !c.duplicateOf);
     if (!chosen.length) return;
-    addFriends(chosen.map((c) => candidateToFriend(c, newId(), newId)));
+    const dups = all.filter((c) => c.duplicateOf);
+
+    // Аватарки из Telegram лежат во временной папке: оставляем только нужные.
+    let kept: Record<string, string> = {};
+    if (fromTelegram && Telegram) {
+      const ids = [...chosen, ...dups].map((c) => c.links.telegramId).filter((id): id is number => !!id);
+      kept = await Telegram.finalizeImport(ids);
+    }
+    const photoOf = (c: ImportCandidate) =>
+      fromTelegram ? (c.links.telegramId ? kept[String(c.links.telegramId)] ?? null : null) : c.photoUri;
+
+    addFriends(chosen.map((c) => ({ ...candidateToFriend(c, newId(), newId), photoUri: photoOf(c) })));
+
+    // Уже добавленных друзей (совпали по номеру) дополняем фото и мессенджерами — заполненное не трогаем.
+    const map = new Map<string, { links: ImportCandidate['links']; photoUri: string | null }>();
+    for (const c of dups) {
+      const key = phoneKey(c.phone);
+      if (key.length >= 7) map.set(key, { links: c.links, photoUri: photoOf(c) });
+    }
+    if (map.size) {
+      const { friends, changed } = applyEnrichment(data.friends, map);
+      if (changed) updateFriends((f) => friends.find((x) => x.id === f.id) ?? f);
+    }
+
     if (fromTelegram) tg.clearResult();
     router.back();
   };
