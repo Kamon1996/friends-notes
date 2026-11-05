@@ -64,7 +64,7 @@ export function fromLegacyContact(c: LegacyContact, index: number): RawContact {
     for (const r of c.rawDates) {
       const date = parseLooseDate(r.value);
       if (!date) continue;
-      if (r.type === 'birthday' && !base.birthday) base.birthday = date;
+      if (isBirthdayLabel(r.type) && !base.birthday) base.birthday = date;
       else dates.push({ label: r.type, date });
     }
     return { ...base, dates };
@@ -89,6 +89,9 @@ export interface ImportCandidate {
 }
 
 const pad = (n: number) => String(n).padStart(2, '0');
+
+/** Метка даты означает день рождения: стандартная «birthday» или своя («День рождения», «ДР»…). */
+export const isBirthdayLabel = (label: string | null | undefined) => /birth|рожд|^др$/i.test((label ?? '').trim());
 
 /** Дата из контактов (месяц 1–12, год может отсутствовать) → ISO. */
 export function contactDateToISO(d: { year?: number | null; month: number; day: number } | null | undefined): ISODate | null {
@@ -130,12 +133,12 @@ export function toCandidates(raw: RawContact[], friends: Friend[]): ImportCandid
     if (!name) continue;
     const phone = (c.phones ?? []).map((p) => p.number?.trim() ?? '').find(Boolean) ?? '';
     // На Android день рождения приходит как дата с меткой «birthday».
-    const birthdayDate = c.birthday ?? (c.dates ?? []).find((d) => d.label?.toLowerCase() === 'birthday')?.date;
+    const birthdayDate = c.birthday ?? (c.dates ?? []).find((d) => isBirthdayLabel(d.label))?.date;
     const birthday = contactDateToISO(birthdayDate);
     const dates = (c.dates ?? [])
       .map((d) => ({ title: dateTitle(d.label), date: contactDateToISO(d.date) }))
       .filter((d): d is { title: string; date: ISODate } => !!d.date)
-      .filter((d) => !(d.title === DATE_LABELS.birthday && d.date === birthday));
+      .filter((d) => !(isBirthdayLabel(d.title) && d.date === birthday));
 
     // Один человек может встречаться в книге дважды (разные аккаунты) — берём первый.
     const dedupe = `${nameKey(name)}|${phoneKey(phone)}`;
@@ -147,7 +150,9 @@ export function toCandidates(raw: RawContact[], friends: Friend[]): ImportCandid
     out.push({ key: c.id, name, phone, birthday, dates, note: c.note?.trim() ?? '', duplicateOf });
   }
 
-  return out.sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+  // Контакты без имени (вместо имени номер) — в конец списка.
+  const noName = (c: ImportCandidate) => !/\p{L}/u.test(c.name);
+  return out.sort((a, b) => Number(noName(a)) - Number(noName(b)) || a.name.localeCompare(b.name, 'ru'));
 }
 
 const EMOJIS = ['🙂', '😎', '🥰', '🤓', '🌸', '⚽', '🎸', '💼', '🐱', '🌟', '🍀', '🎨'];

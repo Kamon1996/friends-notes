@@ -93,3 +93,19 @@ test('контакты из старого API: Android (rawDates) и iOS (ме�
   assert.equal(d.birthday, '2000-01-02');
   assert.deepEqual(d.dates, []);
 });
+
+test('своя метка дня рождения и контакты без имени в конце', async () => {
+  const { fromLegacyContact } = await import('../contactsImport');
+  const c = fromLegacyContact({ name: 'Света', rawDates: [{ type: 'День рождения', value: '1991-07-07' }] }, 0);
+  assert.deepEqual(c.birthday, { year: 1991, month: 7, day: 7 });
+  const list = toCandidates(
+    [
+      { id: '1', fullName: '+375256072741', phones: [{ number: '+375256072741' }] },
+      { id: '2', fullName: 'Яна' },
+      { id: '3', fullName: '069', phones: [{ number: '80447888069' }] },
+      { id: '4', fullName: 'Антон' },
+    ],
+    [],
+  );
+  assert.deepEqual(list.map((x) => x.name), ['Антон', 'Яна', '+375256072741', '069']);
+});
