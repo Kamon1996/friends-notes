@@ -13,6 +13,70 @@ export interface RawContact {
   note?: string | null;
 }
 
+type LooseDate = { year?: number; month: number; day: number };
+
+/**
+ * Разбор даты из телефонной книги. Приложения пишут даты по-разному:
+ * 1990-05-12, 1990-05-12T00:00:00Z, --05-12, 12.05.1990, 12.05, 1990/05/12, 19900512.
+ */
+export function parseLooseDate(value: string | null | undefined): LooseDate | null {
+  const s = (value ?? '').trim();
+  let m: RegExpExecArray | null;
+  if ((m = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/.exec(s))) return { year: +m[1], month: +m[2], day: +m[3] };
+  if ((m = /^--(\d{2})-?(\d{2})$/.exec(s))) return { month: +m[1], day: +m[2] };
+  if ((m = /^(\d{4})(\d{2})(\d{2})$/.exec(s))) return { year: +m[1], month: +m[2], day: +m[3] };
+  if ((m = /^(\d{1,2})\.(\d{1,2})(?:\.(\d{4}))?$/.exec(s))) return { year: m[3] ? +m[3] : undefined, month: +m[2], day: +m[1] };
+  if ((m = /^(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?$/.exec(s))) {
+    const a = +m[1];
+    const b = +m[2];
+    // Порядок день/месяц неоднозначен: если второе число > 12, это MM/DD, иначе считаем DD/MM.
+    const [day, month] = b > 12 ? [b, a] : [a, b];
+    return { year: m[3] ? +m[3] : undefined, month, day };
+  }
+  return null;
+}
+
+/** Контакт из старого API expo-contacts (месяцы с 0, на Android есть исходные строки дат). */
+export interface LegacyContact {
+  id?: string;
+  name?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  phoneNumbers?: { number?: string | null }[] | null;
+  birthday?: { year?: number | null; month: number; day: number } | null;
+  dates?: { year?: number | null; month: number; day: number; label?: string | null }[] | null;
+  rawDates?: { type?: string | null; value?: string | null }[] | null;
+  note?: string | null;
+}
+
+export function fromLegacyContact(c: LegacyContact, index: number): RawContact {
+  const base: RawContact = {
+    id: c.id ?? `legacy-${index}`,
+    fullName: c.name,
+    givenName: c.firstName,
+    familyName: c.lastName,
+    phones: (c.phoneNumbers ?? []).map((p) => ({ number: p.number })),
+    note: c.note,
+  };
+  if (c.rawDates?.length) {
+    // Android: разбираем исходные строки сами — так не теряются даты в нестандартном формате.
+    const dates: NonNullable<RawContact['dates']> = [];
+    for (const r of c.rawDates) {
+      const date = parseLooseDate(r.value);
+      if (!date) continue;
+      if (r.type === 'birthday' && !base.birthday) base.birthday = date;
+      else dates.push({ label: r.type, date });
+    }
+    return { ...base, dates };
+  }
+  const shift = (d: { year?: number | null; month: number; day: number }) => ({ year: d.year, month: d.month + 1, day: d.day });
+  return {
+    ...base,
+    birthday: c.birthday ? shift(c.birthday) : null,
+    dates: (c.dates ?? []).map((d) => ({ label: d.label, date: shift(d) })),
+  };
+}
+
 export interface ImportCandidate {
   key: string;
   name: string;
@@ -65,7 +129,9 @@ export function toCandidates(raw: RawContact[], friends: Friend[]): ImportCandid
     const name = (c.fullName || [c.givenName, c.familyName].filter(Boolean).join(' ')).trim();
     if (!name) continue;
     const phone = (c.phones ?? []).map((p) => p.number?.trim() ?? '').find(Boolean) ?? '';
-    const birthday = contactDateToISO(c.birthday);
+    // На Android день рождения приходит как дата с меткой «birthday».
+    const birthdayDate = c.birthday ?? (c.dates ?? []).find((d) => d.label?.toLowerCase() === 'birthday')?.date;
+    const birthday = contactDateToISO(birthdayDate);
     const dates = (c.dates ?? [])
       .map((d) => ({ title: dateTitle(d.label), date: contactDateToISO(d.date) }))
       .filter((d): d is { title: string; date: ISODate } => !!d.date)

@@ -47,3 +47,49 @@ test('кандидаты: имя, дубликаты, даты, сортиров
   assert.equal(f.dates[0].yearly, true);
   assert.equal(f.dates[0].id, 'd1');
 });
+
+test('разбор дат в разных форматах', async () => {
+  const { parseLooseDate } = await import('../contactsImport');
+  assert.deepEqual(parseLooseDate('1990-05-12'), { year: 1990, month: 5, day: 12 });
+  assert.deepEqual(parseLooseDate('1990-05-12T00:00:00.000Z'), { year: 1990, month: 5, day: 12 });
+  assert.deepEqual(parseLooseDate('--05-12'), { month: 5, day: 12 });
+  assert.deepEqual(parseLooseDate('--0512'), { month: 5, day: 12 });
+  assert.deepEqual(parseLooseDate('19900512'), { year: 1990, month: 5, day: 12 });
+  assert.deepEqual(parseLooseDate('12.05.1990'), { year: 1990, month: 5, day: 12 });
+  assert.deepEqual(parseLooseDate('12.05'), { year: undefined, month: 5, day: 12 });
+  assert.deepEqual(parseLooseDate('1990/05/12'), { year: 1990, month: 5, day: 12 });
+  assert.deepEqual(parseLooseDate('05/25/1990'), { year: 1990, month: 5, day: 25 });
+  assert.equal(parseLooseDate('May 12'), null);
+  assert.equal(parseLooseDate(''), null);
+});
+
+test('контакты из старого API: Android (rawDates) и iOS (месяцы с 0)', async () => {
+  const { fromLegacyContact } = await import('../contactsImport');
+  const android = fromLegacyContact(
+    {
+      id: 'a',
+      name: 'Лена',
+      phoneNumbers: [{ number: '+7 900 1' }],
+      rawDates: [
+        { type: 'birthday', value: '12.05.1990' },
+        { type: 'anniversary', value: '--06-15' },
+        { type: 'other', value: 'мусор' },
+      ],
+    },
+    0,
+  );
+  assert.deepEqual(android.birthday, { year: 1990, month: 5, day: 12 });
+  assert.deepEqual(android.dates, [{ label: 'anniversary', date: { month: 6, day: 15 } }]);
+  const ios = fromLegacyContact({ name: 'Олег', birthday: { year: 1985, month: 0, day: 31 }, dates: [{ label: 'anniversary', month: 11, day: 1 }] }, 3);
+  assert.equal(ios.id, 'legacy-3');
+  assert.deepEqual(ios.birthday, { year: 1985, month: 1, day: 31 });
+  assert.deepEqual(ios.dates, [{ label: 'anniversary', date: { year: undefined, month: 12, day: 1 } }]);
+
+  // iOS: год 1604 означает «без года»
+  const [c] = toCandidates([{ id: 'x', fullName: 'Без года', birthday: { year: 1604, month: 3, day: 8 } }], []);
+  assert.equal(c.birthday, '1904-03-08');
+  // Android (новый API): день рождения внутри dates
+  const [d] = toCandidates([{ id: 'y', fullName: 'Даша', dates: [{ label: 'birthday', date: { year: 2000, month: 1, day: 2 } }] }], []);
+  assert.equal(d.birthday, '2000-01-02');
+  assert.deepEqual(d.dates, []);
+});

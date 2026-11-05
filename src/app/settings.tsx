@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, Linking, Platform, ScrollView, Text } from 'react-native';
 
@@ -62,6 +63,9 @@ export default function SettingsScreen() {
           onChange={(v) => updateSettings({ eventDayBefore: v })}
         />
       </Card>
+
+      <SectionTitle>Для разработки</SectionTitle>
+      <Button title="🔬 Диагностика контактов" variant="secondary" onPress={() => router.push('/contacts-debug')} />
 
       <Text style={[styles.muted, { textAlign: 'center', marginTop: 16 }]}>
         Все данные хранятся только на этом телефоне.

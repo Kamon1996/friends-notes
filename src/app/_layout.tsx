@@ -48,6 +48,7 @@ export default function RootLayout() {
         <Stack.Screen name="reminder/edit" options={{ presentation: 'modal', title: 'Напоминание' }} />
         <Stack.Screen name="settings" options={{ title: 'Настройки' }} />
         <Stack.Screen name="import" options={{ presentation: 'modal', title: 'Импорт контактов' }} />
+        <Stack.Screen name="contacts-debug" options={{ title: 'Диагностика контактов' }} />
       </Stack>
     </StoreProvider>
   );
