@@ -80,7 +80,8 @@ export default function UpcomingScreen() {
           entry.events.push(item.kind === 'birthday' ? { kind: 'birthday', years: item.age } : { kind: 'date', title: item.title, years: item.years });
           byFriend.set(item.friend.id, entry);
         }
-        const people = [...byFriend.values()];
+        // Большие карточки достаются избранным, остальные — компактными строками.
+        const people = [...byFriend.values()].sort((a, b) => Number(!!b.friend.favorite) - Number(!!a.friend.favorite));
         people.slice(0, TODAY_CARDS).forEach((c) => out.push({ type: 'today', key: `t-${c.friend.id}`, friend: c.friend, events: c.events }));
         const rest = people.slice(TODAY_CARDS);
         rest.forEach((c, i) => out.push({ type: 'todayRow', key: `tr-${c.friend.id}`, friend: c.friend, events: c.events, first: i === 0, last: i === rest.length - 1 }));

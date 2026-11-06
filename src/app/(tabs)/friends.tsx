@@ -3,49 +3,22 @@ import { useMemo, useState } from 'react';
 import { FlatList, Text, View } from 'react-native';
 
 import { Avatar } from '@/components/Avatar';
+import { Icon } from '@/components/Icon';
 import { Button, Chip, Empty, Fab, GroupedRow, IconButton, ListRow, ScreenHeader, SearchField, Tag, useTheme } from '@/components/ui';
 import { ageOn, daysBetween, formatDate, hasYear, nextAnniversary, plural, relativeDay, todayISO } from '@/lib/dates';
+import { buildFriendList, type FriendSort } from '@/lib/friendList';
 import { useStore } from '@/lib/store';
 import { telegramAvailable } from '@/lib/telegramClient';
 import type { Friend } from '@/lib/types';
 
-type Sort = 'name' | 'date';
-type Item = { type: 'letter'; key: string; letter: string } | { type: 'friend'; key: string; friend: Friend; first: boolean; last: boolean };
-
 export default function FriendsScreen() {
   const { data } = useStore();
-  const { s } = useTheme();
+  const { s, colors } = useTheme();
   const [query, setQuery] = useState('');
-  const [sort, setSort] = useState<Sort>('name');
+  const [sort, setSort] = useState<FriendSort>('name');
   const today = todayISO();
 
-  const items = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const list = data.friends.filter((f) => !q || [f.name, f.food, f.flowers, f.gifts, f.notes].some((x) => x.toLowerCase().includes(q)));
-    const out: Item[] = [];
-    if (sort === 'date') {
-      const next = (f: Friend) => (f.birthday ? daysBetween(today, nextAnniversary(f.birthday, today)) : 10_000);
-      list.sort((a, b) => next(a) - next(b) || a.name.localeCompare(b.name, 'ru'));
-      list.forEach((f, i) => out.push({ type: 'friend', key: f.id, friend: f, first: i === 0, last: i === list.length - 1 }));
-      return out;
-    }
-    list.sort((a, b) => a.name.localeCompare(b.name, 'ru'));
-    const letterOf = (f: Friend) => {
-      const ch = (f.name.trim()[0] ?? '').toUpperCase();
-      return /\p{L}/u.test(ch) ? ch : '#';
-    };
-    let letter = '';
-    list.forEach((f, i) => {
-      const l = letterOf(f);
-      if (l !== letter) {
-        letter = l;
-        out.push({ type: 'letter', key: `l-${l}`, letter: l });
-      }
-      const nextIsSame = i + 1 < list.length && letterOf(list[i + 1]) === l;
-      out.push({ type: 'friend', key: f.id, friend: f, first: out[out.length - 1].type === 'letter', last: !nextIsSame });
-    });
-    return out;
-  }, [data.friends, query, sort, today]);
+  const items = useMemo(() => buildFriendList(data.friends, query, sort, today), [data.friends, query, sort, today]);
 
   const n = data.friends.length;
   const inMonth = data.friends.filter((f) => f.birthday && daysBetween(today, nextAnniversary(f.birthday, today)) <= 30).length;
@@ -76,8 +49,11 @@ export default function FriendsScreen() {
           </>
         }
         renderItem={({ item }) =>
-          item.type === 'letter' ? (
-            <Text style={[s.name, { fontSize: 13, color: s.caption.color, paddingHorizontal: 24, paddingTop: 10, paddingBottom: 6 }]}>{item.letter}</Text>
+          item.type === 'label' ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 24, paddingTop: 10, paddingBottom: 6 }}>
+              {item.star && <Icon name="star" size={13} color={colors.accent} fill={colors.accent} />}
+              <Text style={[s.name, { fontSize: 13, color: item.star ? colors.accentText : s.caption.color }]}>{item.title}</Text>
+            </View>
           ) : (
             <View style={{ paddingHorizontal: 20 }}>
               <GroupedRow first={item.first} last={item.last} inset={70}>

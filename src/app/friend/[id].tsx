@@ -12,7 +12,7 @@ import { useFriend, useStore } from '@/lib/store';
 export default function FriendScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const friend = useFriend(id);
-  const { data, ready } = useStore();
+  const { data, ready, saveFriend } = useStore();
   const { s, colors, fonts } = useTheme();
 
   if (!ready) return null;
@@ -42,7 +42,16 @@ export default function FriendScreen() {
         options={{
           title: '',
           headerRight: () => (
-            <IconButton icon="pencil" label="Изменить" onPress={() => router.push({ pathname: '/friend/edit', params: { id: friend.id } })} />
+            <View style={{ flexDirection: 'row' }}>
+              <IconButton
+                icon="star"
+                label={friend.favorite ? 'Убрать из избранного' : 'В избранное'}
+                color={friend.favorite ? colors.accent : undefined}
+                fill={friend.favorite ? colors.accent : undefined}
+                onPress={() => saveFriend({ ...friend, favorite: !friend.favorite })}
+              />
+              <IconButton icon="pencil" label="Изменить" onPress={() => router.push({ pathname: '/friend/edit', params: { id: friend.id } })} />
+            </View>
           ),
         }}
       />

@@ -111,6 +111,9 @@ function FriendForm() {
         )}
 
         <Field label="Телефон" value={f.phone} onChangeText={(v) => set('phone', v)} placeholder="+7…" keyboardType="phone-pad" />
+        <Card style={{ paddingVertical: 4, marginBottom: 14 }}>
+          <SwitchRow icon="star" label="В избранном" sub="Выше остальных в списке друзей" value={!!f.favorite} onChange={(v) => set('favorite', v)} />
+        </Card>
 
         <SectionTitle style={{ marginBottom: 6 }}>Что важно знать</SectionTitle>
         <Field label="Еда" value={f.food} onChangeText={(v) => set('food', v)} placeholder="Любит суши, не ест острое…" multiline />

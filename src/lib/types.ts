@@ -33,6 +33,8 @@ export interface Friend {
   photoUri?: string | null;
   /** Маленькая версия фото для списков. */
   thumbUri?: string | null;
+  /** Избранный — выше остальных в списке друзей и в окне выбора. */
+  favorite?: boolean;
 }
 
 export type RepeatUnit = 'day' | 'week' | 'month' | 'year';

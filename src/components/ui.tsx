@@ -126,6 +126,7 @@ export function IconButton({
   onPress,
   label,
   color,
+  fill,
   size = 22,
   style,
 }: {
@@ -133,6 +134,7 @@ export function IconButton({
   onPress: () => void;
   label: string;
   color?: string;
+  fill?: string;
   size?: number;
   style?: StyleProp<ViewStyle>;
 }) {
@@ -147,7 +149,7 @@ export function IconButton({
         style,
       ]}
     >
-      <Icon name={icon} size={size} color={color ?? colors.text} />
+      <Icon name={icon} size={size} color={color ?? colors.text} fill={fill} />
     </Pressable>
   );
 }

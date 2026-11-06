@@ -42,7 +42,8 @@ export type IconName =
   | 'palette'
   | 'list'
   | 'book'
-  | 'camera';
+  | 'camera'
+  | 'star';
 
 const PATHS: Record<IconName, ReactNode> = {
   calendar: (
@@ -192,26 +193,29 @@ const PATHS: Record<IconName, ReactNode> = {
       <Circle cx={12} cy={13} r={3.5} />
     </>
   ),
+  star: <Path d="M12 3.6l2.5 5.3 5.8.7-4.3 4 1.1 5.8L12 16.6l-5.1 2.8 1.1-5.8-4.3-4 5.8-.7z" />,
 };
 
-/** Иконки одной линии (1.75 px) — вместо эмодзи. */
+/** Иконки одной линии (1.75 px) — вместо эмодзи. `fill` — для «включённых» состояний, например закрашенной звезды. */
 export function Icon({
   name,
   size = 22,
   color = '#221C18',
   strokeWidth = 1.75,
+  fill = 'none',
 }: {
   name: IconName;
   size?: number;
   color?: string;
   strokeWidth?: number;
+  fill?: string;
 }) {
   return (
     <Svg
       width={size}
       height={size}
       viewBox="0 0 24 24"
-      fill="none"
+      fill={fill}
       stroke={color}
       strokeWidth={strokeWidth}
       strokeLinecap="round"

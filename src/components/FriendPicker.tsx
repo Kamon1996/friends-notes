@@ -3,6 +3,7 @@ import { FlatList, Modal, Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { formatDate, hasYear } from '@/lib/dates';
+import { byName, favoritesFirst } from '@/lib/friendList';
 import type { Friend } from '@/lib/types';
 import { Avatar } from './Avatar';
 import { Icon } from './Icon';
@@ -17,7 +18,7 @@ export function FriendPicker({ friends, value, onChange }: { friends: Friend[]; 
   const insets = useSafeAreaInsets();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const sorted = useMemo(() => [...friends].sort((a, b) => a.name.localeCompare(b.name, 'ru')), [friends]);
+  const sorted = useMemo(() => [...friends].sort(favoritesFirst(byName)), [friends]);
   const selected = friends.find((f) => f.id === value) ?? null;
 
   const visible = useMemo(() => {
@@ -71,7 +72,14 @@ export function FriendPicker({ friends, value, onChange }: { friends: Friend[]; 
                 leading={<Avatar friend={item} size={44} />}
                 title={<Text style={{ fontFamily: fonts.displayMedium, fontSize: 17, color: colors.text }} numberOfLines={1}>{item.name}</Text>}
                 subtitle={item.birthday ? formatDate(item.birthday, hasYear(item.birthday)) : undefined}
-                trailing={value === item.id ? <Icon name="check" size={20} color={colors.accent} strokeWidth={2.2} /> : undefined}
+                trailing={
+                  item.favorite || value === item.id ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      {item.favorite && <Icon name="star" size={16} color={colors.accent} fill={colors.accent} />}
+                      {value === item.id && <Icon name="check" size={20} color={colors.accent} strokeWidth={2.2} />}
+                    </View>
+                  ) : undefined
+                }
                 style={{ paddingHorizontal: 0, paddingVertical: 10 }}
               />
             )}
