@@ -1,4 +1,4 @@
-import { Children, type ReactNode } from 'react';
+import { Children, useState, type ReactNode } from 'react';
 import {
   Pressable,
   Switch,
@@ -61,13 +61,15 @@ export function Label({ children }: { children: ReactNode }) {
 
 export function Field({ label, ...props }: TextInputProps & { label: string }) {
   const { s, colors } = useTheme();
+  const [grow, setGrow] = useState(0);
   return (
     <View style={s.field}>
       <Label>{label}</Label>
       <TextInput
         placeholderTextColor={colors.placeholder}
+        onContentSizeChange={(e) => props.multiline && setGrow(Math.min(320, e.nativeEvent.contentSize.height + 26))}
         {...props}
-        style={[s.input, props.multiline && s.inputMultiline, props.style]}
+        style={[s.input, props.multiline && s.inputMultiline, props.multiline && grow > 84 && { minHeight: grow }, props.style]}
       />
     </View>
   );
@@ -170,11 +172,13 @@ export function Chip({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityState={{ selected: !!selected }}
-      style={({ pressed }) => [s.chip, selected && s.chipSelected, leading ? { paddingLeft: 4 } : null, pressed && { opacity: 0.7 }]}
+      style={({ pressed }) => [s.chip, { maxWidth: '100%' }, selected && s.chipSelected, leading ? { paddingLeft: 4 } : null, pressed && { opacity: 0.7 }]}
     >
       {leading}
       {icon && <Icon name={icon} size={15} color={selected ? colors.bg : colors.text} strokeWidth={2} />}
-      <Text style={[s.chipText, selected && s.chipTextSelected]}>{label}</Text>
+      <Text style={[s.chipText, { flexShrink: 1 }, selected && s.chipTextSelected]} numberOfLines={1}>
+        {label}
+      </Text>
     </Pressable>
   );
 }

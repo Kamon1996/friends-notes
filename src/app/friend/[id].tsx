@@ -34,7 +34,6 @@ export default function FriendScreen() {
   const today = todayISO();
   const nextBirthday = friend.birthday ? nextAnniversary(friend.birthday, today) : null;
   const diff = nextBirthday ? daysBetween(today, nextBirthday) : null;
-  const age = friend.birthday && nextBirthday && hasYear(friend.birthday) ? ageOn(friend.birthday, nextBirthday) : null;
   const ageNow = friend.birthday && hasYear(friend.birthday) ? ageOn(friend.birthday, today) : null;
 
   return (
@@ -52,7 +51,7 @@ export default function FriendScreen() {
         <Pressable onPress={() => router.push({ pathname: '/friend/edit', params: { id: friend.id } })} accessibilityLabel="Изменить фото" style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
           <Avatar friend={friend} size={88} />
         </Pressable>
-        <Text style={{ fontFamily: fonts.display, fontSize: 26, lineHeight: 30, color: colors.text, textAlign: 'center', letterSpacing: -0.2 }}>{friend.name}</Text>
+        <Text style={{ fontFamily: fonts.display, fontSize: 26, lineHeight: 30, color: colors.text, textAlign: 'center', letterSpacing: -0.2, alignSelf: 'stretch' }}>{friend.name}</Text>
         {friend.birthday && nextBirthday && (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <Text style={[s.muted, { fontSize: 14, fontVariant: ['tabular-nums'] }]}>
@@ -62,7 +61,7 @@ export default function FriendScreen() {
             {diff === 0 ? (
               <Tag text="сегодня" tone="solid" />
             ) : (
-              <Tag text={age ? `${age} ${plural(age, 'год', 'года', 'лет')} ${relativeDay(nextBirthday, today)}` : relativeDay(nextBirthday, today)} tone={diff !== null && diff <= 7 ? 'accent' : 'neutral'} />
+              <Tag text={relativeDay(nextBirthday, today)} tone={diff !== null && diff <= 7 ? 'accent' : 'neutral'} />
             )}
           </View>
         )}
@@ -106,7 +105,9 @@ export default function FriendScreen() {
         <View style={{ gap: 8 }}>
           <SectionTitle style={{ marginBottom: 0 }}>Важные даты</SectionTitle>
           <Group inset={62}>
-            {friend.dates.map((d) => {
+            {[...friend.dates]
+              .sort((a, b) => (a.yearly ? nextAnniversary(a.date, today) : a.date).localeCompare(b.yearly ? nextAnniversary(b.date, today) : b.date))
+              .map((d) => {
               const next = d.yearly ? nextAnniversary(d.date, today) : d.date;
               const years = d.yearly && hasYear(d.date) ? ageOn(d.date, next) : null;
               const dd = daysBetween(today, next);

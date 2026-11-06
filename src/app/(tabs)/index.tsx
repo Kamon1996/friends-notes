@@ -1,26 +1,39 @@
 import { router } from 'expo-router';
 import { useMemo } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { FlatList, Pressable, Text, View } from 'react-native';
 
 import { Avatar } from '@/components/Avatar';
+import { Icon } from '@/components/Icon';
 import { ReminderRow } from '@/components/ReminderRow';
 import { TodayCard, type TodayEvent } from '@/components/TodayCard';
-import { Empty, Group, IconButton, IconCircle, ListRow, ScreenHeader, SectionTitle, Tag, useTheme } from '@/components/ui';
+import { Empty, GroupedRow, IconButton, IconCircle, ListRow, ScreenHeader, Tag, useTheme } from '@/components/ui';
 import { daysBetween, formatDateLong, formatDayShort, plural, relativeDay, todayISO } from '@/lib/dates';
 import { upcomingItems, type UpcomingItem } from '@/lib/events';
 import { useStore } from '@/lib/store';
 import type { Friend } from '@/lib/types';
 
-type Section = { key: string; title: string; items: UpcomingItem[]; tone?: 'danger' };
+/** Сколько просроченных показывать на ленте; остальные — во вкладке «Напоминания». */
+const OVERDUE_LIMIT = 5;
+/** Сколько именинников показывать большими карточками; остальные за сегодня — компактными строками. */
+const TODAY_CARDS = 3;
+
+type Row =
+  | { type: 'label'; key: string; title: string; tone?: 'danger' }
+  | { type: 'today'; key: string; friend: Friend; events: TodayEvent[] }
+  | { type: 'todayRow'; key: string; friend: Friend; events: TodayEvent[]; first: boolean; last: boolean }
+  | { type: 'event'; key: string; item: UpcomingItem; first: boolean; last: boolean }
+  | { type: 'reminder'; key: string; item: Extract<UpcomingItem, { kind: 'reminder' }>; first: boolean; last: boolean; showDate: boolean }
+  | { type: 'more'; key: string; count: number }
+  | { type: 'empty'; key: string; noFriends: boolean };
 
 export default function UpcomingScreen() {
   const { data, ready } = useStore();
   const { s, colors } = useTheme();
   const today = todayISO();
 
-  const sections = useMemo(() => {
-    const groups: Section[] = [
-      { key: 'overdue', title: 'Просрочено', items: [], tone: 'danger' },
+  const rows = useMemo(() => {
+    const groups: { key: string; title: string; tone?: 'danger'; items: UpcomingItem[] }[] = [
+      { key: 'overdue', title: 'Просрочено', tone: 'danger', items: [] },
       { key: 'today', title: 'Сегодня', items: [] },
       { key: 'week', title: 'На этой неделе', items: [] },
       { key: 'month', title: 'В ближайший месяц', items: [] },
@@ -34,83 +47,150 @@ export default function UpcomingScreen() {
       else if (diff <= 31) groups[3].items.push(item);
       else groups[4].items.push(item);
     }
-    return groups.filter((g) => g.items.length);
+
+    const out: Row[] = [];
+    const pushGroup = (keyPrefix: string, items: UpcomingItem[], showDate: boolean) => {
+      items.forEach((item, i) => {
+        const first = i === 0;
+        const last = i === items.length - 1;
+        if (item.kind === 'reminder') out.push({ type: 'reminder', key: item.key, item, first, last, showDate });
+        else out.push({ type: 'event', key: item.key, item, first, last });
+      });
+    };
+
+    for (const g of groups) {
+      if (!g.items.length) continue;
+      const weekCount = g.key === 'week' ? ` · ${g.items.length}` : '';
+      out.push({ type: 'label', key: `l-${g.key}`, title: g.title + weekCount, tone: g.tone });
+
+      if (g.key === 'overdue') {
+        // Самые свежие просроченные — ближе к делу; остальные ждут во вкладке «Напоминания».
+        const recent = [...g.items].reverse();
+        pushGroup(g.key, recent.slice(0, OVERDUE_LIMIT), true);
+        if (recent.length > OVERDUE_LIMIT) out.push({ type: 'more', key: 'overdue-more', count: recent.length - OVERDUE_LIMIT });
+        continue;
+      }
+
+      if (g.key === 'today') {
+        // Все сегодняшние события одного человека — в одной карточке.
+        const byFriend = new Map<string, { friend: Friend; events: TodayEvent[] }>();
+        for (const item of g.items) {
+          if (item.kind === 'reminder') continue;
+          const entry = byFriend.get(item.friend.id) ?? { friend: item.friend, events: [] };
+          entry.events.push(item.kind === 'birthday' ? { kind: 'birthday', years: item.age } : { kind: 'date', title: item.title, years: item.years });
+          byFriend.set(item.friend.id, entry);
+        }
+        const people = [...byFriend.values()];
+        people.slice(0, TODAY_CARDS).forEach((c) => out.push({ type: 'today', key: `t-${c.friend.id}`, friend: c.friend, events: c.events }));
+        const rest = people.slice(TODAY_CARDS);
+        rest.forEach((c, i) => out.push({ type: 'todayRow', key: `tr-${c.friend.id}`, friend: c.friend, events: c.events, first: i === 0, last: i === rest.length - 1 }));
+        pushGroup(g.key, g.items.filter((i) => i.kind === 'reminder'), false);
+        continue;
+      }
+
+      pushGroup(g.key, g.items.filter((i) => i.kind !== 'reminder'), true);
+      pushGroup(g.key, g.items.filter((i) => i.kind === 'reminder'), true);
+    }
+    if (!out.length) out.push({ type: 'empty', key: 'empty', noFriends: data.friends.length === 0 });
+    return out;
   }, [data, today]);
 
   if (!ready) return <View style={s.screen} />;
 
-  const weekCount = sections.find((g) => g.key === 'week')?.items.length ?? 0;
-
-  // Все сегодняшние события одного человека — в одной карточке.
-  const todayCards = (items: UpcomingItem[]) => {
-    const byFriend = new Map<string, { friend: Friend; events: TodayEvent[] }>();
-    for (const item of items) {
-      if (item.kind === 'reminder') continue;
-      const entry = byFriend.get(item.friend.id) ?? { friend: item.friend, events: [] };
-      entry.events.push(item.kind === 'birthday' ? { kind: 'birthday', years: item.age } : { kind: 'date', title: item.title, years: item.years });
-      byFriend.set(item.friend.id, entry);
-    }
-    return [...byFriend.values()];
-  };
-
   return (
     <View style={s.screen}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 120 }}>
-        <ScreenHeader
-          title="Скоро"
-          subtitle={formatDateLong(today)}
-          right={
-            <>
-              <IconButton icon="import" label="Импорт друзей" onPress={() => router.push('/import')} />
-              <IconButton icon="sliders" label="Настройки" onPress={() => router.push('/settings')} />
-            </>
-          }
-        />
-        <View style={{ padding: 20, paddingTop: 14, gap: 20 }}>
-          {sections.length === 0 &&
-            (data.friends.length === 0 ? (
-              <Empty
-                icon="people"
-                title="Пока никого"
-                text="Добавь первого друга во вкладке «Друзья» или импортируй из контактов — дни рождения появятся здесь."
-              />
-            ) : (
-              <Empty icon="calendar" title="Всё спокойно" text="В ближайшие два месяца ничего не запланировано." />
-            ))}
-          {sections.map((g) => {
-            const events = g.items.filter((i) => i.kind !== 'reminder');
-            const reminders = g.items.filter((i) => i.kind === 'reminder');
-            return (
-              <View key={g.key} style={{ gap: 8 }}>
-                <SectionTitle style={{ marginBottom: 0 }}>
-                  <Text style={[s.sectionLabel, g.tone === 'danger' && { color: colors.danger }]}>
-                    {g.title}
-                    {g.key === 'week' && weekCount ? ` · ${weekCount}` : ''}
+      <FlatList
+        data={rows}
+        keyExtractor={(r) => r.key}
+        contentContainerStyle={{ paddingBottom: 120 }}
+        ListHeaderComponent={
+          <ScreenHeader
+            title="Скоро"
+            subtitle={formatDateLong(today)}
+            right={
+              <>
+                <IconButton icon="import" label="Импорт друзей" onPress={() => router.push('/import')} />
+                <IconButton icon="sliders" label="Настройки" onPress={() => router.push('/settings')} />
+              </>
+            }
+          />
+        }
+        renderItem={({ item: row }) => {
+          switch (row.type) {
+            case 'label':
+              return (
+                <Text style={[s.sectionLabel, { paddingHorizontal: 24, paddingTop: 20, paddingBottom: 8 }, row.tone === 'danger' && { color: colors.danger }]}>{row.title}</Text>
+              );
+            case 'today':
+              return (
+                <View style={{ paddingHorizontal: 20, paddingBottom: 8 }}>
+                  <TodayCard friend={row.friend} events={row.events} />
+                </View>
+              );
+            case 'todayRow':
+              return (
+                <View style={{ paddingHorizontal: 20, paddingTop: row.first ? 2 : 0, paddingBottom: row.last ? 8 : 0 }}>
+                  <GroupedRow first={row.first} last={row.last}>
+                    <TodayRow friend={row.friend} events={row.events} />
+                  </GroupedRow>
+                </View>
+              );
+            case 'event':
+              return (
+                <View style={{ paddingHorizontal: 20, paddingTop: row.first ? 2 : 0 }}>
+                  <GroupedRow first={row.first} last={row.last}>
+                    <EventRow item={row.item} />
+                  </GroupedRow>
+                </View>
+              );
+            case 'reminder':
+              return (
+                <View style={{ paddingHorizontal: 20, paddingTop: row.first ? 2 : 0 }}>
+                  <GroupedRow first={row.first} last={row.last} inset={row.item.friend ? 96 : 56}>
+                    <ReminderRow reminder={row.item.reminder} friend={row.item.friend} showDate={row.showDate} />
+                  </GroupedRow>
+                </View>
+              );
+            case 'more':
+              return (
+                <Pressable onPress={() => router.push('/reminders')} style={({ pressed }) => [s.row, { paddingHorizontal: 24, paddingVertical: 10, gap: 6, opacity: pressed ? 0.6 : 1 }]}>
+                  <Text style={[s.muted, { color: colors.accent, fontFamily: s.title.fontFamily }]}>
+                    Ещё {row.count} {plural(row.count, 'просроченное', 'просроченных', 'просроченных')} во вкладке «Напоминания»
                   </Text>
-                </SectionTitle>
-                {g.key === 'today' && todayCards(events).map((c) => <TodayCard key={c.friend.id} friend={c.friend} events={c.events} />)}
-                {g.key !== 'today' && events.length > 0 && (
-                  <Group>
-                    {events.map((item) => (
-                      <EventRow key={item.key} item={item} />
-                    ))}
-                  </Group>
-                )}
-                {reminders.length > 0 && (
-                  <Group>
-                    {reminders.map((item) =>
-                      item.kind === 'reminder' ? (
-                        <ReminderRow key={item.key} reminder={item.reminder} friend={item.friend} showDate={g.key !== 'today'} />
-                      ) : null,
-                    )}
-                  </Group>
-                )}
-              </View>
-            );
-          })}
-        </View>
-      </ScrollView>
+                  <Icon name="chevronRight" size={16} color={colors.accent} strokeWidth={2} />
+                </Pressable>
+              );
+            case 'empty':
+              return (
+                <View style={{ padding: 20 }}>
+                  {row.noFriends ? (
+                    <Empty icon="people" title="Пока никого" text="Добавь первого друга во вкладке «Друзья» или импортируй из контактов — дни рождения появятся здесь." />
+                  ) : (
+                    <Empty icon="calendar" title="Всё спокойно" text="В ближайшие два месяца ничего не запланировано." />
+                  )}
+                </View>
+              );
+          }
+        }}
+      />
     </View>
+  );
+}
+
+/** Компактная строка именинника, когда карточек «Сегодня» слишком много. */
+function TodayRow({ friend, events }: { friend: Friend; events: TodayEvent[] }) {
+  const { s } = useTheme();
+  const text = events
+    .map((e) => (e.kind === 'birthday' ? 'День рождения' : e.title ?? 'Важная дата') + (e.years ? ` · ${e.years} ${plural(e.years, 'год', 'года', 'лет')}` : ''))
+    .join(' · ');
+  return (
+    <ListRow
+      onPress={() => router.push(`/friend/${friend.id}`)}
+      leading={<Avatar friend={friend} size={40} />}
+      title={<Text style={[s.name, { fontSize: 16 }]} numberOfLines={1}>{friend.name}</Text>}
+      subtitle={text}
+      trailing={<Tag text="сегодня" tone="solid" />}
+    />
   );
 }
 

@@ -16,6 +16,26 @@ export async function loadContacts(): Promise<ContactsResult> {
     { id: 's7', fullName: 'Папа', phones: [{ number: '+7 901 222-33-44' }], birthday: { year: 1964, month: 7, day: 21 } },
     { id: 's8', fullName: 'Серёжа Волков', phones: [{ number: '+7 925 333-44-55' }], links: { telegramId: 444, viber: '79253334455' } },
   ];
+  // Для стресс-теста в браузере: localStorage «friends-notes/sample-count» = N даёт N выдуманных контактов.
+  let n = 0;
+  try {
+    n = Number(globalThis.localStorage?.getItem('friends-notes/sample-count') ?? 0);
+  } catch {
+    n = 0;
+  }
+  if (n > 0) {
+    const first = ['Аня', 'Борис', 'Вика', 'Глеб', 'Даша', 'Егор', 'Жанна', 'Зоя', 'Иван', 'Катя', 'Лена', 'Миша', 'Нина', 'Олег', 'Паша', 'Рита', 'Саша', 'Таня', 'Уля', 'Федя'];
+    const last = ['Смирнова', 'Ким', 'Петров', 'Орлова', 'Волков', 'Белова', 'Громова', 'Ветров', 'Козлов', 'Новикова'];
+    for (let i = 0; i < n; i++) {
+      contacts.push({
+        id: `g${i}`,
+        fullName: `${first[i % first.length]} ${last[(i * 7) % last.length]}${i >= 200 ? ' ' + (i + 1) : ''}`,
+        phones: [{ number: `+7 9${String(i).padStart(2, '0')} ${String(100 + (i % 900)).padStart(3, '0')}-${String(i % 100).padStart(2, '0')}-${String((i * 3) % 100).padStart(2, '0')}` }],
+        birthday: i % 3 === 0 ? { year: 1970 + (i % 35), month: 1 + (i % 12), day: 1 + (i % 28) } : undefined,
+        links: i % 4 === 0 ? { telegramId: 1000 + i } : undefined,
+      });
+    }
+  }
   return { status: 'granted', contacts, limited: false, sample: true };
 }
 
