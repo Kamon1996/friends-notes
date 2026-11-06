@@ -59,7 +59,10 @@ npx expo start --web    # превью в браузере (без уведом�
 
 ```bash
 npm run typecheck
+npm run lint
 npm test
+# сквозная проверка экранов на веб-сборке (нужен playwright с Chromium):
+npx expo export --platform web --output-dir /tmp/web && node scripts/e2e-web.js /tmp/web /tmp/shots
 ```
 
 ## Сборка APK без компьютера (GitHub Actions + EAS)

@@ -166,7 +166,12 @@ export function Chip({
 }) {
   const { s, colors } = useTheme();
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [s.chip, selected && s.chipSelected, leading ? { paddingLeft: 4 } : null, pressed && { opacity: 0.7 }]}>
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityState={{ selected: !!selected }}
+      style={({ pressed }) => [s.chip, selected && s.chipSelected, leading ? { paddingLeft: 4 } : null, pressed && { opacity: 0.7 }]}
+    >
       {leading}
       {icon && <Icon name={icon} size={15} color={selected ? colors.bg : colors.text} strokeWidth={2} />}
       <Text style={[s.chipText, selected && s.chipTextSelected]}>{label}</Text>
@@ -274,7 +279,13 @@ export function Empty({ icon, title, text, children }: { icon: IconName; title: 
 export function Checkbox({ checked, onPress, done }: { checked: boolean; onPress: () => void; done?: boolean }) {
   const { s, colors } = useTheme();
   return (
-    <Pressable onPress={onPress} hitSlop={12} style={[s.checkbox, checked && (done ? s.checkboxDone : s.checkboxChecked)]}>
+    <Pressable
+      onPress={onPress}
+      hitSlop={12}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked }}
+      style={[s.checkbox, checked && (done ? s.checkboxDone : s.checkboxChecked)]}
+    >
       {checked && <Icon name="check" size={14} color={done ? '#fff' : colors.onAccent} strokeWidth={3} />}
     </Pressable>
   );

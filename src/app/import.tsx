@@ -1,5 +1,5 @@
 import { Stack, router, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Linking, Platform, Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -35,6 +35,11 @@ export default function ImportScreen() {
   const tg = useTelegramSession();
   const [state, setState] = useState<State>({ kind: 'loading' });
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  // Дубликаты ищем среди друзей на момент загрузки списка, а не на момент первого рендера экрана.
+  const friendsRef = useRef(data.friends);
+  useEffect(() => {
+    friendsRef.current = data.friends;
+  }, [data.friends]);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
 
@@ -48,7 +53,7 @@ export default function ImportScreen() {
           setState({ kind: 'error', message: 'Нет загруженных контактов Telegram — начни импорт заново.' });
           return;
         }
-        const candidates = toCandidates(people.map(tgToRawContact), data.friends);
+        const candidates = toCandidates(people.map(tgToRawContact), friendsRef.current);
         setState({ kind: 'ready', candidates, limited: false, sample: false, partial: !!tg.imp.partial });
         setSelected(new Set(candidates.filter((c) => !c.duplicateOf && c.birthday).map((c) => c.key)));
         return;
@@ -60,14 +65,13 @@ export default function ImportScreen() {
       }
       // Без входа: только те, кого Telegram добавил в телефонную книгу.
       const list = fromTgBook ? res.contacts.filter((c) => c.links?.telegramId) : res.contacts;
-      const candidates = toCandidates(list, data.friends);
+      const candidates = toCandidates(list, friendsRef.current);
       setState({ kind: 'ready', candidates, limited: res.limited, sample: res.sample });
       // По умолчанию отмечаем новых людей, у которых указан день рождения.
       setSelected(new Set(candidates.filter((c) => !c.duplicateOf && c.birthday).map((c) => c.key)));
     } catch (e) {
       setState({ kind: 'error', message: e instanceof Error ? e.message : String(e) });
     }
-    // Дубликаты считаем по списку друзей на момент открытия экрана.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
