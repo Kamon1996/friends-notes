@@ -1,6 +1,6 @@
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from 'react-native';
 
 import { FriendPicker } from '@/components/FriendPicker';
 import { DateField } from '@/components/DateField';
@@ -51,6 +51,9 @@ function ReminderForm() {
   const params = useLocalSearchParams<{ id?: string; friendId?: string }>();
   const { data, saveReminder, deleteReminder } = useStore();
   const { s, colors, fonts } = useTheme();
+  const { width, fontScale } = useWindowDimensions();
+  // Дата и время рядом, пока оба поля влезают; при крупном системном шрифте или узком экране — друг под другом.
+  const stackDateTime = width - 40 < 330 * fontScale;
   const existing = data.reminders.find((r) => r.id === params.id);
 
   const [r, setR] = useState<Reminder>(
@@ -127,8 +130,8 @@ function ReminderForm() {
           <FriendPicker friends={data.friends} value={r.friendId} onChange={(id) => set('friendId', id)} />
         </View>
 
-        <View style={{ flexDirection: 'row', gap: 10 }}>
-          <View style={{ flex: 3 }}>
+        <View style={stackDateTime ? undefined : { flexDirection: 'row', gap: 10 }}>
+          <View style={stackDateTime ? undefined : { flex: 3 }}>
             <DateField
               mode="date"
               label={r.repeat ? 'Ближайший раз' : 'Дата или дедлайн'}
@@ -136,7 +139,7 @@ function ReminderForm() {
               onChange={(v) => set('date', v)}
             />
           </View>
-          <View style={{ flex: 2 }}>
+          <View style={stackDateTime ? undefined : { flex: 2 }}>
             <DateField mode="time" label="Время" value={r.time} onChange={(v) => set('time', v)} />
           </View>
         </View>

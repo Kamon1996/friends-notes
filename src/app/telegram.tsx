@@ -4,7 +4,7 @@ import { ActivityIndicator, KeyboardAvoidingView, Linking, Platform, Pressable, 
 
 import { QrCode } from '@/components/QrCode';
 import { Icon, type IconName } from '@/components/Icon';
-import { Button, Card, Field, IconCircle, SectionTitle, useTheme } from '@/components/ui';
+import { Button, ButtonRow, Card, Field, IconCircle, SectionTitle, useTheme } from '@/components/ui';
 import { telegramAvailable, telegramConfigured } from '@/lib/telegramClient';
 import { tgErrorText } from '@/lib/telegramImport';
 import { useTelegramSession } from '@/lib/telegramSession';
@@ -103,10 +103,10 @@ export default function TelegramImportScreen() {
           <Line icon="bubble" tone="danger">{`Сообщения и чаты: ${imp.requestsMessages ?? 0} — в приложении нет такой функции`}</Line>
         </Card>
 
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          <Button title="К друзьям" variant="secondary" onPress={() => router.back()} style={{ flex: 1 }} />
-          {imp.phase === 'loading' && <Button title="Остановить" variant="danger" onPress={tg.cancel} style={{ flex: 1 }} />}
-        </View>
+        <ButtonRow>
+          <Button title="К друзьям" variant="secondary" onPress={() => router.back()} style={{ flexGrow: 1 }} />
+          {imp.phase === 'loading' && <Button title="Остановить" variant="danger" onPress={tg.cancel} style={{ flexGrow: 1 }} />}
+        </ButtonRow>
       </ScrollView>
     );
   }

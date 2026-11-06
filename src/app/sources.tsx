@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, ScrollView, Share, Text, View } from 'react-native';
 
 import type { IconName } from '@/components/Icon';
-import { Button, Card, IconCircle, SectionTitle, useTheme } from '@/components/ui';
+import { Button, ButtonRow, Card, IconCircle, SectionTitle, useTheme } from '@/components/ui';
 import { contactsRawAvailable, dumpAccount, getAccounts, type RawAccount, type RawDump } from '../../modules/contacts-raw';
 import { SOURCES, accountsFor, filterDumpsByMime, formatDump, mimeStats, otherAccounts, type SourceDef } from '@/lib/sources';
 import { plural } from '@/lib/dates';
@@ -185,15 +185,15 @@ export default function SourcesScreen() {
               </View>
             ))}
           </Card>
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <Button title="Поделиться текстом" onPress={() => share(result.text)} style={{ flex: 1 }} />
+          <ButtonRow>
+            <Button title="Поделиться текстом" onPress={() => share(result.text)} style={{ flexGrow: 1 }} />
             <Button
               title="JSON"
               variant="secondary"
               onPress={() => share(JSON.stringify(result.dumps, null, 1))}
               style={{ width: 90 }}
             />
-          </View>
+          </ButtonRow>
           <Card>
             <Text style={mono} selectable>
               {result.text.length > SHOW_LIMIT ? result.text.slice(0, SHOW_LIMIT) + '\n…(дальше — через «Поделиться»)' : result.text}

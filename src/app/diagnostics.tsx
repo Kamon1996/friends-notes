@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, ScrollView, Share, Text, View } from 'react-native';
 
-import { Button, Card, SectionTitle, useTheme } from '@/components/ui';
+import { Button, ButtonRow, Card, SectionTitle, useTheme } from '@/components/ui';
 import { Telegram } from '@/lib/telegramClient';
 
 const mono = { fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' }), fontSize: 11, lineHeight: 15 } as const;
@@ -45,18 +45,18 @@ export default function DiagnosticsScreen() {
       {!data && !error && <ActivityIndicator color={colors.accent} />}
       {data && (
         <>
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <Button title="Поделиться" onPress={() => Share.share({ message: report.slice(-60_000) }).catch(() => {})} style={{ flex: 1 }} />
+          <ButtonRow>
+            <Button title="Поделиться" onPress={() => Share.share({ message: report.slice(-60_000) }).catch(() => {})} style={{ flexGrow: 1 }} />
             <Button
               title="Очистить"
               variant="secondary"
+              style={{ flexGrow: 1 }}
               onPress={async () => {
                 await Telegram?.clearDiagnostics();
                 load();
               }}
-              style={{ width: 110 }}
             />
-          </View>
+          </ButtonRow>
           <SectionTitle>Последний сбой</SectionTitle>
           <Card>
             <Text style={mono} selectable>

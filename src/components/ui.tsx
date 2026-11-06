@@ -258,6 +258,11 @@ export function SwitchRow({
   );
 }
 
+/** Кнопки в ряд; если места не хватает (крупный системный шрифт, узкий экран) — переносятся на новую строку. */
+export function ButtonRow({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
+  return <View style={[{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }, style]}>{children}</View>;
+}
+
 export function Fab({ onPress, label = 'Добавить' }: { onPress: () => void; label?: string }) {
   const { s, colors } = useTheme();
   return (
