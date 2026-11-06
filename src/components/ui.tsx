@@ -1,4 +1,4 @@
-import { Children, useState, type ReactNode } from 'react';
+import { Children, type ReactNode } from 'react';
 import {
   Pressable,
   Switch,
@@ -59,17 +59,16 @@ export function Label({ children }: { children: ReactNode }) {
   return <Text style={s.label}>{children}</Text>;
 }
 
+/** Многострочные поля растут вместе с текстом сами (так работает нативный TextInput без фиксированной высоты). */
 export function Field({ label, ...props }: TextInputProps & { label: string }) {
   const { s, colors } = useTheme();
-  const [grow, setGrow] = useState(0);
   return (
     <View style={s.field}>
       <Label>{label}</Label>
       <TextInput
         placeholderTextColor={colors.placeholder}
-        onContentSizeChange={(e) => props.multiline && setGrow(Math.min(320, e.nativeEvent.contentSize.height + 26))}
         {...props}
-        style={[s.input, props.multiline && s.inputMultiline, props.multiline && grow > 84 && { minHeight: grow }, props.style]}
+        style={[s.input, props.multiline && s.inputMultiline, props.style]}
       />
     </View>
   );
