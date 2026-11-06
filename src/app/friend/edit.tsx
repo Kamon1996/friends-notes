@@ -2,9 +2,10 @@ import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
-import { Avatar } from '@/components/Avatar';
+import { AvatarPicker } from '@/components/AvatarPicker';
 import { DateField } from '@/components/DateField';
 import { Button, Card, Chip, Field, Label, SectionTitle, SwitchRow, useTheme } from '@/components/ui';
+import { cleanupAvatars, deleteOwnedFiles } from '@/lib/avatars';
 import { UNKNOWN_YEAR, hasYear, parseISODate, todayISO, toISODate } from '@/lib/dates';
 import { confirm } from '@/lib/confirm';
 import { newId, useFriend, useStore } from '@/lib/store';
@@ -62,6 +63,9 @@ function FriendForm() {
       return;
     }
     saveFriend({ ...f, name: f.name.trim(), dates: f.dates.filter((d) => d.title.trim()) });
+    // Файлы фото, которые больше не используются (заменили или убрали), удаляем.
+    cleanupAvatars(f.id, [f.photoUri, f.thumbUri]);
+    if (existing) deleteOwnedFiles([existing.photoUri, existing.thumbUri].filter((u) => u !== f.photoUri && u !== f.thumbUri));
     router.back();
   };
 
@@ -84,14 +88,18 @@ function FriendForm() {
         }}
       />
       <ScrollView style={s.screen} contentContainerStyle={[s.content, { gap: 0 }]} keyboardShouldPersistTaps="handled">
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 14 }}>
-          <Avatar friend={{ name: f.name || '?', photoUri: f.photoUri, thumbUri: f.thumbUri }} size={64} />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 14 }}>
+          <AvatarPicker
+            friend={{ id: f.id, name: f.name || '?', phone: f.phone, photoUri: f.photoUri, thumbUri: f.thumbUri }}
+            size={72}
+            onChange={(uris) => setF((prev) => ({ ...prev, photoUri: uris?.photoUri ?? null, thumbUri: uris?.thumbUri ?? null }))}
+          />
           <View style={{ flex: 1 }}>
             <Field label="Имя" value={f.name} onChangeText={(v) => set('name', v)} placeholder="Например, Аня" autoFocus={!existing} style={{ marginBottom: 0 }} />
           </View>
         </View>
         <Text style={[s.caption, { marginTop: -8, marginBottom: 14, paddingHorizontal: 4 }]}>
-          {f.photoUri ? 'Фото пришло из контактов.' : 'Фото подтянется из контактов при импорте, а пока — инициалы.'}
+          {f.photoUri ? 'Нажми на фото, чтобы заменить или убрать.' : 'Нажми на кружок, чтобы добавить фото. Без фото — инициалы.'}
         </Text>
 
         <DateField mode="date" label="День рождения" value={f.birthday} onChange={setBirthday} noYear={yearUnknown} />

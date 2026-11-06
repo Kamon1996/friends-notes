@@ -1,5 +1,5 @@
 import { Stack, router, useLocalSearchParams } from 'expo-router';
-import { ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import { Avatar } from '@/components/Avatar';
 import { ContactButtons } from '@/components/ContactButtons';
@@ -49,7 +49,9 @@ export default function FriendScreen() {
       />
 
       <View style={{ alignItems: 'center', gap: 8 }}>
-        <Avatar friend={friend} size={88} />
+        <Pressable onPress={() => router.push({ pathname: '/friend/edit', params: { id: friend.id } })} accessibilityLabel="Изменить фото" style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
+          <Avatar friend={friend} size={88} />
+        </Pressable>
         <Text style={{ fontFamily: fonts.display, fontSize: 26, lineHeight: 30, color: colors.text, textAlign: 'center', letterSpacing: -0.2 }}>{friend.name}</Text>
         {friend.birthday && nextBirthday && (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>

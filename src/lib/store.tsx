@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { AppState } from 'react-native';
 
+import { cleanupAvatars, deleteOwnedFiles } from './avatars';
 import { completeReminder } from './events';
 import { syncNotifications } from './notifications';
 import { DEFAULT_SETTINGS, EMPTY_DATA, type AppData, type Friend, type Reminder, type Settings } from './types';
@@ -79,11 +80,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const deleteFriend = useCallback((id: string) => {
+    const gone = dataRef.current.friends.find((f) => f.id === id);
     setData((d) => ({
       ...d,
       friends: d.friends.filter((f) => f.id !== id),
       reminders: d.reminders.filter((r) => r.friendId !== id),
     }));
+    cleanupAvatars(id);
+    if (gone) deleteOwnedFiles([gone.photoUri, gone.thumbUri]);
   }, []);
 
   const saveReminder = useCallback((r: Reminder) => {

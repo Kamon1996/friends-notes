@@ -45,7 +45,15 @@
           "contactsPermission": "Чтобы быстро добавить друзей и их дни рождения из контактов."
         }
       ],
-      "expo-font"
+      "expo-font",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Чтобы выбрать фото друга из галереи.",
+          "cameraPermission": "Чтобы сфотографировать друга для аватара.",
+          "microphonePermission": false
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

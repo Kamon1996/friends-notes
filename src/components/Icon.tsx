@@ -41,7 +41,8 @@ export type IconName =
   | 'refresh'
   | 'palette'
   | 'list'
-  | 'book';
+  | 'book'
+  | 'camera';
 
 const PATHS: Record<IconName, ReactNode> = {
   calendar: (
@@ -185,6 +186,12 @@ const PATHS: Record<IconName, ReactNode> = {
   ),
   list: <Path d="M8 6h13M8 12h13M8 18h13M3 6h.5M3 12h.5M3 18h.5" />,
   book: <Path d="M4 4h6a3 3 0 0 1 3 3v13a2 2 0 0 0-2-2H4zM20 4h-6a3 3 0 0 0-3 3v13a2 2 0 0 1 2-2h7z" />,
+  camera: (
+    <>
+      <Path d="M4 8h3l2-3h6l2 3h3v11H4z" />
+      <Circle cx={12} cy={13} r={3.5} />
+    </>
+  ),
 };
 
 /** Иконки одной линии (1.75 px) — вместо эмодзи. */
