@@ -21,7 +21,8 @@ test('инициалы: два слова, одно слово, дефис, пу
   assert.equal(initials('Анна-Мария Петрова'), 'АМ');
   assert.equal(initials('  Игорь   Ветров  Иванович'), 'ИВ');
   assert.equal(initials(''), '·');
-  assert.equal(initials('+375 29 123'), '+2'.replace('+', '') ? initials('+375 29 123') : '');
+  assert.equal(initials('+375 29 123'), '·');
+  assert.equal(initials('🙂 Вика'), 'В');
 });
 
 test('оттенок аватара зависит только от имени и всегда из палитры', () => {

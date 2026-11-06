@@ -304,7 +304,7 @@ function ContactRow({ candidate: c, checked, onToggle }: { candidate: ImportCand
       <Avatar friend={{ name: c.name, photoUri: c.photoUri, thumbUri: c.thumbUri }} size={40} />
       <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
         <Text style={styles.title} numberOfLines={1}>{c.name}</Text>
-        <Text style={[styles.muted, { fontVariant: ['tabular-nums'] }]} numberOfLines={1}>
+        <Text style={[styles.muted, { fontVariant: ['tabular-nums'] }]} numberOfLines={2}>
           {dup ? `Уже есть: ${c.duplicateOf}` : [c.phone, ...details].filter(Boolean).join(' · ') || 'Без номера'}
         </Text>
       </View>

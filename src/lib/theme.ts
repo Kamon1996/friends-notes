@@ -187,7 +187,7 @@ export function initials(name: string): string {
   const words = name
     .trim()
     .split(/[\s\-–—]+/)
-    .filter((w) => /[\p{L}\p{N}]/u.test(w));
-  const letters = words.slice(0, 2).map((w) => [...w].find((c) => /[\p{L}\p{N}]/u.test(c)) ?? '');
+    .filter((w) => /\p{L}/u.test(w));
+  const letters = words.slice(0, 2).map((w) => [...w].find((c) => /\p{L}/u.test(c)) ?? '');
   return letters.join('').toUpperCase() || '·';
 }

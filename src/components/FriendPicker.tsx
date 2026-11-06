@@ -57,7 +57,7 @@ export function FriendPicker({ friends, value, onChange }: { friends: Friend[]; 
             contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: insets.bottom + 24 }}
             ItemSeparatorComponent={() => <Separator inset={70} />}
             ListHeaderComponent={
-              <Pressable onPress={() => pick(null)} style={({ pressed }) => [s.row, s.rowPad, { opacity: pressed ? 0.6 : 1 }]}>
+              <Pressable onPress={() => pick(null)} style={({ pressed }) => [s.row, { paddingVertical: 10, opacity: pressed ? 0.6 : 1 }]}>
                 <View style={[s.iconCircle, { width: 44, height: 44, borderRadius: 22 }]}>
                   <Icon name="person" size={22} color={colors.text2} />
                 </View>

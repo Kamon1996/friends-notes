@@ -82,8 +82,8 @@ export default function FriendScreen() {
         >
           <IconCircle icon="note" tone="accent" />
           <View style={{ flex: 1, gap: 2 }}>
-            <Text style={s.title}>Что любит, какие цветы, идеи подарков</Text>
-            <Text style={s.muted}>Запиши, чтобы не забыть к празднику.</Text>
+            <Text style={s.title}>Еда, цветы, подарки</Text>
+            <Text style={s.muted}>Запиши, что любит, чтобы не гадать к празднику.</Text>
           </View>
           <Text style={[s.title, { color: colors.accent }]}>Дополнить</Text>
         </Pressable>
