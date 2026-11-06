@@ -69,9 +69,10 @@ export function DateFieldBase({ picker, ...props }: DateFieldProps & { picker: R
           placeholderTextColor={colors.placeholder}
           keyboardType="number-pad"
           maxLength={fullLength}
+          maxFontSizeMultiplier={1.3}
           style={[
             s.input,
-            { flex: 1, minWidth: 0, fontSize: 17, letterSpacing: 0.5, fontVariant: ['tabular-nums'] },
+            { flex: 1, minWidth: 0, paddingHorizontal: 12, fontSize: 17, letterSpacing: 0.3, fontVariant: ['tabular-nums'] },
             focused && { borderColor: colors.accent, borderWidth: 1.5 },
             invalid && { borderColor: colors.danger, borderWidth: 1.5 },
           ]}

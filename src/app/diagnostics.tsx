@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Platform, ScrollView, Share, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, ScrollView, Share, Text } from 'react-native';
 
 import { Button, ButtonRow, Card, SectionTitle, useTheme } from '@/components/ui';
 import { Telegram } from '@/lib/telegramClient';

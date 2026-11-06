@@ -107,6 +107,19 @@ const has = (t, s) => t.toLowerCase().includes(s.toLowerCase());
     await shot('friends');
   });
 
+  await step('Друзья: долгое нажатие — режим выбора, корзина удаляет с подтверждением', async () => {
+    await page.getByText('По имени', { exact: true }).click(); await page.waitForTimeout(300);
+    const row = page.getByText('Мама', { exact: true }).last(); const box = await row.boundingBox();
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await page.mouse.down(); await page.waitForTimeout(700); await page.mouse.up(); await page.waitForTimeout(400);
+    let t = await text(); assert(has(t, 'Выбрано: 1') || (await page.getByLabel('Удалить выбранных').count()) > 0, 'режим выбора не включился: ' + t.slice(0, 200));
+    await tap(page.getByText('Игорь Ветров')); await page.waitForTimeout(300);
+    assert(await page.getByLabel('Выбрано: 2').count(), 'второй не отметился');
+    await tap(page.getByText('Игорь Ветров')); await page.waitForTimeout(300);
+    await tap(page.getByLabel('Удалить выбранных')); await page.waitForTimeout(600);
+    t = await text(); assert(!has(t, 'Мама') && has(t, 'Игорь Ветров') && has(t, '2 человека'), 'Мама не удалилась: ' + t.slice(0, 200));
+    assert(!(await stored()).friends.some((f) => f.id === 'c'));
+    await shot('friends-selection');
+  });
   await step('Карточка друга: связь, предпочтения, даты, напоминания', async () => {
     await tap(page.getByText('Аня Смирнова')); await page.waitForTimeout(900);
     const t = await text();
@@ -216,7 +229,7 @@ const has = (t, s) => t.toLowerCase().includes(s.toLowerCase());
     t = await text(); assert(has(t, 'Выбрано 7 из 8'), 'ожидали 7 выбранных (одна — дубликат): ' + t.slice(0, 200));
     await page.getByText(/^Добавить 7/).click(); await page.waitForTimeout(1200);
     const d = await stored();
-    assert.equal(d.friends.length, 3 + 7);
+    assert.equal(d.friends.length, 2 + 7); // двое остались после удаления Мамы в сценарии выбора
     const dima = d.friends.find((f) => f.name === 'Дима Петров');
     assert(dima && dima.birthday === '1993-12-30' && dima.dates.length === 1, 'даты из контактов не перенесены');
     const boris = d.friends.find((f) => f.name === 'Борис Ким');

@@ -53,7 +53,8 @@ function ReminderForm() {
   const { s, colors, fonts } = useTheme();
   const { width, fontScale } = useWindowDimensions();
   // Дата и время рядом, пока оба поля влезают; при крупном системном шрифте или узком экране — друг под другом.
-  const stackDateTime = width - 40 < 330 * fontScale;
+  // Цифры «07.11.2026» и «10:00» ≈ 140 px при обычном шрифте, плюс отступы полей, две кнопки и зазоры ≈ 190 px.
+  const stackDateTime = width - 40 < 200 + 140 * Math.min(fontScale, 1.3);
   const existing = data.reminders.find((r) => r.id === params.id);
 
   const [r, setR] = useState<Reminder>(
@@ -131,7 +132,7 @@ function ReminderForm() {
         </View>
 
         <View style={stackDateTime ? undefined : { flexDirection: 'row', gap: 10 }}>
-          <View style={stackDateTime ? undefined : { flex: 3 }}>
+          <View style={stackDateTime ? undefined : { flex: 4 }}>
             <DateField
               mode="date"
               label={r.repeat ? 'Ближайший раз' : 'Дата или дедлайн'}
@@ -139,7 +140,7 @@ function ReminderForm() {
               onChange={(v) => set('date', v)}
             />
           </View>
-          <View style={stackDateTime ? undefined : { flex: 2 }}>
+          <View style={stackDateTime ? undefined : { flex: 3 }}>
             <DateField mode="time" label="Время" value={r.time} onChange={(v) => set('time', v)} />
           </View>
         </View>

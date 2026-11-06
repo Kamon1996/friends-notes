@@ -100,19 +100,22 @@ export function Button({
         : variant === 'ghost' || variant === 'danger'
           ? { backgroundColor: 'transparent', minHeight: 44 }
           : {};
-  const textColor =
-    variant === 'primary'
+  const textColor = disabled
+    ? colors.text2
+    : variant === 'primary'
       ? colors.onAccent
       : variant === 'danger'
         ? colors.danger
         : variant === 'soft' || variant === 'ghost'
           ? colors.accentText
           : colors.text;
+  // Неактивная кнопка — не «выцветшая» акцентная, а спокойная серая с читаемой подписью.
+  const disabledBox: ViewStyle = variant === 'ghost' || variant === 'danger' ? {} : { backgroundColor: colors.chip, borderWidth: 0 };
   return (
     <Pressable
       onPress={onPress}
       disabled={disabled}
-      style={({ pressed }) => [s.button, box, (pressed || disabled) && { opacity: disabled ? 0.45 : 0.7 }, style]}
+      style={({ pressed }) => [s.button, box, disabled && disabledBox, pressed && !disabled && { opacity: 0.7 }, style]}
     >
       {icon && <Icon name={icon} size={18} color={textColor} strokeWidth={2} />}
       <Text style={[s.buttonText, { color: textColor }, variant === 'ghost' && { fontSize: 15 }]}>{title}</Text>
@@ -323,6 +326,7 @@ export function ListRow({
   subtitle,
   trailing,
   onPress,
+  onLongPress,
   chevron,
   titleStyle,
   subtitleStyle,
@@ -333,6 +337,7 @@ export function ListRow({
   subtitle?: ReactNode;
   trailing?: ReactNode;
   onPress?: () => void;
+  onLongPress?: () => void;
   chevron?: boolean;
   titleStyle?: StyleProp<TextStyle>;
   subtitleStyle?: StyleProp<TextStyle>;
@@ -350,9 +355,9 @@ export function ListRow({
       {chevron && <Icon name="chevronRight" size={18} color={colors.checkbox} strokeWidth={2} />}
     </>
   );
-  if (!onPress) return <View style={[s.row, s.rowPad, style]}>{body}</View>;
+  if (!onPress && !onLongPress) return <View style={[s.row, s.rowPad, style]}>{body}</View>;
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [s.row, s.rowPad, pressed && { opacity: 0.6 }, style]}>
+    <Pressable onPress={onPress} onLongPress={onLongPress} delayLongPress={350} style={({ pressed }) => [s.row, s.rowPad, pressed && { opacity: 0.6 }, style]}>
       {body}
     </Pressable>
   );

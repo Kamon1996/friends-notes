@@ -20,6 +20,7 @@ interface Store {
   addFriends: (list: Friend[]) => void;
   updateFriends: (update: (f: Friend) => Friend) => void;
   deleteFriend: (id: string) => void;
+  deleteFriends: (ids: string[]) => void;
   saveReminder: (r: Reminder) => void;
   deleteReminder: (id: string) => void;
   toggleReminderDone: (id: string) => void;
@@ -79,16 +80,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setData((d) => ({ ...d, friends: d.friends.map(update) }));
   }, []);
 
-  const deleteFriend = useCallback((id: string) => {
-    const gone = dataRef.current.friends.find((f) => f.id === id);
+  const deleteFriends = useCallback((ids: string[]) => {
+    const set = new Set(ids);
+    const gone = dataRef.current.friends.filter((f) => set.has(f.id));
     setData((d) => ({
       ...d,
-      friends: d.friends.filter((f) => f.id !== id),
-      reminders: d.reminders.filter((r) => r.friendId !== id),
+      friends: d.friends.filter((f) => !set.has(f.id)),
+      reminders: d.reminders.filter((r) => !r.friendId || !set.has(r.friendId)),
     }));
-    cleanupAvatars(id);
-    if (gone) deleteOwnedFiles([gone.photoUri, gone.thumbUri]);
+    for (const f of gone) {
+      cleanupAvatars(f.id);
+      deleteOwnedFiles([f.photoUri, f.thumbUri]);
+    }
   }, []);
+  const deleteFriend = useCallback((id: string) => deleteFriends([id]), [deleteFriends]);
 
   const saveReminder = useCallback((r: Reminder) => {
     setData((d) => {
@@ -118,8 +123,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ ready, data, saveFriend, addFriends, updateFriends, deleteFriend, saveReminder, deleteReminder, toggleReminderDone, updateSettings }),
-    [ready, data, saveFriend, addFriends, updateFriends, deleteFriend, saveReminder, deleteReminder, toggleReminderDone, updateSettings],
+    () => ({ ready, data, saveFriend, addFriends, updateFriends, deleteFriend, deleteFriends, saveReminder, deleteReminder, toggleReminderDone, updateSettings }),
+    [ready, data, saveFriend, addFriends, updateFriends, deleteFriend, deleteFriends, saveReminder, deleteReminder, toggleReminderDone, updateSettings],
   );
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

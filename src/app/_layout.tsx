@@ -10,6 +10,8 @@ import { TelegramBanner } from '@/components/TelegramBanner';
 import { handleNotificationResponse, setupNotifications } from '@/lib/notifications';
 import { StoreProvider } from '@/lib/store';
 import { TelegramSessionProvider } from '@/lib/telegramSession';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+
 import { ThemeProvider, useTheme } from '@/lib/themeContext';
 
 /** Переход по нажатию на уведомление или на его кнопку («Позвонить», «Написать»). */
@@ -80,12 +82,14 @@ export default function RootLayout() {
   if (!fontsLoaded && !fontError) return <View style={{ flex: 1, backgroundColor: system === 'dark' ? '#17130F' : '#F7F3EE' }} />;
 
   return (
-    <StoreProvider>
-      <ThemeProvider>
-        <TelegramSessionProvider>
-          <AppShell />
-        </TelegramSessionProvider>
-      </ThemeProvider>
-    </StoreProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <StoreProvider>
+        <ThemeProvider>
+          <TelegramSessionProvider>
+            <AppShell />
+          </TelegramSessionProvider>
+        </ThemeProvider>
+      </StoreProvider>
+    </GestureHandlerRootView>
   );
 }
