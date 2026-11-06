@@ -4,7 +4,7 @@
     "slug": "friends-notes",
     "owner": "kamon1996",
     "scheme": "friendsnotes",
-    "version": "1.10.1",
+    "version": "1.11.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -16,7 +16,7 @@
     "android": {
       "package": "com.kamon1996.friendsnotes",
       "adaptiveIcon": {
-        "backgroundColor": "#FCE9E5",
+        "backgroundColor": "#D05858",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -36,7 +36,8 @@
       [
         "expo-notifications",
         {
-          "color": "#C4502F"
+          "color": "#C4502F",
+          "icon": "./assets/notification-icon.png"
         }
       ],
       [
@@ -52,6 +53,18 @@
           "photosPermission": "Чтобы выбрать фото друга из галереи.",
           "cameraPermission": "Чтобы сфотографировать друга для аватара.",
           "microphonePermission": false
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 160,
+          "resizeMode": "contain",
+          "backgroundColor": "#F7F3EE",
+          "dark": {
+            "backgroundColor": "#17130F"
+          }
         }
       ]
     ],
