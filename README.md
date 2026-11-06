@@ -70,13 +70,16 @@ npm test
 npx expo export --platform web --output-dir /tmp/web && node scripts/e2e-web.js /tmp/web /tmp/shots
 ```
 
-## Сборка APK без компьютера (GitHub Actions + EAS)
+## Сборка APK без компьютера (GitHub Actions)
 
 1. Создай токен на https://expo.dev/settings/access-tokens.
-2. Добавь его в репозиторий: **Settings → Secrets and variables → Actions → New repository secret**, имя `EXPO_TOKEN`.
-3. Запусти workflow **Android APK (EAS Build)** (вкладка Actions → Run workflow / Re-run)
-   или сделай коммит со словом `[apk]` в сообщении.
-4. В итогах запуска будет ссылка на сборку на expo.dev — оттуда скачивается APK.
+2. Добавь его в репозиторий: **Settings → Secrets and variables → Actions → New repository secret**, имя `EXPO_TOKEN`
+   (нужен для подписи: ключ хранится в EAS, и локальная сборка берёт его оттуда же).
+3. Сделай коммит со словом `[apk]` в сообщении или запусти workflow **Android APK** вручную (Actions → Run workflow).
+   Сборка идёт прямо на машине GitHub (`eas build --local`), квота EAS не тратится. Минут через 20–30
+   готовый APK появится в разделе **Releases** репозитория, прямая ссылка на файл есть и в итогах запуска.
+4. Слово `[apk-cloud]` в сообщении коммита (или режим `cloud` при ручном запуске) собирает по-старому, на серверах EAS:
+   ссылка на сборку будет на expo.dev. На бесплатном плане таких сборок ограниченное число в месяц.
 
 ## Сборка вручную
 
