@@ -2,13 +2,15 @@ import { requestPermissionsAsync } from 'expo-contacts';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, ScrollView, Share, Text, View } from 'react-native';
 
-import { Button, Card, SectionTitle, useTheme } from '@/components/ui';
+import type { IconName } from '@/components/Icon';
+import { Button, Card, IconCircle, SectionTitle, useTheme } from '@/components/ui';
 import { contactsRawAvailable, dumpAccount, getAccounts, type RawAccount, type RawDump } from '../../modules/contacts-raw';
 import { SOURCES, accountsFor, filterDumpsByMime, formatDump, mimeStats, otherAccounts, type SourceDef } from '@/lib/sources';
 import { plural } from '@/lib/dates';
 import { SAMPLE_ACCOUNTS, SAMPLE_DUMPS } from '@/lib/sourcesSample';
 
 const isSample = !contactsRawAvailable && Platform.OS === 'web';
+const SOURCE_ICONS: Record<string, IconName> = { phone: 'phone', google: 'person', telegram: 'send', whatsapp: 'bubble', viber: 'bubble2', vk: 'people', signal: 'lock', instagram: 'camera' };
 const LIMIT = 300;
 const SHARE_LIMIT = 200_000; // Android не передаст через «Поделиться» слишком длинный текст
 const SHOW_LIMIT = 40_000;
@@ -113,7 +115,7 @@ export default function SourcesScreen() {
           pressed && { opacity: 0.7 },
         ]}
       >
-        <Text style={{ fontSize: 24 }}>{s.emoji}</Text>
+        <IconCircle icon={SOURCE_ICONS[s.key] ?? 'list'} size={40} />
         <View style={{ flex: 1, gap: 2 }}>
           <Text style={styles.title}>{s.title}</Text>
           <Text style={styles.muted}>

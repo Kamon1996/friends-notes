@@ -1,16 +1,15 @@
 import { router } from 'expo-router';
 import { Text, View } from 'react-native';
 
-import { combine, formatDateShort, formatRepeat, relativeDay } from '@/lib/dates';
+import { combine, daysBetween, formatDayShort, formatRepeat, relativeDay, todayISO } from '@/lib/dates';
 import { useStore } from '@/lib/store';
 import type { Friend, Reminder } from '@/lib/types';
 import { Avatar } from './Avatar';
-import { Icon } from './Icon';
-import { Checkbox, ListRow, Tag, useTheme } from './ui';
+import { Checkbox, IconCircle, ListRow, Tag, useTheme } from './ui';
 
 /**
- * Строка напоминания: кружок-чекбокс, текст, дата. Сделанное зачёркивается и уходит в шалфей,
- * просроченное краснеет только подписью.
+ * Строка напоминания: кружок-чекбокс, аватар друга (или значок «для себя»), текст, дата.
+ * Справа — ярлык срока, как у событий. Сделанное зачёркивается, просроченное краснеет подписью.
  */
 export function ReminderRow({
   reminder,
@@ -25,10 +24,19 @@ export function ReminderRow({
 }) {
   const { toggleReminderDone } = useStore();
   const { s, colors } = useTheme();
+  const today = todayISO();
   const overdue = !reminder.done && combine(reminder.date, reminder.time) < new Date();
+  const diff = daysBetween(today, reminder.date);
 
-  const when = showDate ? `${formatDateShort(reminder.date)}, ${reminder.time}` : reminder.time;
-  const parts = [when, overdue ? 'просрочено' : showDate ? relativeDay(reminder.date) : null, reminder.repeat && formatRepeat(reminder.repeat)].filter(Boolean);
+  const when = showDate ? `${formatDayShort(reminder.date)} · ${reminder.time}` : reminder.time;
+  const subtitle = reminder.done ? `Сделано · ${formatDayShort(reminder.date)}` : when;
+  const repeat = !reminder.done && reminder.repeat ? formatRepeat(reminder.repeat) : null;
+
+  const trailing = reminder.done ? null : overdue ? (
+    <Tag text="просрочено" tone="danger" />
+  ) : showDate ? (
+    <Tag text={relativeDay(reminder.date, today)} tone={diff === 0 ? 'solid' : diff <= 7 ? 'accent' : 'neutral'} />
+  ) : null;
 
   return (
     <ListRow
@@ -36,7 +44,7 @@ export function ReminderRow({
       leading={
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingLeft: 6 }}>
           <Checkbox checked={reminder.done} done onPress={() => toggleReminderDone(reminder.id)} />
-          {showFriend && friend && <Avatar friend={friend} size={30} />}
+          {showFriend && (friend ? <Avatar friend={friend} size={30} /> : <IconCircle icon="person" size={30} />)}
         </View>
       }
       title={
@@ -45,17 +53,18 @@ export function ReminderRow({
         </Text>
       }
       subtitle={
-        <Text style={[s.muted, { fontVariant: ['tabular-nums'] }, overdue && { color: colors.danger }, reminder.done && { color: colors.success }]} numberOfLines={1}>
-          {reminder.done ? 'Сделано' : parts.join(' · ')}
-        </Text>
+        <View style={{ gap: 1 }}>
+          <Text style={[s.muted, { fontVariant: ['tabular-nums'] }, overdue && { color: colors.danger }, reminder.done && { color: colors.success }]} numberOfLines={1}>
+            {subtitle}
+          </Text>
+          {repeat && (
+            <Text style={s.caption} numberOfLines={1}>
+              {repeat}
+            </Text>
+          )}
+        </View>
       }
-      trailing={
-        reminder.repeat ? (
-          <Icon name="repeat" size={16} color={colors.text3} />
-        ) : !showDate && !reminder.done ? null : showFriend && !friend ? (
-          <Tag text="личное" />
-        ) : null
-      }
+      trailing={trailing}
     />
   );
 }

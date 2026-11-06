@@ -9,7 +9,7 @@ import { Button, Card, Checkbox, Chip, Empty, GroupedRow, IconCircle, SearchFiel
 import { loadContacts, pickMoreContacts } from '@/lib/contacts';
 import { candidateToFriend, phoneKey, toCandidates, type ImportCandidate } from '@/lib/contactsImport';
 import { applyEnrichment } from '@/lib/enrich';
-import { formatDate, hasYear } from '@/lib/dates';
+import { formatDateCompact, hasYear } from '@/lib/dates';
 import { newId, useStore } from '@/lib/store';
 import { telegramAvailable } from '@/lib/telegramClient';
 import { tgToRawContact } from '@/lib/telegramImport';
@@ -288,7 +288,7 @@ export default function ImportScreen() {
 function ContactRow({ candidate: c, checked, onToggle }: { candidate: ImportCandidate; checked: boolean; onToggle: () => void }) {
   const { s: styles, colors } = useTheme();
   const dup = !!c.duplicateOf;
-  const details = [c.birthday && `ДР ${formatDate(c.birthday, hasYear(c.birthday))}`, ...c.dates.map((d) => d.title)].filter(Boolean);
+  const details = [c.birthday && `ДР ${formatDateCompact(c.birthday, hasYear(c.birthday))}`, ...c.dates.map((d) => d.title)].filter(Boolean);
   const messengers = [c.links.telegramId && 'send', c.links.whatsapp && 'bubble', c.links.viber && 'bubble2'].filter(Boolean) as ('send' | 'bubble' | 'bubble2')[];
 
   return (

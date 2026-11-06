@@ -8,28 +8,34 @@ import { contactActions, openExternal } from './ContactButtons';
 import { Icon } from './Icon';
 import { useTheme } from './ui';
 
-/**
- * Карточка «Сегодня»: тёплая подложка, имя серифом и крупная цифра возраста —
- * единственное украшение на экране. Кнопки: позвонить и поздравить в мессенджере.
- */
-export function TodayCard({
-  friend,
-  kind,
-  title,
-  years,
-}: {
-  friend: Friend;
+export interface TodayEvent {
   kind: 'birthday' | 'date';
   /** Название важной даты (для kind = 'date'). */
   title?: string;
   /** Возраст или число лет годовщины. */
   years: number | null;
-}) {
+}
+
+const yearsText = (n: number) => `${n} ${plural(n, 'год', 'года', 'лет')}`;
+
+/**
+ * Карточка «Сегодня»: тёплая подложка, имя серифом и крупная цифра возраста —
+ * единственное украшение на экране. Все сегодняшние события человека собраны в одной карточке.
+ */
+export function TodayCard({ friend, events }: { friend: Friend; events: TodayEvent[] }) {
   const { colors, fonts } = useTheme();
   const actions = contactActions(friend);
   const call = actions.find((a) => a.key === 'call');
   const write = actions.find((a) => a.key !== 'call');
-  const subtitle = kind === 'birthday' ? 'День рождения' : title ?? 'Важная дата';
+
+  // Крупная цифра — возраст именинника; если дня рождения нет, годы первой годовщины.
+  const birthday = events.find((e) => e.kind === 'birthday');
+  const big = birthday?.years ?? (birthday ? null : events[0]?.years ?? null);
+  const lines = events.map((e) => {
+    if (e.kind === 'birthday') return 'День рождения';
+    const withYears = e.years && e !== events[0] ? ` · ${yearsText(e.years)}` : e.years && birthday ? ` · ${yearsText(e.years)}` : '';
+    return `${e.title ?? 'Важная дата'}${withYears}`;
+  });
 
   return (
     <Pressable
@@ -42,17 +48,19 @@ export function TodayCard({
           <Text style={{ fontFamily: fonts.display, fontSize: 20, lineHeight: 24, color: colors.text }} numberOfLines={1}>
             {friend.name}
           </Text>
-          <Text style={{ fontFamily: fonts.body, fontSize: 13, lineHeight: 18, color: colors.text2 }} numberOfLines={1}>
-            {subtitle}
-          </Text>
+          {lines.map((line, i) => (
+            <Text key={i} style={{ fontFamily: fonts.body, fontSize: 13, lineHeight: 18, color: colors.text2 }} numberOfLines={1}>
+              {line}
+            </Text>
+          ))}
         </View>
-        {years ? (
+        {big ? (
           <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 3 }}>
-            <Text style={{ fontFamily: fonts.display, fontSize: 40, lineHeight: 44, color: colors.accent, fontVariant: ['tabular-nums'] }}>{years}</Text>
-            <Text style={{ fontFamily: fonts.semibold, fontSize: 13, color: colors.accent }}>{plural(years, 'год', 'года', 'лет')}</Text>
+            <Text style={{ fontFamily: fonts.display, fontSize: 40, lineHeight: 44, color: colors.accent, fontVariant: ['tabular-nums'] }}>{big}</Text>
+            <Text style={{ fontFamily: fonts.semibold, fontSize: 13, color: colors.accent }}>{plural(big, 'год', 'года', 'лет')}</Text>
           </View>
         ) : (
-          <Icon name={kind === 'birthday' ? 'cake' : 'heart'} size={28} color={colors.accent} />
+          <Icon name={birthday ? 'cake' : 'heart'} size={28} color={colors.accent} />
         )}
       </View>
       {(call || write) && (

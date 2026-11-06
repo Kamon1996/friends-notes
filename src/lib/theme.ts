@@ -133,7 +133,7 @@ const DARK: typeof LIGHT = {
   hairline: '#332C26',
   separator: '#2E2722',
   chip: '#2C2620',
-  checkbox: '#5A4F45',
+  checkbox: '#6A5E53',
   placeholder: '#7B7066',
   success: '#7FB58F',
   successSoft: '#1F3328',

@@ -30,14 +30,18 @@ export default function FriendsScreen() {
       return out;
     }
     list.sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+    const letterOf = (f: Friend) => {
+      const ch = (f.name.trim()[0] ?? '').toUpperCase();
+      return /\p{L}/u.test(ch) ? ch : '#';
+    };
     let letter = '';
     list.forEach((f, i) => {
-      const l = (f.name.trim()[0] ?? '#').toUpperCase();
+      const l = letterOf(f);
       if (l !== letter) {
         letter = l;
         out.push({ type: 'letter', key: `l-${l}`, letter: l });
       }
-      const nextIsSame = i + 1 < list.length && (list[i + 1].name.trim()[0] ?? '#').toUpperCase() === l;
+      const nextIsSame = i + 1 < list.length && letterOf(list[i + 1]) === l;
       out.push({ type: 'friend', key: f.id, friend: f, first: out[out.length - 1].type === 'letter', last: !nextIsSame });
     });
     return out;

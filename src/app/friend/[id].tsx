@@ -75,6 +75,19 @@ export default function FriendScreen() {
 
       <ContactButtons friend={friend} />
 
+      {prefs.length === 0 && (
+        <Pressable
+          onPress={() => router.push({ pathname: '/friend/edit', params: { id: friend.id } })}
+          style={({ pressed }) => [s.card, { flexDirection: 'row', alignItems: 'center', gap: 12, opacity: pressed ? 0.7 : 1 }]}
+        >
+          <IconCircle icon="note" tone="accent" />
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={s.title}>Что любит, какие цветы, идеи подарков</Text>
+            <Text style={s.muted}>Запиши, чтобы не забыть к празднику.</Text>
+          </View>
+          <Text style={[s.title, { color: colors.accent }]}>Дополнить</Text>
+        </Pressable>
+      )}
       {prefs.length > 0 && (
         <Group inset={62}>
           {prefs.map((p) => (
@@ -96,13 +109,19 @@ export default function FriendScreen() {
             {friend.dates.map((d) => {
               const next = d.yearly ? nextAnniversary(d.date, today) : d.date;
               const years = d.yearly && hasYear(d.date) ? ageOn(d.date, next) : null;
+              const dd = daysBetween(today, next);
               return (
                 <ListRow
                   key={d.id}
                   leading={<IconCircle icon="heart" tone="accent" />}
                   title={d.title}
-                  subtitle={`${formatDate(d.date, hasYear(d.date))}${d.yearly ? ' · каждый год' : ''} · ${relativeDay(next, today)}`}
-                  trailing={years ? <Tag text={`${years} ${plural(years, 'год', 'года', 'лет')}`} /> : undefined}
+                  subtitle={[formatDate(d.date, hasYear(d.date)), d.yearly ? 'каждый год' : null].filter(Boolean).join(' · ')}
+                  trailing={
+                    <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                      {years ? <Text style={[s.title, { fontSize: 13, fontVariant: ['tabular-nums'] }]}>{`${years} ${plural(years, 'год', 'года', 'лет')}`}</Text> : null}
+                      {dd >= 0 ? <Tag text={relativeDay(next, today)} tone={dd === 0 ? 'solid' : dd <= 7 ? 'accent' : 'neutral'} /> : null}
+                    </View>
+                  }
                 />
               );
             })}

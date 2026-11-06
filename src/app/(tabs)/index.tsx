@@ -4,11 +4,12 @@ import { ScrollView, Text, View } from 'react-native';
 
 import { Avatar } from '@/components/Avatar';
 import { ReminderRow } from '@/components/ReminderRow';
-import { TodayCard } from '@/components/TodayCard';
-import { Empty, Fab, Group, IconButton, IconCircle, ListRow, ScreenHeader, SectionTitle, Tag, useTheme } from '@/components/ui';
+import { TodayCard, type TodayEvent } from '@/components/TodayCard';
+import { Empty, Group, IconButton, IconCircle, ListRow, ScreenHeader, SectionTitle, Tag, useTheme } from '@/components/ui';
 import { daysBetween, formatDateLong, formatDayShort, plural, relativeDay, todayISO } from '@/lib/dates';
 import { upcomingItems, type UpcomingItem } from '@/lib/events';
 import { useStore } from '@/lib/store';
+import type { Friend } from '@/lib/types';
 
 type Section = { key: string; title: string; items: UpcomingItem[]; tone?: 'danger' };
 
@@ -38,14 +39,26 @@ export default function UpcomingScreen() {
 
   if (!ready) return <View style={s.screen} />;
 
-  const weekCount = sections.filter((g) => g.key === 'today' || g.key === 'week').reduce((n, g) => n + g.items.length, 0);
+  const weekCount = sections.find((g) => g.key === 'week')?.items.length ?? 0;
+
+  // Все сегодняшние события одного человека — в одной карточке.
+  const todayCards = (items: UpcomingItem[]) => {
+    const byFriend = new Map<string, { friend: Friend; events: TodayEvent[] }>();
+    for (const item of items) {
+      if (item.kind === 'reminder') continue;
+      const entry = byFriend.get(item.friend.id) ?? { friend: item.friend, events: [] };
+      entry.events.push(item.kind === 'birthday' ? { kind: 'birthday', years: item.age } : { kind: 'date', title: item.title, years: item.years });
+      byFriend.set(item.friend.id, entry);
+    }
+    return [...byFriend.values()];
+  };
 
   return (
     <View style={s.screen}>
       <ScrollView contentContainerStyle={{ paddingBottom: 120 }}>
         <ScreenHeader
           title="Скоро"
-          subtitle={weekCount ? `${formatDateLong(today)} · ${weekCount} ${plural(weekCount, 'событие', 'события', 'событий')} на неделе` : formatDateLong(today)}
+          subtitle={formatDateLong(today)}
           right={
             <>
               <IconButton icon="import" label="Импорт друзей" onPress={() => router.push('/import')} />
@@ -70,16 +83,12 @@ export default function UpcomingScreen() {
             return (
               <View key={g.key} style={{ gap: 8 }}>
                 <SectionTitle style={{ marginBottom: 0 }}>
-                  <Text style={[s.sectionLabel, g.tone === 'danger' && { color: colors.danger }]}>{g.title}</Text>
+                  <Text style={[s.sectionLabel, g.tone === 'danger' && { color: colors.danger }]}>
+                    {g.title}
+                    {g.key === 'week' && weekCount ? ` · ${weekCount}` : ''}
+                  </Text>
                 </SectionTitle>
-                {g.key === 'today' &&
-                  events.map((item) =>
-                    item.kind === 'birthday' ? (
-                      <TodayCard key={item.key} friend={item.friend} kind="birthday" years={item.age} />
-                    ) : item.kind === 'date' ? (
-                      <TodayCard key={item.key} friend={item.friend} kind="date" title={item.title} years={item.years} />
-                    ) : null,
-                  )}
+                {g.key === 'today' && todayCards(events).map((c) => <TodayCard key={c.friend.id} friend={c.friend} events={c.events} />)}
                 {g.key !== 'today' && events.length > 0 && (
                   <Group>
                     {events.map((item) => (
@@ -101,7 +110,6 @@ export default function UpcomingScreen() {
           })}
         </View>
       </ScrollView>
-      <Fab onPress={() => router.push('/reminder/edit')} label="Новое напоминание" />
     </View>
   );
 }

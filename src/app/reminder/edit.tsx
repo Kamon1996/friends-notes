@@ -2,7 +2,7 @@ import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
-import { Avatar } from '@/components/Avatar';
+import { FriendPicker } from '@/components/FriendPicker';
 import { DateField } from '@/components/DateField';
 import { Button, Card, Chip, Field, Label, SectionTitle, SwitchRow, useTheme } from '@/components/ui';
 import { confirm } from '@/lib/confirm';
@@ -123,17 +123,8 @@ function ReminderForm() {
         </View>
 
         <Label>Для кого</Label>
-        <View style={[s.chips, { marginBottom: 18 }]}>
-          <Chip label="Для себя" icon="person" selected={!r.friendId} onPress={() => set('friendId', null)} />
-          {data.friends.map((f) => (
-            <Chip
-              key={f.id}
-              label={f.name}
-              selected={r.friendId === f.id}
-              leading={<Avatar friend={f} size={28} />}
-              onPress={() => set('friendId', f.id)}
-            />
-          ))}
+        <View style={{ marginBottom: 18 }}>
+          <FriendPicker friends={data.friends} value={r.friendId} onChange={(id) => set('friendId', id)} />
         </View>
 
         <View style={{ flexDirection: 'row', gap: 10 }}>

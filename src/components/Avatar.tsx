@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Image, Text, View } from 'react-native';
 
 import { avatarTint, fonts, initials } from '@/lib/theme';
+import { Icon } from './Icon';
 import type { Friend } from '@/lib/types';
 
 /** Фото из контактов, а без него — инициалы серифом на мягком оттенке, выбранном по имени. */
@@ -37,10 +38,18 @@ export function Avatar({
       </View>
     );
   }
+  const letters = initials(friend.name);
+  if (letters === '·') {
+    return (
+      <View style={box}>
+        <Icon name="person" size={Math.round(size * 0.46)} color={fg ?? tint.fg} />
+      </View>
+    );
+  }
   return (
     <View style={box}>
       <Text style={{ fontFamily: fonts.display, fontSize: Math.round(size * 0.37), color: fg ?? tint.fg, lineHeight: Math.round(size * 0.5) }}>
-        {initials(friend.name)}
+        {letters}
       </Text>
     </View>
   );

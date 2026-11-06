@@ -3,7 +3,8 @@ import { useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { QrCode } from '@/components/QrCode';
-import { Button, Card, Field, SectionTitle, useTheme } from '@/components/ui';
+import { Icon, type IconName } from '@/components/Icon';
+import { Button, Card, Field, IconCircle, SectionTitle, useTheme } from '@/components/ui';
 import { telegramAvailable, telegramConfigured } from '@/lib/telegramClient';
 import { tgErrorText } from '@/lib/telegramImport';
 import { useTelegramSession } from '@/lib/telegramSession';
@@ -19,11 +20,21 @@ const UNSUPPORTED: Record<string, string> = {
   waitPremiumPurchase: 'Telegram требует Premium для входа с этого номера.',
 };
 
-function Line({ icon, children }: { icon: string; children: string }) {
-  const { s } = useTheme();
+/** Строка с иконкой слева: пункт списка «что читает / не читает», шаг инструкции, счётчик. */
+function Line({ icon, tone = 'neutral', num, children }: { icon?: IconName; tone?: 'neutral' | 'success' | 'danger' | 'warn' | 'info'; num?: number; children: string }) {
+  const { s, colors, fonts } = useTheme();
+  const color = { neutral: colors.text2, success: colors.success, danger: colors.danger, warn: colors.warn, info: colors.info }[tone];
   return (
-    <View style={{ flexDirection: 'row', gap: 8 }}>
-      <Text style={[s.body, { width: 24, fontSize: 15 }]}>{icon}</Text>
+    <View style={{ flexDirection: 'row', gap: 10, alignItems: 'flex-start' }}>
+      <View style={{ width: 24, height: 21, alignItems: 'center', justifyContent: 'center' }}>
+        {num ? (
+          <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: colors.soft, alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ fontFamily: fonts.bold, fontSize: 12, color: colors.accentText }}>{num}</Text>
+          </View>
+        ) : icon ? (
+          <Icon name={icon} size={18} color={color} strokeWidth={2} />
+        ) : null}
+      </View>
       <Text style={[s.body, { flex: 1, fontSize: 15, lineHeight: 21 }]}>{children}</Text>
     </View>
   );
@@ -85,11 +96,11 @@ export default function TelegramImportScreen() {
 
         <SectionTitle>Что запрошено у Telegram</SectionTitle>
         <Card style={{ gap: 6 }}>
-          <Line icon="📒">{`Список контактов: ${imp.requestsContacts ?? 0}`}</Line>
-          <Line icon="👤">{`Профили (имя, телефон, @username): ${imp.requestsUsers ?? 0}`}</Line>
-          <Line icon="🎂">{`Полные профили (день рождения, «о себе»): ${imp.requestsProfiles ?? 0}`}</Line>
-          <Line icon="📷">{`Аватарки (маленькая и большая версии): ${imp.requestsPhotos ?? 0}`}</Line>
-          <Line icon="💬">{`Сообщения и чаты: ${imp.requestsMessages ?? 0} — в приложении нет такой функции`}</Line>
+          <Line icon="book">{`Список контактов: ${imp.requestsContacts ?? 0}`}</Line>
+          <Line icon="person">{`Профили (имя, телефон, @username): ${imp.requestsUsers ?? 0}`}</Line>
+          <Line icon="cake">{`Полные профили (день рождения, «о себе»): ${imp.requestsProfiles ?? 0}`}</Line>
+          <Line icon="camera">{`Аватарки (маленькая и большая версии): ${imp.requestsPhotos ?? 0}`}</Line>
+          <Line icon="bubble" tone="danger">{`Сообщения и чаты: ${imp.requestsMessages ?? 0} — в приложении нет такой функции`}</Line>
         </Card>
 
         <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -108,7 +119,10 @@ export default function TelegramImportScreen() {
         <Stack.Screen options={{ title: 'Импорт из Telegram' }} />
         {imp.loggedOut ? (
           <Card style={{ gap: 8, backgroundColor: colors.successSoft, borderColor: colors.successSoft }}>
-            <Text style={[styles.title, { color: colors.success }]}>✓ Сессия Telegram завершена</Text>
+            <View style={styles.row}>
+              <IconCircle icon="check" tone="success" />
+              <Text style={[styles.title, { color: colors.success, flex: 1 }]}>Сессия Telegram завершена</Text>
+            </View>
             <Text style={[styles.body, { fontSize: 15, lineHeight: 21 }]}>
               Приложение вышло из аккаунта и стёрло данные входа. Проверь сам: Telegram → Настройки → Устройства —
               сессии «{SESSION_NAME}» там больше нет.
@@ -116,7 +130,10 @@ export default function TelegramImportScreen() {
           </Card>
         ) : (
           <Card style={{ gap: 8, backgroundColor: colors.warnSoft, borderColor: colors.warnSoft }}>
-            <Text style={[styles.title, { color: colors.warn }]}>⚠️ Проверь, что сессия завершена</Text>
+            <View style={styles.row}>
+              <IconCircle icon="warning" tone="warn" />
+              <Text style={[styles.title, { color: colors.warn, flex: 1 }]}>Проверь, что сессия завершена</Text>
+            </View>
             <Text style={[styles.body, { fontSize: 15, lineHeight: 21 }]}>
               Не удалось подтвердить выход из аккаунта. Открой Telegram → Настройки → Устройства и, если там есть
               «{SESSION_NAME}», нажми «Завершить сеанс».
@@ -174,7 +191,10 @@ export default function TelegramImportScreen() {
                 <Button title={busy ? 'Отправляю…' : 'Получить код'} onPress={() => run(() => Telegram!.setPhoneNumber(phone))} />
               </Card>
               <Card style={{ gap: 8 }}>
-                <Text style={styles.title}>📷 Или QR-код — без ввода кода и пароля</Text>
+                <View style={styles.row}>
+                  <IconCircle icon="qr" />
+                  <Text style={[styles.title, { flex: 1 }]}>Или QR-код — без ввода кода и пароля</Text>
+                </View>
                 <Text style={[styles.muted, { lineHeight: 20 }]}>
                   Если есть второй телефон или планшет, где ты уже вошёл в Telegram: покажи QR-код здесь и отсканируй его
                   там. Подтверждение происходит в твоём Telegram, ничего вводить в это приложение не нужно. На этом же
@@ -189,9 +209,9 @@ export default function TelegramImportScreen() {
             <Card style={{ gap: 12, alignItems: 'center' }}>
               {auth.link ? <QrCode value={auth.link} size={240} /> : <ActivityIndicator color={colors.accent} />}
               <View style={{ gap: 6, alignSelf: 'stretch' }}>
-                <Line icon="1️⃣">На втором телефоне или планшете открой Telegram → Настройки → Устройства.</Line>
-                <Line icon="2️⃣">Нажми «Подключить устройство» (сканировать QR) и наведи камеру на этот код.</Line>
-                <Line icon="3️⃣">{`Telegram покажет вход «${SESSION_NAME}» — подтверди его. Если включён облачный пароль, его попросят здесь.`}</Line>
+                <Line num={1}>На втором телефоне или планшете открой Telegram → Настройки → Устройства.</Line>
+                <Line num={2}>Нажми «Подключить устройство» (сканировать QR) и наведи камеру на этот код.</Line>
+                <Line num={3}>{`Telegram покажет вход «${SESSION_NAME}» — подтверди его. Если включён облачный пароль, его попросят здесь.`}</Line>
               </View>
               <Text style={[styles.muted, { alignSelf: 'stretch' }]}>Код обновляется сам каждые ~30 секунд, так что просто держи экран открытым.</Text>
               <Button title="Ввести номер вместо этого" variant="secondary" onPress={() => run(tg.restart)} style={{ alignSelf: 'stretch' }} />
@@ -243,7 +263,10 @@ export default function TelegramImportScreen() {
       <Stack.Screen options={{ title: 'Импорт из Telegram' }} />
 
       <Card style={{ gap: 8 }}>
-        <Text style={[styles.title, { fontSize: 17 }]}>📒 Без входа — быстро и безопасно</Text>
+        <View style={styles.row}>
+          <IconCircle icon="book" tone="success" />
+          <Text style={[styles.title, { fontSize: 17, flex: 1 }]}>Без входа — быстро и безопасно</Text>
+        </View>
         <Text style={[styles.muted, { lineHeight: 20 }]}>
           Возьмём из телефонной книги контакты, которые туда добавил Telegram: имя, номер и кнопку «Написать в
           Telegram». Ни кода, ни пароля не нужно. Дней рождения так не получить.
@@ -253,20 +276,23 @@ export default function TelegramImportScreen() {
 
       <SectionTitle>С днями рождения</SectionTitle>
       <Card style={{ gap: 10 }}>
-        <Text style={[styles.title, { fontSize: 17 }]}>🎂 Через вход в Telegram</Text>
+        <View style={styles.row}>
+          <IconCircle icon="cake" tone="accent" />
+          <Text style={[styles.title, { fontSize: 17, flex: 1 }]}>Через вход в Telegram</Text>
+        </View>
         <View style={{ backgroundColor: colors.warnSoft, borderRadius: 12, padding: 12 }}>
           <Text style={[styles.body, { fontSize: 15, lineHeight: 21 }]}>
-            ⚠️ Telegram не умеет давать ограниченный доступ: любой вход по коду — это полный доступ к аккаунту, как у
+            Telegram не умеет давать ограниченный доступ: любой вход по коду — это полный доступ к аккаунту, как у
             любого приложения-клиента Telegram. Поэтому «Друзья» устроены так:
           </Text>
         </View>
-        <Line icon="✅">Читает: список контактов, имена и телефоны, @username, дни рождения, «о себе», текущие аватарки.</Line>
-        <Line icon="❌">
+        <Line icon="check" tone="success">Читает: список контактов, имена и телефоны, @username, дни рождения, «о себе», текущие аватарки.</Line>
+        <Line icon="close" tone="danger">
           Не читает: сообщения, чаты и группы, файлы и фото из переписок. Таких функций в приложении нет — даже по ошибке их не вызвать.
         </Line>
-        <Line icon="🔒">Сразу после загрузки выходит из аккаунта. Своего сервера нет — всё остаётся на этом телефоне.</Line>
-        <Line icon="📷">Войти можно по номеру с кодом или по QR-коду со второго устройства — тогда код и пароль в это приложение вводить не нужно.</Line>
-        <Line icon="👀">{`В Telegram → Настройки → Устройства вход виден как «${SESSION_NAME}» и пропадёт после выхода.`}</Line>
+        <Line icon="lock">Сразу после загрузки выходит из аккаунта. Своего сервера нет — всё остаётся на этом телефоне.</Line>
+        <Line icon="qr">Войти можно по номеру с кодом или по QR-коду со второго устройства — тогда код и пароль в это приложение вводить не нужно.</Line>
+        <Line icon="info">{`В Telegram → Настройки → Устройства вход виден как «${SESSION_NAME}» и пропадёт после выхода.`}</Line>
         <Pressable onPress={() => Linking.openURL(SOURCE_URL).catch(() => {})} hitSlop={6}>
           <Text style={[styles.muted, { color: colors.info }]}>Исходный код модуля Telegram →</Text>
         </Pressable>

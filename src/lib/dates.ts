@@ -133,6 +133,13 @@ export function formatDayShort(date: ISODate): string {
   return `${WEEKDAYS_SHORT[d.getDay()]}, ${d.getDate()} ${MONTHS_GEN[d.getMonth()].slice(0, 3)}`;
 }
 
+/** «12 апр 1997» / «12 апр» — компактная дата для плотных строк. */
+export function formatDateCompact(date: ISODate, withYear = true): string {
+  const d = parseISODate(date);
+  const base = `${d.getDate()} ${MONTHS_GEN[d.getMonth()].slice(0, 3)}`;
+  return withYear ? `${base} ${d.getFullYear()}` : base;
+}
+
 /** «Пятница, 6 ноября» — подпись под заголовком экрана. */
 export function formatDateLong(date: ISODate): string {
   const d = parseISODate(date);
