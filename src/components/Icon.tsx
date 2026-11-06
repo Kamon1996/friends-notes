@@ -44,7 +44,8 @@ export type IconName =
   | 'book'
   | 'camera'
   | 'star'
-  | 'bellOff';
+  | 'bellOff'
+  | 'minus';
 
 const PATHS: Record<IconName, ReactNode> = {
   calendar: (
@@ -200,6 +201,7 @@ const PATHS: Record<IconName, ReactNode> = {
       <Path d="M3 3l18 18" />
     </>
   ),
+  minus: <Path d="M6 12h12" />,
   star: <Path d="M12 3.6l2.5 5.3 5.8.7-4.3 4 1.1 5.8L12 16.6l-5.1 2.8 1.1-5.8-4.3-4 5.8-.7z" />,
 };
 

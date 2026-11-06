@@ -13,6 +13,7 @@ import { formatDateCompact, hasYear } from '@/lib/dates';
 import { newId, useStore } from '@/lib/store';
 import { telegramAvailable } from '@/lib/telegramClient';
 import { tgToRawContact } from '@/lib/telegramImport';
+import { Stepper, TG_STEPS } from '@/components/Stepper';
 import { useTelegramSession } from '@/lib/telegramSession';
 import { Telegram } from '../../modules/telegram';
 
@@ -196,6 +197,11 @@ export default function ImportScreen() {
         ListHeaderComponent={
           <View style={{ gap: 12, marginBottom: 10 }}>
             <Stack.Screen options={{ title: fromTelegram || fromTgBook ? 'Контакты Telegram' : 'Импорт контактов' }} />
+            {(fromTelegram || fromTgBook) && (
+              <View style={{ paddingTop: 2, paddingBottom: 4 }}>
+                <Stepper steps={TG_STEPS} active={4} />
+              </View>
+            )}
             {!fromTelegram && !fromTgBook && telegramAvailable && (
               <Pressable
                 onPress={() => router.push('/telegram')}

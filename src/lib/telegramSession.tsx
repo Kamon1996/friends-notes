@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 
 import type { TgAuthState, TgImportState } from '../../modules/telegram';
 import { Telegram, startTelegram } from './telegramClient';
@@ -22,6 +22,26 @@ interface TelegramSession {
 }
 
 const Ctx = createContext<TelegramSession | null>(null);
+
+/** Для веб-превью: localStorage «friends-notes/tg-preview» = phone | qr | code | loading | done подменяет состояние, чтобы посмотреть шаги мастера без Android. */
+function previewState(): { auth: TgAuthState; imp: TgImportState } | null {
+  if (Platform.OS !== 'web') return null;
+  const idle: TgImportState = { phase: 'idle' };
+  switch (globalThis.localStorage?.getItem('friends-notes/tg-preview')) {
+    case 'phone':
+      return { auth: { state: 'waitPhoneNumber' }, imp: idle };
+    case 'qr':
+      return { auth: { state: 'waitOtherDeviceConfirmation', link: 'tg://login?token=preview' }, imp: idle };
+    case 'code':
+      return { auth: { state: 'waitCode', codeType: 'authenticationCodeTypeTelegramMessage' }, imp: idle };
+    case 'loading':
+      return { auth: { state: 'ready' }, imp: { phase: 'loading', done: 154, total: 248, requestsContacts: 1, requestsUsers: 248, requestsProfiles: 154, requestsPhotos: 112, requestsMessages: 0 } };
+    case 'done':
+      return { auth: { state: 'closed' }, imp: { phase: 'done', done: 248, total: 248, loggedOut: true, requestsContacts: 1, requestsUsers: 248, requestsProfiles: 248, requestsPhotos: 180, requestsMessages: 0 } };
+    default:
+      return null;
+  }
+}
 
 const SIGN_IN_STATES = new Set(['starting', 'waitTdlibParameters', 'waitPhoneNumber', 'waitOtherDeviceConfirmation', 'waitCode', 'waitPassword']);
 
@@ -83,20 +103,22 @@ export function TelegramSessionProvider({ children }: { children: ReactNode }) {
     sync();
   }, [sync]);
 
-  const value = useMemo<TelegramSession>(
-    () => ({
-      auth,
-      imp,
-      signingIn: SIGN_IN_STATES.has(auth.state) && imp.phase === 'idle',
-      working: imp.phase === 'loading' || imp.phase === 'finishing',
-      resultReady: (imp.phase === 'done' || imp.phase === 'cancelled') && (imp.done ?? 0) > 0,
+  const value = useMemo<TelegramSession>(() => {
+    const preview = previewState();
+    const a = preview?.auth ?? auth;
+    const i = preview?.imp ?? imp;
+    return {
+      auth: a,
+      imp: i,
+      signingIn: SIGN_IN_STATES.has(a.state) && i.phase === 'idle',
+      working: i.phase === 'loading' || i.phase === 'finishing',
+      resultReady: (i.phase === 'done' || i.phase === 'cancelled') && (i.done ?? 0) > 0,
       begin,
       cancel,
       restart,
       clearResult,
-    }),
-    [auth, imp, begin, cancel, restart, clearResult],
-  );
+    };
+  }, [auth, imp, begin, cancel, restart, clearResult]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
