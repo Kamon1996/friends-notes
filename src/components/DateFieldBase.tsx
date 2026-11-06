@@ -1,9 +1,9 @@
-import { useEffect, useState, type ReactNode } from 'react';
-import { Text, TextInput, View } from 'react-native';
+import { useState, type ReactNode } from 'react';
+import { Text, TextInput, View, type ViewStyle } from 'react-native';
 
 import { formatRuDate, maskDate, maskTime, parseRuDate, parseTimeText } from '@/lib/dateMask';
 import type { ISODate, TimeOfDay } from '@/lib/types';
-import { Label, colors, styles } from './ui';
+import { Label, useTheme } from './ui';
 
 export type DateFieldProps =
   | {
@@ -25,14 +25,18 @@ const format = (p: DateFieldProps) =>
  * плюс кнопка справа (`picker`) для выбора в календаре/часах.
  */
 export function DateFieldBase({ picker, ...props }: DateFieldProps & { picker: ReactNode }) {
+  const { s, colors } = useTheme();
   const [text, setText] = useState(() => format(props));
   const [focused, setFocused] = useState(false);
 
-  // Значение пришло извне (из календаря) — показываем его.
-  useEffect(() => {
-    if (!focused) setText(format(props));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.value, props.mode === 'date' && props.noYear, focused]);
+  // Значение пришло извне (из календаря) — показываем его. Считаем прямо при рендере,
+  // запоминая, для какого значения текст был сформирован.
+  const external = format(props);
+  const [shown, setShown] = useState(external);
+  if (shown !== external) {
+    setShown(external);
+    if (!focused) setText(external);
+  }
 
   const withYear = props.mode === 'date' && !props.noYear;
   const fullLength = props.mode === 'time' ? 5 : withYear ? 10 : 5;
@@ -50,7 +54,7 @@ export function DateFieldBase({ picker, ...props }: DateFieldProps & { picker: R
     props.placeholder ?? (props.mode === 'time' ? 'ЧЧ:ММ' : withYear ? 'ДД.ММ.ГГГГ' : 'ДД.ММ');
 
   return (
-    <View style={styles.field}>
+    <View style={s.field}>
       <Label>{props.label}</Label>
       <View style={{ flexDirection: 'row', gap: 8 }}>
         <TextInput
@@ -62,15 +66,20 @@ export function DateFieldBase({ picker, ...props }: DateFieldProps & { picker: R
             setText(format(props)); // неполный или неверный ввод откатываем к последнему верному значению
           }}
           placeholder={placeholder}
-          placeholderTextColor={colors.muted}
+          placeholderTextColor={colors.placeholder}
           keyboardType="number-pad"
           maxLength={fullLength}
-          style={[styles.input, { flex: 1, minWidth: 0 }, invalid && { borderColor: colors.danger }]}
+          style={[
+            s.input,
+            { flex: 1, minWidth: 0, fontSize: 17, letterSpacing: 0.5, fontVariant: ['tabular-nums'] },
+            focused && { borderColor: colors.accent, borderWidth: 1.5 },
+            invalid && { borderColor: colors.danger, borderWidth: 1.5 },
+          ]}
         />
         {picker}
       </View>
       {invalid && (
-        <Text style={{ color: colors.danger, fontSize: 13, marginTop: 4 }}>
+        <Text style={[s.caption, { color: colors.danger, marginTop: 4 }]}>
           {props.mode === 'time' ? 'Нет такого времени' : 'Нет такой даты'}
         </Text>
       )}
@@ -78,12 +87,15 @@ export function DateFieldBase({ picker, ...props }: DateFieldProps & { picker: R
   );
 }
 
-export const pickerButtonStyle = {
-  width: 48,
-  borderRadius: 12,
-  borderWidth: 1,
-  borderColor: colors.border,
-  backgroundColor: colors.card,
-  alignItems: 'center',
-  justifyContent: 'center',
-} as const;
+export function usePickerButtonStyle(): ViewStyle {
+  const { colors } = useTheme();
+  return {
+    width: 50,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.hairline,
+    backgroundColor: colors.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+  };
+}

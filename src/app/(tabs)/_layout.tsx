@@ -1,52 +1,30 @@
-import { Link } from 'expo-router';
 import { Tabs } from 'expo-router/tabs';
-import { Text } from 'react-native';
+import type { ColorValue } from 'react-native';
 
-import { colors } from '@/components/ui';
+import { Icon, type IconName } from '@/components/Icon';
+import { useTheme } from '@/lib/themeContext';
 
-const icon = (emoji: string) =>
-  function TabIcon({ focused }: { focused: boolean }) {
-    return <Text style={{ fontSize: 22, opacity: focused ? 1 : 0.5 }}>{emoji}</Text>;
+const tabIcon = (name: IconName) =>
+  function TabIcon({ color, focused }: { color: ColorValue; focused: boolean }) {
+    return <Icon name={name} size={24} color={typeof color === 'string' ? color : '#9A8F85'} strokeWidth={focused ? 2 : 1.75} />;
   };
 
 export default function TabsLayout() {
+  const { colors, fonts } = useTheme();
   return (
     <Tabs
       screenOptions={{
-        headerStyle: { backgroundColor: colors.bg },
-        headerShadowVisible: false,
-        headerTitleStyle: { color: colors.text, fontSize: 20, fontWeight: '700' },
+        headerShown: false,
         sceneStyle: { backgroundColor: colors.bg },
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.muted,
-        tabBarStyle: { backgroundColor: colors.card, borderTopColor: colors.border },
+        tabBarActiveTintColor: colors.accent,
+        tabBarInactiveTintColor: colors.text3,
+        tabBarStyle: { backgroundColor: colors.card, borderTopColor: colors.hairline, borderTopWidth: 1 },
+        tabBarLabelStyle: { fontFamily: fonts.medium, fontSize: 11 },
       }}
     >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Скоро',
-          tabBarIcon: icon('🗓️'),
-          headerRight: () => (
-            <Link href="/settings" style={{ fontSize: 22, paddingHorizontal: 16 }}>
-              ⚙️
-            </Link>
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="friends"
-        options={{
-          title: 'Друзья',
-          tabBarIcon: icon('👥'),
-          headerRight: () => (
-            <Link href="/import" style={{ fontSize: 16, fontWeight: '600', color: colors.primary, paddingHorizontal: 16 }}>
-              📇 Импорт
-            </Link>
-          ),
-        }}
-      />
-      <Tabs.Screen name="reminders" options={{ title: 'Напоминания', tabBarIcon: icon('⏰') }} />
+      <Tabs.Screen name="index" options={{ title: 'Скоро', tabBarIcon: tabIcon('calendar') }} />
+      <Tabs.Screen name="friends" options={{ title: 'Друзья', tabBarIcon: tabIcon('people') }} />
+      <Tabs.Screen name="reminders" options={{ title: 'Напоминания', tabBarIcon: tabIcon('bell') }} />
     </Tabs>
   );
 }

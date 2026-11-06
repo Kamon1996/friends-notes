@@ -1,16 +1,60 @@
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, Linking, Platform, ScrollView, Text } from 'react-native';
+import { Alert, Linking, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { DateField } from '@/components/DateField';
-import { Button, Card, SectionTitle, SwitchRow, colors, styles } from '@/components/ui';
-import { notificationsAllowed, sendTestNotification, setupNotifications } from '@/lib/notifications';
+import { Icon } from '@/components/Icon';
+import { Button, Card, Chip, Group, IconCircle, ListRow, SectionTitle, SwitchRow, useTheme } from '@/components/ui';
 import { loadEnrichment } from '@/lib/contacts';
 import { applyEnrichment } from '@/lib/enrich';
+import { notificationsAllowed, sendTestNotification, setupNotifications } from '@/lib/notifications';
 import { useStore } from '@/lib/store';
+import { ACCENTS, type AccentId, type Scheme } from '@/lib/theme';
+import type { ThemeMode } from '@/lib/types';
+
+const THEME_MODES: { key: ThemeMode; label: string }[] = [
+  { key: 'system', label: 'Как в системе' },
+  { key: 'light', label: 'Светлая' },
+  { key: 'dark', label: 'Тёмная' },
+];
+
+/** Шесть кружков акцента для одной темы; выбранный — с кольцом и галочкой. */
+function AccentPicker({ scheme, value, onChange }: { scheme: Scheme; value: AccentId; onChange: (id: AccentId) => void }) {
+  const { colors, fonts } = useTheme();
+  return (
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 }}>
+      {ACCENTS.map((a) => {
+        const c = a[scheme];
+        const selected = a.id === value;
+        return (
+          <Pressable key={a.id} onPress={() => onChange(a.id)} accessibilityLabel={a.name} style={{ alignItems: 'center', gap: 6, flex: 1 }}>
+            <View
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 22,
+                borderWidth: 2,
+                borderColor: selected ? colors.text : 'transparent',
+                padding: 3,
+              }}
+            >
+              <View style={{ flex: 1, borderRadius: 17, backgroundColor: c.accent, alignItems: 'center', justifyContent: 'center' }}>
+                {selected && <Icon name="check" size={16} color={c.onAccent} strokeWidth={3} />}
+              </View>
+            </View>
+            <Text style={{ fontFamily: selected ? fonts.semibold : fonts.body, fontSize: 10, lineHeight: 12, color: selected ? colors.text : colors.text3 }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
+              {a.name}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
 
 export default function SettingsScreen() {
   const { data, updateSettings, updateFriends } = useStore();
+  const { s, colors } = useTheme();
   const [enrichStatus, setEnrichStatus] = useState<string | null>(null);
 
   const enrich = async () => {
@@ -47,64 +91,80 @@ export default function SettingsScreen() {
     else enable();
   };
 
-  return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <SectionTitle>Уведомления</SectionTitle>
-      <Card style={{ gap: 12 }}>
-        {Platform.OS === 'web' ? (
-          <Text style={styles.muted}>В браузере уведомления не работают — открой приложение на телефоне.</Text>
-        ) : (
-          <>
-            <Text style={[styles.title, { color: allowed ? colors.green : colors.danger }]}>
-              {allowed === null ? '…' : allowed ? '✓ Уведомления включены' : '✕ Уведомления выключены'}
-            </Text>
-            {!allowed && <Button title="Включить уведомления" onPress={enable} />}
-            <Button title="Отправить тестовое уведомление" variant="secondary" onPress={test} />
-          </>
-        )}
-      </Card>
+  const { settings } = data;
 
-      <SectionTitle>Дни рождения и важные даты</SectionTitle>
-      <Card>
-        <DateField
-          mode="time"
-          label="Во сколько напоминать"
-          value={data.settings.eventTime}
-          onChange={(v) => updateSettings({ eventTime: v })}
-        />
-        <SwitchRow
-          label="Напоминать ещё и за день"
-          value={data.settings.eventDayBefore}
-          onChange={(v) => updateSettings({ eventDayBefore: v })}
-        />
-      </Card>
+  return (
+    <ScrollView style={s.screen} contentContainerStyle={s.content}>
+      <View style={{ gap: 8 }}>
+        <SectionTitle style={{ marginBottom: 0 }}>Уведомления</SectionTitle>
+        <Card style={{ gap: 10 }}>
+          {Platform.OS === 'web' ? (
+            <Text style={s.muted}>В браузере уведомления не работают — открой приложение на телефоне.</Text>
+          ) : (
+            <>
+              <View style={s.row}>
+                <IconCircle icon="bell" tone={allowed ? 'success' : 'warn'} />
+                <Text style={[s.title, { flex: 1 }]}>
+                  {allowed === null ? '…' : allowed ? 'Уведомления включены' : 'Уведомления выключены'}
+                </Text>
+              </View>
+              {!allowed && <Button title="Включить уведомления" onPress={enable} />}
+              <Button title="Отправить тестовое" variant="secondary" onPress={test} />
+            </>
+          )}
+        </Card>
+        <Card style={{ paddingBottom: 6 }}>
+          <DateField mode="time" label="Во сколько напоминать о датах" value={settings.eventTime} onChange={(v) => updateSettings({ eventTime: v })} />
+          <SwitchRow label="Напоминать ещё и за день" value={settings.eventDayBefore} onChange={(v) => updateSettings({ eventDayBefore: v })} />
+        </Card>
+      </View>
+
+      <View style={{ gap: 8 }}>
+        <SectionTitle style={{ marginBottom: 0 }}>Оформление</SectionTitle>
+        <Card style={{ gap: 14 }}>
+          <View style={{ gap: 8 }}>
+            <Text style={s.label}>Тема</Text>
+            <View style={s.chips}>
+              {THEME_MODES.map((m) => (
+                <Chip key={m.key} label={m.label} selected={settings.theme === m.key} onPress={() => updateSettings({ theme: m.key })} />
+              ))}
+            </View>
+          </View>
+          <View style={{ gap: 4 }}>
+            <Text style={s.label}>Цвет светлой темы</Text>
+            <AccentPicker scheme="light" value={settings.accentLight} onChange={(id) => updateSettings({ accentLight: id })} />
+          </View>
+          <View style={{ gap: 4 }}>
+            <Text style={s.label}>Цвет тёмной темы</Text>
+            <AccentPicker scheme="dark" value={settings.accentDark} onChange={(id) => updateSettings({ accentDark: id })} />
+          </View>
+          <Text style={s.caption}>Цвет кнопок, активной вкладки и карточки «Сегодня». У светлой и тёмной темы он свой.</Text>
+        </Card>
+      </View>
 
       {Platform.OS === 'android' && (
-        <>
-          <SectionTitle>Друзья</SectionTitle>
+        <View style={{ gap: 8 }}>
+          <SectionTitle style={{ marginBottom: 0 }}>Друзья</SectionTitle>
           <Card style={{ gap: 10 }}>
-            <Text style={[styles.muted, { lineHeight: 20 }]}>
-              Найти в контактах телефона Telegram, WhatsApp, Viber и фото для уже добавленных друзей (по номеру
-              телефона).
+            <Text style={s.muted}>
+              Найти в контактах телефона Telegram, WhatsApp, Viber и фото для уже добавленных друзей — по номеру телефона.
             </Text>
-            <Button title={enrichStatus === '…' ? 'Ищу…' : '🔄 Подтянуть мессенджеры и фото'} variant="secondary" onPress={enrich} />
-            {enrichStatus && enrichStatus !== '…' && <Text style={styles.muted}>{enrichStatus}</Text>}
+            <Button title={enrichStatus === '…' ? 'Ищу…' : 'Подтянуть мессенджеры и фото'} icon="refresh" variant="secondary" onPress={enrich} />
+            {enrichStatus && enrichStatus !== '…' && <Text style={s.muted}>{enrichStatus}</Text>}
           </Card>
-        </>
+        </View>
       )}
 
-      <SectionTitle>Для разработки</SectionTitle>
-      <Button
-        title="🧪 Данные из приложений (Telegram, WhatsApp…)"
-        variant="secondary"
-        onPress={() => router.push('/sources')}
-      />
-      <Button title="🔬 Диагностика контактов" variant="secondary" onPress={() => router.push('/contacts-debug')} />
-      <Button title="🩺 Отчёт об ошибке" variant="secondary" onPress={() => router.push('/diagnostics')} />
+      <View style={{ gap: 8 }}>
+        <SectionTitle style={{ marginBottom: 0 }}>Для разработки</SectionTitle>
+        <Group inset={62}>
+          <ListRow leading={<IconCircle icon="flask" />} title="Данные из приложений" subtitle="Что Telegram, WhatsApp и Viber кладут в контакты" chevron onPress={() => router.push('/sources')} />
+          <ListRow leading={<IconCircle icon="search" />} title="Диагностика контактов" chevron onPress={() => router.push('/contacts-debug')} />
+          <ListRow leading={<IconCircle icon="info" />} title="Отчёт об ошибке" chevron onPress={() => router.push('/diagnostics')} />
+        </Group>
+      </View>
 
-      <Text style={[styles.muted, { textAlign: 'center', marginTop: 16 }]}>
-        Все данные хранятся только на этом телефоне.
-      </Text>
+      <Text style={[s.caption, { textAlign: 'center', color: colors.text3 }]}>Все данные хранятся только на этом телефоне.</Text>
     </ScrollView>
   );
 }

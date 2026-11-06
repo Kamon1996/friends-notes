@@ -60,11 +60,20 @@ export interface Reminder {
   createdAt: number;
 }
 
+export type ThemeMode = 'system' | 'light' | 'dark';
+export type AccentId = 'terracotta' | 'honey' | 'eucalyptus' | 'plum' | 'indigo' | 'raspberry';
+
 export interface Settings {
   /** Во сколько присылать уведомления о днях рождения и важных датах. */
   eventTime: TimeOfDay;
   /** Напоминать за день до дня рождения / важной даты. */
   eventDayBefore: boolean;
+  /** Тема: как в системе, светлая или тёмная. */
+  theme: ThemeMode;
+  /** Акцентный цвет светлой темы. */
+  accentLight: AccentId;
+  /** Акцентный цвет тёмной темы — может отличаться от светлой. */
+  accentDark: AccentId;
 }
 
 export interface AppData {
@@ -77,6 +86,9 @@ export interface AppData {
 export const DEFAULT_SETTINGS: Settings = {
   eventTime: '10:00',
   eventDayBefore: true,
+  theme: 'system',
+  accentLight: 'terracotta',
+  accentDark: 'terracotta',
 };
 
 export const EMPTY_DATA: AppData = {

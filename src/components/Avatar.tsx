@@ -1,17 +1,29 @@
 import { useState } from 'react';
 import { Image, Text, View } from 'react-native';
 
+import { avatarTint, fonts, initials } from '@/lib/theme';
 import type { Friend } from '@/lib/types';
-import { colors } from './ui';
 
-/** Фото из контактов, а если его нет или оно не открылось — эмодзи. */
-export function Avatar({ friend, size }: { friend: Pick<Friend, 'emoji' | 'photoUri' | 'thumbUri'>; size: number }) {
+/** Фото из контактов, а без него — инициалы серифом на мягком оттенке, выбранном по имени. */
+export function Avatar({
+  friend,
+  size,
+  bg,
+  fg,
+}: {
+  friend: Pick<Friend, 'name' | 'photoUri' | 'thumbUri'>;
+  size: number;
+  /** Переопределить цвета (например, белый кружок на карточке «Сегодня»). */
+  bg?: string;
+  fg?: string;
+}) {
   const [failed, setFailed] = useState(false);
+  const tint = avatarTint(friend.name);
   const box = {
     width: size,
     height: size,
     borderRadius: size / 2,
-    backgroundColor: colors.primarySoft,
+    backgroundColor: bg ?? tint.bg,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
     overflow: 'hidden' as const,
@@ -27,7 +39,9 @@ export function Avatar({ friend, size }: { friend: Pick<Friend, 'emoji' | 'photo
   }
   return (
     <View style={box}>
-      <Text style={{ fontSize: size * 0.54 }}>{friend.emoji}</Text>
+      <Text style={{ fontFamily: fonts.display, fontSize: Math.round(size * 0.37), color: fg ?? tint.fg, lineHeight: Math.round(size * 0.5) }}>
+        {initials(friend.name)}
+      </Text>
     </View>
   );
 }

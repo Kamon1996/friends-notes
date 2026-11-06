@@ -1,16 +1,20 @@
 import { createElement } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 
-import { DateFieldBase, pickerButtonStyle, type DateFieldProps } from './DateFieldBase';
+import { DateFieldBase, usePickerButtonStyle, type DateFieldProps } from './DateFieldBase';
+import { Icon } from './Icon';
+import { useTheme } from './ui';
 
 /**
  * Веб-версия: ввод цифрами + кнопка, поверх которой лежит прозрачный
  * <input type="date|time"> — нажатие открывает системный выбор даты.
  */
 export function DateField(props: DateFieldProps) {
+  const { colors } = useTheme();
+  const pickerButton = usePickerButtonStyle();
   const picker = (
-    <View style={[pickerButtonStyle, { position: 'relative', overflow: 'hidden' }]}>
-      <Text style={{ fontSize: 20 }}>{props.mode === 'date' ? '📅' : '🕐'}</Text>
+    <View style={[pickerButton, { position: 'relative', overflow: 'hidden' }]}>
+      <Icon name={props.mode === 'date' ? 'calendar' : 'clock'} size={20} color={colors.text2} />
       {createElement('input', {
         type: props.mode,
         'aria-label': props.mode === 'date' ? 'Выбрать в календаре' : 'Выбрать время',

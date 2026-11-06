@@ -46,8 +46,9 @@ export function TelegramSessionProvider({ children }: { children: ReactNode }) {
     const b = Telegram.addListener('onImport', setImp);
     // Пока приложение было свёрнуто, события могли не дойти — сверяемся при возврате.
     const c = AppState.addEventListener('change', (s) => s === 'active' && sync());
-    sync();
+    const t = setTimeout(sync, 0);
     return () => {
+      clearTimeout(t);
       a.remove();
       b.remove();
       c.remove();

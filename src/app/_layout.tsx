@@ -1,22 +1,25 @@
+import { GolosText_400Regular, GolosText_500Medium, GolosText_600SemiBold, GolosText_700Bold } from '@expo-google-fonts/golos-text';
+import { Lora_500Medium, Lora_600SemiBold, Lora_700Bold, useFonts } from '@expo-google-fonts/lora';
 import * as Notifications from 'expo-notifications';
 import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { Platform } from 'react-native';
+import { Platform, View, useColorScheme } from 'react-native';
 
-import { colors } from '@/components/ui';
-import { setupNotifications } from '@/lib/notifications';
 import { TelegramBanner } from '@/components/TelegramBanner';
+import { handleNotificationResponse, setupNotifications } from '@/lib/notifications';
 import { StoreProvider } from '@/lib/store';
 import { TelegramSessionProvider } from '@/lib/telegramSession';
+import { ThemeProvider, useTheme } from '@/lib/themeContext';
 
-/** Переход по нажатию на уведомление. */
+/** Переход по нажатию на уведомление или на его кнопку («Позвонить», «Написать»). */
 function useNotificationNavigation() {
   useEffect(() => {
     if (Platform.OS === 'web') return;
     const open = (response: Notifications.NotificationResponse | null) => {
-      const url = response?.notification.request.content.data?.url;
-      if (typeof url === 'string') router.push(url as never);
+      if (!response) return;
+      const url = handleNotificationResponse(response);
+      if (url) router.push(url as never);
     };
     open(Notifications.getLastNotificationResponse());
     const sub = Notifications.addNotificationResponseReceivedListener(open);
@@ -24,25 +27,19 @@ function useNotificationNavigation() {
   }, []);
 }
 
-export default function RootLayout() {
-  useNotificationNavigation();
-
-  useEffect(() => {
-    setupNotifications().catch(() => {});
-  }, []);
-
+function AppShell() {
+  const { colors, fonts, scheme } = useTheme();
   return (
-    <StoreProvider>
-      <TelegramSessionProvider>
-      <StatusBar style="dark" />
+    <>
+      <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
       <Stack
         screenOptions={{
           headerStyle: { backgroundColor: colors.bg },
           headerShadowVisible: false,
-          headerTintColor: colors.primary,
-          headerTitleStyle: { color: colors.text },
+          headerTintColor: colors.accent,
+          headerTitleStyle: { color: colors.text, fontFamily: fonts.display, fontSize: 18 },
+          headerBackButtonDisplayMode: 'minimal',
           contentStyle: { backgroundColor: colors.bg },
-          headerBackTitle: 'Назад',
         }}
       >
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
@@ -57,7 +54,38 @@ export default function RootLayout() {
         <Stack.Screen name="diagnostics" options={{ title: 'Отчёт об ошибке' }} />
       </Stack>
       <TelegramBanner />
-      </TelegramSessionProvider>
+    </>
+  );
+}
+
+export default function RootLayout() {
+  const [fontsLoaded, fontError] = useFonts({
+    Lora_500Medium,
+    Lora_600SemiBold,
+    Lora_700Bold,
+    GolosText_400Regular,
+    GolosText_500Medium,
+    GolosText_600SemiBold,
+    GolosText_700Bold,
+  });
+  const system = useColorScheme();
+  useNotificationNavigation();
+
+  useEffect(() => {
+    setupNotifications().catch(() => {});
+  }, []);
+
+  // Пока шрифты грузятся — пустой экран цвета бумаги, чтобы текст не «прыгал» между гарнитурами.
+  // Если шрифты не загрузились (например, в веб-превью без сети) — показываем приложение системным шрифтом.
+  if (!fontsLoaded && !fontError) return <View style={{ flex: 1, backgroundColor: system === 'dark' ? '#17130F' : '#F7F3EE' }} />;
+
+  return (
+    <StoreProvider>
+      <ThemeProvider>
+        <TelegramSessionProvider>
+          <AppShell />
+        </TelegramSessionProvider>
+      </ThemeProvider>
     </StoreProvider>
   );
 }

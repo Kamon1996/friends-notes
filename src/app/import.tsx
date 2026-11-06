@@ -1,10 +1,11 @@
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, Linking, Platform, Pressable, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, Linking, Platform, Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/Avatar';
-import { Button, Card, Checkbox, Chip, Empty, colors, styles } from '@/components/ui';
+import { Icon } from '@/components/Icon';
+import { Button, Card, Checkbox, Chip, Empty, GroupedRow, IconCircle, SearchField, Tag, useTheme } from '@/components/ui';
 import { loadContacts, pickMoreContacts } from '@/lib/contacts';
 import { candidateToFriend, phoneKey, toCandidates, type ImportCandidate } from '@/lib/contactsImport';
 import { applyEnrichment } from '@/lib/enrich';
@@ -25,6 +26,7 @@ type Filter = 'all' | 'phone' | 'birthday';
 
 export default function ImportScreen() {
   const { data, ready, addFriends, updateFriends } = useStore();
+  const { s: styles, colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { source } = useLocalSearchParams<{ source?: string }>();
   // telegram — загружено через вход в Telegram; tgbook — контакты Telegram из телефонной книги, без входа.
@@ -70,10 +72,12 @@ export default function ImportScreen() {
   }, []);
 
   useEffect(() => {
-    if (ready) load();
+    if (!ready) return;
+    const t = setTimeout(load, 0);
+    return () => clearTimeout(t);
   }, [ready, load]);
 
-  const all = state.kind === 'ready' ? state.candidates : [];
+  const all = useMemo(() => (state.kind === 'ready' ? state.candidates : []), [state]);
   const withBirthday = useMemo(() => all.filter((c) => c.birthday).length, [all]);
   const withPhone = useMemo(() => all.filter((c) => c.phone).length, [all]);
   const visible = useMemo(() => {
@@ -143,7 +147,7 @@ export default function ImportScreen() {
   if (state.kind === 'loading') {
     return (
       <View style={[styles.screen, { alignItems: 'center', justifyContent: 'center', gap: 12 }]}>
-        <ActivityIndicator color={colors.primary} />
+        <ActivityIndicator color={colors.accent} />
         <Text style={styles.muted}>Читаю контакты…</Text>
       </View>
     );
@@ -153,7 +157,7 @@ export default function ImportScreen() {
     return (
       <View style={[styles.screen, styles.content]}>
         <Empty
-          emoji="🔒"
+          icon="lock"
           title="Нет доступа к контактам"
           text="Разреши приложению читать контакты — оно возьмёт только имена, телефоны и дни рождения. Ничего не отправляется в интернет."
         />
@@ -169,7 +173,7 @@ export default function ImportScreen() {
   if (state.kind === 'error') {
     return (
       <View style={[styles.screen, styles.content]}>
-        <Empty emoji="⚠️" title="Не получилось прочитать контакты" text={state.message} />
+        <Empty icon="warning" title="Не получилось прочитать контакты" text={state.message} />
         <Button title="Попробовать ещё раз" onPress={load} />
       </View>
     );
@@ -183,34 +187,34 @@ export default function ImportScreen() {
         data={visible}
         keyExtractor={(c) => c.key}
         extraData={selected}
-        contentContainerStyle={[styles.content, { paddingBottom: 110 + insets.bottom }]}
+        contentContainerStyle={[styles.content, { gap: 0, paddingBottom: 110 + insets.bottom }]}
         keyboardShouldPersistTaps="handled"
         ListHeaderComponent={
-          <View style={{ gap: 12 }}>
+          <View style={{ gap: 12, marginBottom: 10 }}>
             <Stack.Screen options={{ title: fromTelegram || fromTgBook ? 'Контакты Telegram' : 'Импорт контактов' }} />
             {!fromTelegram && !fromTgBook && telegramAvailable && (
               <Pressable
                 onPress={() => router.push('/telegram')}
-                style={({ pressed }) => [styles.card, styles.row, { borderColor: colors.blue }, pressed && { opacity: 0.7 }]}
+                style={({ pressed }) => [styles.card, styles.row, pressed && { opacity: 0.7 }]}
               >
-                <Text style={{ fontSize: 28 }}>✈️</Text>
-                <View style={{ flex: 1 }}>
+                <IconCircle icon="send" tone="info" size={40} />
+                <View style={{ flex: 1, gap: 2 }}>
                   <Text style={styles.title}>Импорт из Telegram</Text>
                   <Text style={styles.muted}>Без входа — или с днями рождения через вход</Text>
                 </View>
-                <Text style={styles.muted}>›</Text>
+                <Icon name="chevronRight" size={18} color={colors.checkbox} strokeWidth={2} />
               </Pressable>
             )}
             {state.partial && (
-              <Card style={{ backgroundColor: colors.amberSoft, borderColor: colors.amberSoft }}>
-                <Text style={{ color: colors.amber, lineHeight: 20 }}>
+              <Card style={{ backgroundColor: colors.warnSoft, borderColor: colors.warnSoft }}>
+                <Text style={[styles.muted, { color: colors.warn, fontSize: 14, lineHeight: 20 }]}>
                   Telegram попросил сделать паузу, поэтому дни рождения загружены не у всех. Можно повторить импорт позже.
                 </Text>
               </Card>
             )}
             {state.sample && (
-              <Card style={{ backgroundColor: colors.amberSoft, borderColor: colors.amberSoft }}>
-                <Text style={{ color: colors.amber, lineHeight: 20 }}>
+              <Card style={{ backgroundColor: colors.warnSoft, borderColor: colors.warnSoft }}>
+                <Text style={[styles.muted, { color: colors.warn, fontSize: 14, lineHeight: 20 }]}>
                   Это пример: в браузере нет доступа к телефонной книге. В приложении на телефоне здесь будут твои
                   контакты.
                 </Text>
@@ -222,39 +226,33 @@ export default function ImportScreen() {
                 <Button title="Выбрать ещё контакты" variant="secondary" onPress={() => pickMoreContacts().then(load)} />
               </Card>
             )}
-            {!fromTelegram && !fromTgBook && <Pressable onPress={() => router.push('/sources')} hitSlop={8}>
-              <Text style={{ color: colors.blue }}>🧪 Что лежит в контактах от Telegram, WhatsApp, Viber… →</Text>
-            </Pressable>}
-            <TextInput
-              value={query}
-              onChangeText={setQuery}
-              placeholder="🔍  Имя или телефон"
-              placeholderTextColor={colors.muted}
-              style={styles.input}
-            />
+            {!fromTelegram && !fromTgBook && (
+              <Pressable onPress={() => router.push('/sources')} hitSlop={8}>
+                <Text style={[styles.muted, { color: colors.info }]}>Что лежит в контактах от Telegram, WhatsApp, Viber →</Text>
+              </Pressable>
+            )}
+            <SearchField value={query} onChangeText={setQuery} placeholder="Имя или телефон" />
             <View style={[styles.chips, { alignItems: 'center' }]}>
               <Chip label={`Все · ${all.length}`} selected={filter === 'all'} onPress={() => setFilter('all')} />
-              <Chip label={`📞 С номером · ${withPhone}`} selected={filter === 'phone'} onPress={() => setFilter('phone')} />
-              <Chip
-                label={`🎂 С днём рождения · ${withBirthday}`}
-                selected={filter === 'birthday'}
-                onPress={() => setFilter('birthday')}
-              />
+              <Chip label={`С номером · ${withPhone}`} icon="phone" selected={filter === 'phone'} onPress={() => setFilter('phone')} />
+              <Chip label={`С днём рождения · ${withBirthday}`} icon="cake" selected={filter === 'birthday'} onPress={() => setFilter('birthday')} />
             </View>
             {selectable.length > 0 && (
-              <Pressable onPress={toggleAllVisible} style={[styles.row, { paddingVertical: 4, paddingHorizontal: 4 }]}>
-                <Checkbox checked={allVisibleSelected} onPress={toggleAllVisible} />
-                <Text style={styles.title}>{allVisibleSelected ? 'Снять все' : 'Выбрать все'}</Text>
-              </Pressable>
+              <View style={[styles.row, { justifyContent: 'space-between', paddingHorizontal: 4 }]}>
+                <Text style={styles.sectionLabel}>{count ? `Выбрано ${count} из ${all.length}` : `${all.length} контактов`}</Text>
+                <Button title={allVisibleSelected ? 'Снять все' : 'Выбрать все'} variant="ghost" style={{ minHeight: 32, paddingHorizontal: 8, paddingVertical: 2 }} onPress={toggleAllVisible} />
+              </View>
             )}
           </View>
         }
-        renderItem={({ item }) => (
-          <ContactRow candidate={item} checked={selected.has(item.key)} onToggle={() => toggle(item.key)} />
+        renderItem={({ item, index }) => (
+          <GroupedRow first={index === 0} last={index === visible.length - 1} inset={102}>
+            <ContactRow candidate={item} checked={selected.has(item.key)} onToggle={() => toggle(item.key)} />
+          </GroupedRow>
         )}
         ListEmptyComponent={
           <Empty
-            emoji="📇"
+            icon="people"
             title={all.length ? 'Никого не нашлось' : 'Контактов нет'}
             text={all.length ? 'Попробуй другой запрос или фильтр.' : 'В телефонной книге пока пусто.'}
           />
@@ -270,13 +268,13 @@ export default function ImportScreen() {
           paddingBottom: 16 + insets.bottom,
           backgroundColor: colors.bg,
           borderTopWidth: 1,
-          borderTopColor: colors.border,
+          borderTopColor: colors.hairline,
         }}
       >
         <Button
-          title={count ? `Добавить (${count})` : 'Отметь, кого добавить'}
+          title={count ? `Добавить ${count} ${count === 1 ? 'друга' : count < 5 ? 'друзей' : 'друзей'}` : 'Отметь, кого добавить'}
           onPress={doImport}
-          style={!count && { opacity: 0.5 }}
+          disabled={!count}
         />
       </View>
     </View>
@@ -284,28 +282,36 @@ export default function ImportScreen() {
 }
 
 function ContactRow({ candidate: c, checked, onToggle }: { candidate: ImportCandidate; checked: boolean; onToggle: () => void }) {
+  const { s: styles, colors } = useTheme();
   const dup = !!c.duplicateOf;
-  const details = [
-    c.birthday && `🎂 ${formatDate(c.birthday, hasYear(c.birthday))}`,
-    ...c.dates.map((d) => `📅 ${d.title}`),
-    c.links.telegramId && '✈️',
-    c.links.whatsapp && '💬',
-    c.links.viber && '🟣',
-  ].filter(Boolean);
+  const details = [c.birthday && `ДР ${formatDate(c.birthday, hasYear(c.birthday))}`, ...c.dates.map((d) => d.title)].filter(Boolean);
+  const messengers = [c.links.telegramId && 'send', c.links.whatsapp && 'bubble', c.links.viber && 'bubble2'].filter(Boolean) as ('send' | 'bubble' | 'bubble2')[];
 
   return (
     <Pressable
       onPress={dup ? undefined : onToggle}
-      style={({ pressed }) => [styles.card, styles.row, { paddingVertical: 12 }, dup && { opacity: 0.5 }, pressed && !dup && { opacity: 0.7 }]}
+      style={({ pressed }) => [styles.row, { paddingHorizontal: 14, paddingVertical: 10 }, dup && { opacity: 0.55 }, pressed && !dup && { opacity: 0.7 }]}
     >
-      {dup ? <View style={{ width: 26 }} /> : <Checkbox checked={checked} onPress={onToggle} />}
-      {(c.thumbUri || c.photoUri) && <Avatar friend={{ emoji: '🙂', photoUri: c.photoUri, thumbUri: c.thumbUri }} size={36} />}
-      <View style={{ flex: 1, gap: 2 }}>
-        <Text style={styles.title}>{c.name}</Text>
-        {!!c.phone && <Text style={styles.muted}>{c.phone}</Text>}
-        {details.length > 0 && <Text style={[styles.muted, { color: colors.text }]}>{details.join('  ')}</Text>}
-        {dup && <Text style={[styles.muted, { fontSize: 13 }]}>Уже есть: {c.duplicateOf}</Text>}
+      {dup ? (
+        <Checkbox checked done onPress={() => {}} />
+      ) : (
+        <Checkbox checked={checked} onPress={onToggle} />
+      )}
+      <Avatar friend={{ name: c.name, photoUri: c.photoUri, thumbUri: c.thumbUri }} size={40} />
+      <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
+        <Text style={styles.title} numberOfLines={1}>{c.name}</Text>
+        <Text style={[styles.muted, { fontVariant: ['tabular-nums'] }]} numberOfLines={1}>
+          {dup ? `Уже есть: ${c.duplicateOf}` : [c.phone, ...details].filter(Boolean).join(' · ') || 'Без номера'}
+        </Text>
       </View>
+      {!dup && messengers.length > 0 && (
+        <View style={{ flexDirection: 'row', gap: 4 }}>
+          {messengers.map((m) => (
+            <Icon key={m} name={m} size={16} color={colors.text3} />
+          ))}
+        </View>
+      )}
+      {dup && <Tag text="уже есть" tone="success" />}
     </Pressable>
   );
 }

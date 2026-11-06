@@ -1,13 +1,16 @@
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { useState } from 'react';
-import { Modal, Platform, Pressable, Text, View } from 'react-native';
+import { Modal, Platform, Pressable, View } from 'react-native';
 
 import { combine, parseISODate, toISODate, toTime } from '@/lib/dates';
-import { DateFieldBase, pickerButtonStyle, type DateFieldProps } from './DateFieldBase';
-import { Button, colors } from './ui';
+import { DateFieldBase, usePickerButtonStyle, type DateFieldProps } from './DateFieldBase';
+import { Icon } from './Icon';
+import { Button, useTheme } from './ui';
 
 /** Поле даты/времени: ввод цифрами + кнопка нативного пикера (Android — диалог, iOS — колесо в модалке). */
 export function DateField(props: DateFieldProps) {
+  const { colors } = useTheme();
+  const pickerButton = usePickerButtonStyle();
   const [iosOpen, setIosOpen] = useState(false);
   const [draft, setDraft] = useState(new Date());
 
@@ -42,9 +45,9 @@ export function DateField(props: DateFieldProps) {
       <Pressable
         onPress={open}
         accessibilityLabel={props.mode === 'date' ? 'Выбрать в календаре' : 'Выбрать время'}
-        style={({ pressed }) => [pickerButtonStyle, pressed && { opacity: 0.6 }]}
+        style={({ pressed }) => [pickerButton, pressed && { opacity: 0.6 }]}
       >
-        <Text style={{ fontSize: 20 }}>{props.mode === 'date' ? '📅' : '🕐'}</Text>
+        <Icon name={props.mode === 'date' ? 'calendar' : 'clock'} size={20} color={colors.text2} />
       </Pressable>
       {Platform.OS === 'ios' && (
         <Modal visible={iosOpen} transparent animationType="slide" onRequestClose={() => setIosOpen(false)}>

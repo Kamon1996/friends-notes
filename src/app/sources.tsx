@@ -2,7 +2,7 @@ import { requestPermissionsAsync } from 'expo-contacts';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, ScrollView, Share, Text, View } from 'react-native';
 
-import { Button, Card, SectionTitle, colors, styles } from '@/components/ui';
+import { Button, Card, SectionTitle, useTheme } from '@/components/ui';
 import { contactsRawAvailable, dumpAccount, getAccounts, type RawAccount, type RawDump } from '../../modules/contacts-raw';
 import { SOURCES, accountsFor, filterDumpsByMime, formatDump, mimeStats, otherAccounts, type SourceDef } from '@/lib/sources';
 import { plural } from '@/lib/dates';
@@ -38,6 +38,7 @@ async function share(text: string) {
 
 /** Экран для исследования: какие сырые данные мессенджеры и аккаунты кладут в телефонную книгу. */
 export default function SourcesScreen() {
+  const { s: styles, colors } = useTheme();
   const [accounts, setAccounts] = useState<RawAccount[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -60,7 +61,9 @@ export default function SourcesScreen() {
   }, []);
 
   useEffect(() => {
-    if (contactsRawAvailable || isSample) init();
+    if (!contactsRawAvailable && !isSample) return;
+    const t = setTimeout(init, 0);
+    return () => clearTimeout(t);
   }, [init]);
 
   const open = async (title: string, list: RawAccount[], mime?: RegExp) => {
@@ -122,7 +125,7 @@ export default function SourcesScreen() {
           </Text>
           {!found.length && s.note && <Text style={[styles.muted, { fontSize: 12 }]}>{s.note}</Text>}
         </View>
-        {busy === s.title ? <ActivityIndicator color={colors.primary} /> : found.length ? <Text style={styles.muted}>›</Text> : null}
+        {busy === s.title ? <ActivityIndicator color={colors.accent} /> : found.length ? <Text style={styles.muted}>›</Text> : null}
       </Pressable>
     );
   };
@@ -132,8 +135,8 @@ export default function SourcesScreen() {
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <Card style={{ gap: 6, backgroundColor: isSample ? colors.amberSoft : colors.card }}>
-        <Text style={[styles.muted, isSample && { color: colors.amber }]}>
+      <Card style={{ gap: 6, backgroundColor: isSample ? colors.warnSoft : colors.card }}>
+        <Text style={[styles.muted, isSample && { color: colors.warn }]}>
           {isSample
             ? 'Это пример формата на выдуманных данных: в браузере нет телефонной книги. В Android-приложении здесь будут настоящие данные.'
             : 'Только чтение. Показывает, что мессенджеры и аккаунты записали в телефонную книгу. Ничего никуда не отправляется, пока ты сам не нажмёшь «Поделиться» — там будут имена и номера.'}
@@ -142,12 +145,12 @@ export default function SourcesScreen() {
 
       {error && (
         <Card style={{ gap: 8, borderColor: colors.danger }}>
-          <Text style={{ color: colors.danger }}>{error}</Text>
+          <Text style={[styles.muted, { color: colors.danger }]}>{error}</Text>
           <Button title="Ещё раз" variant="secondary" onPress={init} />
         </Card>
       )}
 
-      {!accounts && !error && <ActivityIndicator color={colors.primary} style={{ marginTop: 24 }} />}
+      {!accounts && !error && <ActivityIndicator color={colors.accent} style={{ marginTop: 24 }} />}
 
       {accounts && (
         <>

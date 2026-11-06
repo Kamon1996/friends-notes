@@ -102,7 +102,8 @@ test('уведомления: день рождения, «за день», де
   const fmt = (d: Date) => `${d.getMonth() + 1}-${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
   const times = plan.map((n) => fmt(n.at));
   assert.deepEqual(times.slice(0, 4), ['11-9 18:00', '11-10 18:00', '11-19 10:00', '11-20 10:00']);
-  assert.match(plan[3].body, /31 год/);
+  assert.match(plan[3].title, /31 год/);
+  assert.match(plan[2].body, /^Завтра день рождения · 31 год/);
 
   const many: AppData = {
     ...EMPTY_DATA,

@@ -3,7 +3,8 @@ import { Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useTelegramSession } from '@/lib/telegramSession';
-import { colors } from './ui';
+import { Icon } from './Icon';
+import { useTheme } from './ui';
 
 const TAB_ROUTES = new Set(['/', '/friends', '/reminders']);
 
@@ -12,6 +13,7 @@ export function TelegramBanner() {
   const tg = useTelegramSession();
   const path = usePathname();
   const insets = useSafeAreaInsets();
+  const { colors, fonts } = useTheme();
 
   if (path === '/telegram' || path === '/import') return null;
 
@@ -43,24 +45,23 @@ export function TelegramBanner() {
         right: inTabs ? 96 : 12,
         bottom: inTabs ? insets.bottom + 49 + 30 : insets.bottom + 16,
         borderRadius: 16,
-        backgroundColor: colors.text,
+        backgroundColor: colors.banner,
         paddingHorizontal: 14,
         paddingVertical: 10,
         opacity: pressed ? 0.85 : 1,
         gap: 6,
-        shadowColor: '#000',
-        shadowOpacity: 0.2,
-        shadowRadius: 8,
-        shadowOffset: { width: 0, height: 3 },
-        elevation: 6,
+        boxShadow: '0 6px 18px rgba(0, 0, 0, 0.25)',
       })}
     >
-      <Text style={{ color: '#fff', fontWeight: '600' }} numberOfLines={1}>
-        ✈️ {text}
-      </Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <Icon name="send" size={18} color={colors.accentText} />
+        <Text style={{ color: colors.onBanner, fontFamily: fonts.semibold, fontSize: 13, flex: 1 }} numberOfLines={1}>
+          {text}
+        </Text>
+      </View>
       {progress !== null && (
-        <View style={{ height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.25)', overflow: 'hidden' }}>
-          <View style={{ width: `${Math.round(progress * 100)}%`, height: 4, backgroundColor: colors.primary }} />
+        <View style={{ height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.18)', overflow: 'hidden' }}>
+          <View style={{ width: `${Math.round(progress * 100)}%`, height: 4, backgroundColor: colors.accentText }} />
         </View>
       )}
     </Pressable>

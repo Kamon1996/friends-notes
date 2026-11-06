@@ -5,6 +5,7 @@ const MONTHS_GEN = [
   'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря',
 ];
 const WEEKDAYS_SHORT = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
+const WEEKDAYS = ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
 
 const pad = (n: number) => String(n).padStart(2, '0');
 
@@ -124,6 +125,18 @@ export function formatDate(date: ISODate, withYear = true): string {
 export function formatDateShort(date: ISODate): string {
   const d = parseISODate(date);
   return `${d.getDate()} ${MONTHS_GEN[d.getMonth()].slice(0, 3)}, ${WEEKDAYS_SHORT[d.getDay()]}`;
+}
+
+/** «вт, 9 ноя» — для правого края строк. */
+export function formatDayShort(date: ISODate): string {
+  const d = parseISODate(date);
+  return `${WEEKDAYS_SHORT[d.getDay()]}, ${d.getDate()} ${MONTHS_GEN[d.getMonth()].slice(0, 3)}`;
+}
+
+/** «Пятница, 6 ноября» — подпись под заголовком экрана. */
+export function formatDateLong(date: ISODate): string {
+  const d = parseISODate(date);
+  return `${WEEKDAYS[d.getDay()]}, ${d.getDate()} ${MONTHS_GEN[d.getMonth()]}`;
 }
 
 export function plural(n: number, one: string, few: string, many: string): string {

@@ -4,13 +4,14 @@
     "slug": "friends-notes",
     "owner": "kamon1996",
     "scheme": "friendsnotes",
-    "version": "1.7.1",
+    "version": "1.8.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.kamon1996.friendsnotes"
+      "bundleIdentifier": "com.kamon1996.friendsnotes",
+      "userInterfaceStyle": "automatic"
     },
     "android": {
       "package": "com.kamon1996.friendsnotes",
@@ -23,7 +24,8 @@
       "predictiveBackGestureEnabled": false,
       "blockedPermissions": [
         "android.permission.WRITE_CONTACTS"
-      ]
+      ],
+      "userInterfaceStyle": "automatic"
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -34,7 +36,7 @@
       [
         "expo-notifications",
         {
-          "color": "#E2604B"
+          "color": "#C4502F"
         }
       ],
       [
@@ -42,7 +44,8 @@
         {
           "contactsPermission": "Чтобы быстро добавить друзей и их дни рождения из контактов."
         }
-      ]
+      ],
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true

@@ -2,8 +2,9 @@ import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
+import { Avatar } from '@/components/Avatar';
 import { DateField } from '@/components/DateField';
-import { Button, Card, Chip, Field, Label, SectionTitle, SwitchRow, colors, styles } from '@/components/ui';
+import { Button, Card, Chip, Field, Label, SectionTitle, SwitchRow, useTheme } from '@/components/ui';
 import { confirm } from '@/lib/confirm';
 import { addInterval, formatRepeat, todayISO } from '@/lib/dates';
 import { newId, useStore } from '@/lib/store';
@@ -49,6 +50,7 @@ export default function EditReminderScreen() {
 function ReminderForm() {
   const params = useLocalSearchParams<{ id?: string; friendId?: string }>();
   const { data, saveReminder, deleteReminder } = useStore();
+  const { s, colors, fonts } = useTheme();
   const existing = data.reminders.find((r) => r.id === params.id);
 
   const [r, setR] = useState<Reminder>(
@@ -95,13 +97,13 @@ function ReminderForm() {
         options={{
           title: existing ? 'Напоминание' : 'Новое напоминание',
           headerRight: () => (
-            <Pressable onPress={save} hitSlop={10} style={{ paddingHorizontal: Platform.OS === 'web' ? 16 : 0 }}>
-              <Text style={{ color: colors.primary, fontSize: 17, fontWeight: '700' }}>Готово</Text>
+            <Pressable onPress={save} hitSlop={10} style={{ paddingHorizontal: Platform.OS === 'web' ? 16 : 4, minHeight: 44, justifyContent: 'center' }}>
+              <Text style={{ color: colors.accent, fontSize: 16, fontFamily: fonts.semibold }}>Готово</Text>
             </Pressable>
           ),
         }}
       />
-      <ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView style={s.screen} contentContainerStyle={[s.content, { gap: 0 }]} keyboardShouldPersistTaps="handled">
         <Field
           label="Что сделать"
           value={r.title}
@@ -109,7 +111,7 @@ function ReminderForm() {
           placeholder={friend ? `Например, написать ${friend.name}` : 'Например, сдать отчёт'}
           autoFocus={!existing}
         />
-        <View style={[styles.chips, { marginTop: -4, marginBottom: 14 }]}>
+        <View style={[s.chips, { marginTop: -4, marginBottom: 18 }]}>
           {templates.map((t) => (
             <Chip
               key={t}
@@ -121,18 +123,24 @@ function ReminderForm() {
         </View>
 
         <Label>Для кого</Label>
-        <View style={[styles.chips, { marginBottom: 14 }]}>
-          <Chip label="🙋 Для себя" selected={!r.friendId} onPress={() => set('friendId', null)} />
+        <View style={[s.chips, { marginBottom: 18 }]}>
+          <Chip label="Для себя" icon="person" selected={!r.friendId} onPress={() => set('friendId', null)} />
           {data.friends.map((f) => (
-            <Chip key={f.id} label={`${f.emoji} ${f.name}`} selected={r.friendId === f.id} onPress={() => set('friendId', f.id)} />
+            <Chip
+              key={f.id}
+              label={f.name}
+              selected={r.friendId === f.id}
+              leading={<Avatar friend={f} size={28} />}
+              onPress={() => set('friendId', f.id)}
+            />
           ))}
         </View>
 
-        <View style={{ flexDirection: 'row', gap: 12 }}>
+        <View style={{ flexDirection: 'row', gap: 10 }}>
           <View style={{ flex: 3 }}>
             <DateField
               mode="date"
-              label={r.repeat ? 'Ближайший раз' : 'Дата / дедлайн'}
+              label={r.repeat ? 'Ближайший раз' : 'Дата или дедлайн'}
               value={r.date}
               onChange={(v) => set('date', v)}
             />
@@ -141,9 +149,10 @@ function ReminderForm() {
             <DateField mode="time" label="Время" value={r.time} onChange={(v) => set('time', v)} />
           </View>
         </View>
+        <Text style={[s.caption, { marginTop: -8, marginBottom: 14, paddingHorizontal: 4 }]}>Вводи цифрами — точки подставятся сами.</Text>
 
-        <SectionTitle>Повтор</SectionTitle>
-        <View style={styles.chips}>
+        <SectionTitle style={{ marginBottom: 8 }}>Повтор</SectionTitle>
+        <View style={s.chips}>
           {REPEAT_PRESETS.map((p) => (
             <Chip
               key={p.label}
@@ -165,9 +174,9 @@ function ReminderForm() {
           />
         </View>
         {customRepeat && r.repeat && (
-          <Card style={{ gap: 10 }}>
-            <View style={styles.row}>
-              <Text style={styles.title}>Каждые</Text>
+          <Card style={{ gap: 10, marginTop: 10 }}>
+            <View style={s.row}>
+              <Text style={s.body}>Каждые</Text>
               <TextInput
                 value={String(r.repeat.every)}
                 onChangeText={(v) => {
@@ -175,10 +184,10 @@ function ReminderForm() {
                   set('repeat', { ...r.repeat!, every: n });
                 }}
                 keyboardType="number-pad"
-                style={[styles.input, { width: 70, textAlign: 'center', paddingVertical: 8 }]}
+                style={[s.input, { width: 72, textAlign: 'center', paddingVertical: 8, minHeight: 44 }]}
               />
             </View>
-            <View style={styles.chips}>
+            <View style={s.chips}>
               {UNITS.map((u) => (
                 <Chip
                   key={u.unit}
@@ -188,14 +197,14 @@ function ReminderForm() {
                 />
               ))}
             </View>
-            <Text style={styles.muted}>Будет: {formatRepeat(r.repeat)}</Text>
+            <Text style={s.muted}>Будет: {formatRepeat(r.repeat)}</Text>
           </Card>
         )}
 
         {!r.repeat && (
           <>
-            <SectionTitle>Напомнить заранее</SectionTitle>
-            <View style={styles.chips}>
+            <SectionTitle style={{ marginTop: 18, marginBottom: 8 }}>Напомнить заранее</SectionTitle>
+            <View style={s.chips}>
               {ADVANCES.map((a) => (
                 <Chip key={a.value} label={a.label} selected={r.advance === a.value} onPress={() => set('advance', a.value)} />
               ))}
@@ -203,13 +212,13 @@ function ReminderForm() {
           </>
         )}
 
-        <View style={{ height: 8 }} />
+        <View style={{ height: 18 }} />
         <Field label="Заметка" value={r.note} onChangeText={(v) => set('note', v)} placeholder="Детали, ссылка, адрес…" multiline />
 
         {existing && !r.repeat && <SwitchRow label="Выполнено" value={r.done} onChange={(v) => set('done', v)} />}
 
         <Button title="Сохранить" onPress={save} style={{ marginTop: 8 }} />
-        {existing && <Button title="Удалить" variant="danger" onPress={remove} />}
+        {existing && <Button title="Удалить" variant="danger" onPress={remove} style={{ marginTop: 8 }} />}
       </ScrollView>
     </KeyboardAvoidingView>
   );

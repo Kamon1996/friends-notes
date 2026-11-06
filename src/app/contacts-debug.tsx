@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, Platform, Pressable, Share, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, Platform, Pressable, Share, Text, View } from 'react-native';
 
-import { Button, Card, Empty, SectionTitle, colors, styles } from '@/components/ui';
+import { Button, Card, Empty, SearchField, SectionTitle, useTheme } from '@/components/ui';
 import { collectContactsDebug, type DebugContact, type DebugReport } from '@/lib/contactsDebug';
 
 const mono = { fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' }), fontSize: 12 } as const;
@@ -18,6 +18,7 @@ async function share(text: string) {
 
 /** Экран для отладки: что именно телефон отдаёт приложению о контактах. */
 export default function ContactsDebugScreen() {
+  const { s: styles, colors } = useTheme();
   const [report, setReport] = useState<DebugReport | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
@@ -34,7 +35,8 @@ export default function ContactsDebugScreen() {
   }, []);
 
   useEffect(() => {
-    load();
+    const t = setTimeout(load, 0);
+    return () => clearTimeout(t);
   }, [load]);
 
   const visible = useMemo(() => {
@@ -45,7 +47,7 @@ export default function ContactsDebugScreen() {
   if (error) {
     return (
       <View style={[styles.screen, styles.content]}>
-        <Empty emoji="⚠️" title="Ошибка" text={error} />
+        <Empty icon="warning" title="Ошибка" text={error} />
         <Button title="Ещё раз" onPress={load} />
       </View>
     );
@@ -54,7 +56,7 @@ export default function ContactsDebugScreen() {
   if (!report) {
     return (
       <View style={[styles.screen, { alignItems: 'center', justifyContent: 'center', gap: 12 }]}>
-        <ActivityIndicator color={colors.primary} />
+        <ActivityIndicator color={colors.accent} />
         <Text style={styles.muted}>Читаю всё, что есть в контактах…</Text>
       </View>
     );
@@ -123,24 +125,19 @@ export default function ContactsDebugScreen() {
           <Button title="Поделиться сводкой (без имён и номеров)" variant="secondary" onPress={() => share(summaryText)} />
 
           <SectionTitle>Контакты · {total}</SectionTitle>
-          <TextInput
-            value={query}
-            onChangeText={setQuery}
-            placeholder="🔍  Найти контакт"
-            placeholderTextColor={colors.muted}
-            style={styles.input}
-          />
+          <SearchField value={query} onChangeText={setQuery} placeholder="Найти контакт" />
         </View>
       }
       renderItem={({ item }) => (
         <DebugRow contact={item} open={open === item.id} onToggle={() => setOpen(open === item.id ? null : item.id)} />
       )}
-      ListEmptyComponent={<Empty emoji="📇" title="Пусто" text="Контактов не найдено." />}
+      ListEmptyComponent={<Empty icon="people" title="Пусто" text="Контактов не найдено." />}
     />
   );
 }
 
 function DebugRow({ contact, open, onToggle }: { contact: DebugContact; open: boolean; onToggle: () => void }) {
+  const { s: styles } = useTheme();
   const data = { id: contact.id, legacy: contact.legacy, next: contact.next };
   return (
     <Card style={{ gap: 8, paddingVertical: 12 }}>

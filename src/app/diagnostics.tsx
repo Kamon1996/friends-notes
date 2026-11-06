@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, ScrollView, Share, Text, View } from 'react-native';
 
-import { Button, Card, SectionTitle, colors, styles } from '@/components/ui';
+import { Button, Card, SectionTitle, useTheme } from '@/components/ui';
 import { Telegram } from '@/lib/telegramClient';
 
 const mono = { fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' }), fontSize: 11, lineHeight: 15 } as const;
 
 /** Отчёт об ошибке: последний сбой приложения и лог Telegram (TDLib). Только на этом телефоне. */
 export default function DiagnosticsScreen() {
+  const { s: styles, colors } = useTheme();
   const [data, setData] = useState<{ lastCrash: string; tdlibLog: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -24,7 +25,8 @@ export default function DiagnosticsScreen() {
   }, []);
 
   useEffect(() => {
-    load();
+    const t = setTimeout(load, 0);
+    return () => clearTimeout(t);
   }, [load]);
 
   const report = data
@@ -39,8 +41,8 @@ export default function DiagnosticsScreen() {
           нет сообщений и паролей, но в логе Telegram может быть твой номер телефона.
         </Text>
       </Card>
-      {error && <Text style={{ color: colors.danger }}>{error}</Text>}
-      {!data && !error && <ActivityIndicator color={colors.primary} />}
+      {error && <Text style={[styles.muted, { color: colors.danger }]}>{error}</Text>}
+      {!data && !error && <ActivityIndicator color={colors.accent} />}
       {data && (
         <>
           <View style={{ flexDirection: 'row', gap: 8 }}>

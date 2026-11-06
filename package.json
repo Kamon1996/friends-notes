@@ -3,16 +3,20 @@
   "version": "1.0.0",
   "main": "expo-router/entry",
   "dependencies": {
+    "@expo-google-fonts/golos-text": "^0.4.2",
+    "@expo-google-fonts/lora": "^0.4.2",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/datetimepicker": "9.2.1",
     "expo": "~58.0.23",
     "expo-constants": "~58.0.15",
     "expo-contacts": "~58.0.10",
     "expo-device": "~58.0.5",
+    "expo-font": "~58.0.11",
     "expo-linking": "~58.0.16",
     "expo-notifications": "~58.1.8",
     "expo-router": "~58.0.30",
     "expo-status-bar": "~58.0.4",
+    "expo-system-ui": "~58.0.7",
     "qrcode": "^1.5.4",
     "react": "19.3.0",
     "react-dom": "19.3.0",
@@ -26,6 +30,8 @@
     "@types/node": "^26.6.6",
     "@types/qrcode": "^1.5.6",
     "@types/react": "~19.3.0",
+    "eslint": "^9.0.0",
+    "eslint-config-expo": "~58.0.4",
     "jsqr": "^1.4.0",
     "tsx": "^4.23.15",
     "typescript": "~6.0.3"
@@ -36,7 +42,8 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/lib/__tests__/*.test.ts"
+    "test": "tsx --test src/lib/__tests__/*.test.ts",
+    "lint": "expo lint"
   },
   "private": true
 }

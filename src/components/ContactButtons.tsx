@@ -2,9 +2,10 @@ import { Alert, Linking, Platform, Pressable, Text, View } from 'react-native';
 
 import { phoneUrl, telegramUrl, viberUrl, whatsappUrl } from '@/lib/messengers';
 import type { Friend } from '@/lib/types';
-import { colors } from './ui';
+import { Icon, type IconName } from './Icon';
+import { useTheme } from './ui';
 
-async function open(url: string, app: string) {
+export async function openExternal(url: string, app: string) {
   try {
     await Linking.openURL(url);
   } catch {
@@ -12,37 +13,53 @@ async function open(url: string, app: string) {
   }
 }
 
-/** Кнопки связи: показываются только те мессенджеры, где человек действительно есть. */
-export function ContactButtons({ friend }: { friend: Friend }) {
-  const buttons = [
-    friend.phone && { key: 'call', icon: '📞', label: 'Позвонить', onPress: () => open(phoneUrl(friend.phone), 'звонилку') },
-    friend.telegramId && { key: 'tg', icon: '✈️', label: 'Telegram', onPress: () => open(telegramUrl(friend.telegramId!, Platform.OS), 'Telegram') },
-    friend.whatsapp && { key: 'wa', icon: '💬', label: 'WhatsApp', onPress: () => open(whatsappUrl(friend.whatsapp!), 'WhatsApp') },
-    friend.viber && { key: 'vb', icon: '🟣', label: 'Viber', onPress: () => open(viberUrl(friend.viber!), 'Viber') },
-  ].filter(Boolean) as { key: string; icon: string; label: string; onPress: () => void }[];
+export interface ContactAction {
+  key: string;
+  icon: IconName;
+  label: string;
+  url: string;
+  app: string;
+}
 
+/** Способы связи, которые есть у человека: звонок и мессенджеры. */
+export function contactActions(friend: Pick<Friend, 'phone' | 'telegramId' | 'whatsapp' | 'viber'>, os = Platform.OS): ContactAction[] {
+  const list: (ContactAction | false | null | undefined | number | string)[] = [
+    friend.phone && { key: 'call', icon: 'phone', label: 'Позвонить', url: phoneUrl(friend.phone), app: 'звонилку' },
+    friend.telegramId && { key: 'tg', icon: 'send', label: 'Telegram', url: telegramUrl(friend.telegramId, os), app: 'Telegram' },
+    friend.whatsapp && { key: 'wa', icon: 'bubble', label: 'WhatsApp', url: whatsappUrl(friend.whatsapp), app: 'WhatsApp' },
+    friend.viber && { key: 'vb', icon: 'bubble2', label: 'Viber', url: viberUrl(friend.viber), app: 'Viber' },
+  ];
+  return list.filter((x): x is ContactAction => typeof x === 'object' && !!x);
+}
+
+/** Плитки связи в карточке друга — только те мессенджеры, где человек действительно есть. */
+export function ContactButtons({ friend }: { friend: Friend }) {
+  const { colors, fonts } = useTheme();
+  const buttons = contactActions(friend);
   if (!buttons.length) return null;
   return (
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8 }}>
+    <View style={{ flexDirection: 'row', gap: 8 }}>
       {buttons.map((b) => (
         <Pressable
           key={b.key}
-          onPress={b.onPress}
+          onPress={() => openExternal(b.url, b.app)}
+          accessibilityLabel={b.label}
           style={({ pressed }) => ({
+            flex: 1,
+            minHeight: 60,
             alignItems: 'center',
-            gap: 2,
-            minWidth: 76,
+            justifyContent: 'center',
+            gap: 5,
             paddingVertical: 8,
-            paddingHorizontal: 10,
             borderRadius: 14,
             backgroundColor: colors.card,
             borderWidth: 1,
-            borderColor: colors.border,
-            opacity: pressed ? 0.7 : 1,
+            borderColor: colors.hairline,
+            opacity: pressed ? 0.6 : 1,
           })}
         >
-          <Text style={{ fontSize: 22 }}>{b.icon}</Text>
-          <Text style={{ fontSize: 12, color: colors.text, fontWeight: '600' }}>{b.label}</Text>
+          <Icon name={b.icon} size={22} color={colors.accent} />
+          <Text style={{ fontSize: 11, lineHeight: 14, color: colors.accent, fontFamily: fonts.medium }}>{b.label}</Text>
         </Pressable>
       ))}
     </View>

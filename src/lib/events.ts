@@ -12,6 +12,7 @@ import {
   sameDayInYear,
   todayISO,
 } from './dates';
+import { phoneUrl, telegramUrl, viberUrl, whatsappUrl } from './messengers';
 import type { AppData, Friend, ISODate, Reminder } from './types';
 
 /** Элемент ленты «Скоро». */
@@ -77,6 +78,32 @@ export interface PlannedNotification {
   body: string;
   /** Куда перейти при нажатии на уведомление. */
   url: string;
+  /** Ссылки для кнопок «Позвонить» и «Написать» в самом уведомлении. */
+  callUrl?: string;
+  writeUrl?: string;
+}
+
+const clip = (s: string, max = 60) => (s.length > max ? s.slice(0, max - 1).trimEnd() + '…' : s);
+
+/** Подсказка в уведомлении о дне рождения: что любит, какие цветы. */
+export function birthdayHint(f: Pick<Friend, 'flowers' | 'food' | 'gifts'>): string | null {
+  const parts = [f.flowers.trim() && `Цветы: ${clip(f.flowers.trim())}`, f.food.trim() && `Еда: ${clip(f.food.trim())}`].filter(Boolean);
+  if (!parts.length) return giftHint(f);
+  return parts.join('. ') + '.';
+}
+
+export function giftHint(f: Pick<Friend, 'gifts'>): string | null {
+  return f.gifts.trim() ? `Идеи подарков: ${clip(f.gifts.trim(), 80)}.` : null;
+}
+
+/** Куда ведут кнопки уведомления: звонок по номеру и чат в первом доступном мессенджере. */
+export function notificationActions(f: Pick<Friend, 'phone' | 'telegramId' | 'whatsapp' | 'viber'>): { callUrl?: string; writeUrl?: string } {
+  const out: { callUrl?: string; writeUrl?: string } = {};
+  if (f.phone) out.callUrl = phoneUrl(f.phone);
+  if (f.telegramId) out.writeUrl = telegramUrl(f.telegramId, 'android');
+  else if (f.whatsapp) out.writeUrl = whatsappUrl(f.whatsapp);
+  else if (f.viber) out.writeUrl = viberUrl(f.viber);
+  return out;
 }
 
 const MAX_PER_SERIES = 12;
@@ -93,12 +120,13 @@ export function planNotifications(data: AppData, now = new Date()): PlannedNotif
   const { eventTime, eventDayBefore } = data.settings;
   const friendById = new Map(data.friends.map((f) => [f.id, f]));
 
-  const pushEvent = (date: ISODate, title: string, body: string, bodyBefore: string, url: string) => {
+  const pushEvent = (date: ISODate, title: string, body: string, bodyBefore: string, url: string, friend: Friend) => {
+    const actions = notificationActions(friend);
     const at = combine(date, eventTime);
-    if (at > now) out.push({ at, title, body, url });
+    if (at > now) out.push({ at, title, body, url, ...actions });
     if (eventDayBefore) {
       const before = combine(addInterval(date, 'day', -1), eventTime);
-      if (before > now) out.push({ at: before, title, body: bodyBefore, url });
+      if (before > now) out.push({ at: before, title, body: bodyBefore, url, ...actions });
     }
   };
 
@@ -110,13 +138,15 @@ export function planNotifications(data: AppData, now = new Date()): PlannedNotif
         const date = sameDayInYear(f.birthday, y);
         const knownYear = hasYear(f.birthday);
         const age = knownYear ? ageOn(f.birthday, date) : null;
-        const ageText = age && age > 0 ? ` (${age} ${plural(age, 'год', 'года', 'лет')})` : '';
+        const ageText = age && age > 0 ? ` · ${age} ${plural(age, 'год', 'года', 'лет')}` : '';
+        const hint = birthdayHint(f);
         pushEvent(
           date,
-          `🎂 ${f.name}`,
-          `Сегодня день рождения${ageText}! Не забудь поздравить.`,
-          `Завтра день рождения${ageText}. Подготовь подарок 🎁`,
+          `${f.name} — день рождения${ageText}`,
+          hint ?? 'Самое время поздравить.',
+          `Завтра день рождения${ageText}. ${giftHint(f) ?? 'Подготовь подарок и поздравление.'}`,
           url,
+          f,
         );
       }
     }
@@ -125,7 +155,9 @@ export function planNotifications(data: AppData, now = new Date()): PlannedNotif
         ? [0, 1].map((k) => sameDayInYear(d.date, parseISODate(today).getFullYear() + k))
         : [d.date];
       for (const date of dates) {
-        pushEvent(date, `📅 ${d.title} — ${f.name}`, 'Сегодня важная дата', 'Завтра важная дата', url);
+        const years = d.yearly && hasYear(d.date) ? parseISODate(date).getFullYear() - parseISODate(d.date).getFullYear() : 0;
+        const yearsText = years > 0 ? ` · ${years} ${plural(years, 'год', 'года', 'лет')}` : '';
+        pushEvent(date, `${d.title} — ${f.name}${yearsText}`, 'Сегодня важная дата.', 'Завтра важная дата.', url, f);
       }
     }
   }
@@ -133,7 +165,7 @@ export function planNotifications(data: AppData, now = new Date()): PlannedNotif
   for (const r of data.reminders) {
     if (r.done) continue;
     const friend = r.friendId ? friendById.get(r.friendId) : undefined;
-    const title = friend ? `${friend.emoji} ${r.title}` : `⏰ ${r.title}`;
+    const title = r.title;
     const body = r.note || (friend ? friend.name : 'Напоминание');
     const url = `/reminder/edit?id=${r.id}`;
 

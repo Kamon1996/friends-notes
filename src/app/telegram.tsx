@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { QrCode } from '@/components/QrCode';
-import { Button, Card, Field, SectionTitle, colors, styles } from '@/components/ui';
+import { Button, Card, Field, SectionTitle, useTheme } from '@/components/ui';
 import { telegramAvailable, telegramConfigured } from '@/lib/telegramClient';
 import { tgErrorText } from '@/lib/telegramImport';
 import { useTelegramSession } from '@/lib/telegramSession';
@@ -20,16 +20,18 @@ const UNSUPPORTED: Record<string, string> = {
 };
 
 function Line({ icon, children }: { icon: string; children: string }) {
+  const { s } = useTheme();
   return (
     <View style={{ flexDirection: 'row', gap: 8 }}>
-      <Text style={{ width: 22 }}>{icon}</Text>
-      <Text style={{ flex: 1, color: colors.text, lineHeight: 20 }}>{children}</Text>
+      <Text style={[s.body, { width: 24, fontSize: 15 }]}>{icon}</Text>
+      <Text style={[s.body, { flex: 1, fontSize: 15, lineHeight: 21 }]}>{children}</Text>
     </View>
   );
 }
 
 export default function TelegramImportScreen() {
   const tg = useTelegramSession();
+  const { s: styles, colors } = useTheme();
   const [phone, setPhone] = useState('+');
   const [code, setCode] = useState('');
   const [password, setPassword] = useState('');
@@ -62,14 +64,14 @@ export default function TelegramImportScreen() {
         <Stack.Screen options={{ title: 'Импорт из Telegram' }} />
         <Card style={{ gap: 10 }}>
           <View style={styles.row}>
-            <ActivityIndicator color={colors.primary} />
+            <ActivityIndicator color={colors.accent} />
             <Text style={[styles.title, { flex: 1 }]}>
               {imp.phase === 'finishing' ? 'Выхожу из аккаунта Telegram…' : total ? `Загружаю контакты: ${done} из ${total}` : 'Получаю список контактов…'}
             </Text>
           </View>
           {total > 0 && (
             <View style={{ height: 8, borderRadius: 4, backgroundColor: colors.bg, overflow: 'hidden' }}>
-              <View style={{ width: `${Math.round((done / total) * 100)}%`, height: 8, backgroundColor: colors.primary }} />
+              <View style={{ width: `${Math.round((done / total) * 100)}%`, height: 8, backgroundColor: colors.accent }} />
             </View>
           )}
           {!!imp.waitingSeconds && (
@@ -105,17 +107,17 @@ export default function TelegramImportScreen() {
       <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
         <Stack.Screen options={{ title: 'Импорт из Telegram' }} />
         {imp.loggedOut ? (
-          <Card style={{ gap: 8, backgroundColor: colors.greenSoft, borderColor: colors.greenSoft }}>
-            <Text style={[styles.title, { color: colors.green }]}>✓ Сессия Telegram завершена</Text>
-            <Text style={{ color: colors.text, lineHeight: 20 }}>
+          <Card style={{ gap: 8, backgroundColor: colors.successSoft, borderColor: colors.successSoft }}>
+            <Text style={[styles.title, { color: colors.success }]}>✓ Сессия Telegram завершена</Text>
+            <Text style={[styles.body, { fontSize: 15, lineHeight: 21 }]}>
               Приложение вышло из аккаунта и стёрло данные входа. Проверь сам: Telegram → Настройки → Устройства —
               сессии «{SESSION_NAME}» там больше нет.
             </Text>
           </Card>
         ) : (
-          <Card style={{ gap: 8, backgroundColor: colors.amberSoft, borderColor: colors.amberSoft }}>
-            <Text style={[styles.title, { color: colors.amber }]}>⚠️ Проверь, что сессия завершена</Text>
-            <Text style={{ color: colors.text, lineHeight: 20 }}>
+          <Card style={{ gap: 8, backgroundColor: colors.warnSoft, borderColor: colors.warnSoft }}>
+            <Text style={[styles.title, { color: colors.warn }]}>⚠️ Проверь, что сессия завершена</Text>
+            <Text style={[styles.body, { fontSize: 15, lineHeight: 21 }]}>
               Не удалось подтвердить выход из аккаунта. Открой Telegram → Настройки → Устройства и, если там есть
               «{SESSION_NAME}», нажми «Завершить сеанс».
             </Text>
@@ -124,7 +126,7 @@ export default function TelegramImportScreen() {
 
         {imp.phase === 'error' && (
           <Card style={{ borderColor: colors.danger }}>
-            <Text style={{ color: colors.danger, lineHeight: 20 }}>Загрузка прервалась: {tgErrorText(imp.error)}</Text>
+            <Text style={[styles.body, { color: colors.danger, fontSize: 15, lineHeight: 21 }]}>Загрузка прервалась: {tgErrorText(imp.error)}</Text>
           </Card>
         )}
         {imp.partial && (
@@ -153,7 +155,7 @@ export default function TelegramImportScreen() {
         <ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           {(s === 'starting' || s === 'waitTdlibParameters') && (
             <View style={{ alignItems: 'center', gap: 8, marginTop: 24 }}>
-              <ActivityIndicator color={colors.primary} />
+              <ActivityIndicator color={colors.accent} />
               <Text style={styles.muted}>Подключаюсь к Telegram…</Text>
             </View>
           )}
@@ -185,7 +187,7 @@ export default function TelegramImportScreen() {
 
           {s === 'waitOtherDeviceConfirmation' && (
             <Card style={{ gap: 12, alignItems: 'center' }}>
-              {auth.link ? <QrCode value={auth.link} size={240} /> : <ActivityIndicator color={colors.primary} />}
+              {auth.link ? <QrCode value={auth.link} size={240} /> : <ActivityIndicator color={colors.accent} />}
               <View style={{ gap: 6, alignSelf: 'stretch' }}>
                 <Line icon="1️⃣">На втором телефоне или планшете открой Telegram → Настройки → Устройства.</Line>
                 <Line icon="2️⃣">Нажми «Подключить устройство» (сканировать QR) и наведи камеру на этот код.</Line>
@@ -221,12 +223,12 @@ export default function TelegramImportScreen() {
 
           {unsupported && (
             <Card>
-              <Text style={{ color: colors.danger, lineHeight: 20 }}>{unsupported}</Text>
+              <Text style={[styles.body, { color: colors.danger, fontSize: 15, lineHeight: 21 }]}>{unsupported}</Text>
             </Card>
           )}
           {error && (
             <Card style={{ borderColor: colors.danger }}>
-              <Text style={{ color: colors.danger, lineHeight: 20 }}>{error}</Text>
+              <Text style={[styles.body, { color: colors.danger, fontSize: 15, lineHeight: 21 }]}>{error}</Text>
             </Card>
           )}
           <Button title="Отменить вход" variant="danger" onPress={tg.cancel} />
@@ -252,8 +254,8 @@ export default function TelegramImportScreen() {
       <SectionTitle>С днями рождения</SectionTitle>
       <Card style={{ gap: 10 }}>
         <Text style={[styles.title, { fontSize: 17 }]}>🎂 Через вход в Telegram</Text>
-        <View style={{ backgroundColor: colors.amberSoft, borderRadius: 12, padding: 12 }}>
-          <Text style={{ color: colors.text, lineHeight: 20 }}>
+        <View style={{ backgroundColor: colors.warnSoft, borderRadius: 12, padding: 12 }}>
+          <Text style={[styles.body, { fontSize: 15, lineHeight: 21 }]}>
             ⚠️ Telegram не умеет давать ограниченный доступ: любой вход по коду — это полный доступ к аккаунту, как у
             любого приложения-клиента Telegram. Поэтому «Друзья» устроены так:
           </Text>
@@ -266,7 +268,7 @@ export default function TelegramImportScreen() {
         <Line icon="📷">Войти можно по номеру с кодом или по QR-коду со второго устройства — тогда код и пароль в это приложение вводить не нужно.</Line>
         <Line icon="👀">{`В Telegram → Настройки → Устройства вход виден как «${SESSION_NAME}» и пропадёт после выхода.`}</Line>
         <Pressable onPress={() => Linking.openURL(SOURCE_URL).catch(() => {})} hitSlop={6}>
-          <Text style={{ color: colors.blue }}>Исходный код модуля Telegram →</Text>
+          <Text style={[styles.muted, { color: colors.info }]}>Исходный код модуля Telegram →</Text>
         </Pressable>
         {loginPossible ? (
           <Button title={busy ? 'Подключаюсь…' : 'Войти в Telegram'} onPress={() => run(tg.begin)} />
@@ -277,7 +279,7 @@ export default function TelegramImportScreen() {
               : 'Вход доступен только в Android-приложении.'}
           </Text>
         )}
-        {error && <Text style={{ color: colors.danger }}>{error}</Text>}
+        {error && <Text style={[styles.muted, { color: colors.danger }]}>{error}</Text>}
       </Card>
     </ScrollView>
   );
