@@ -123,3 +123,13 @@ test('лента «Скоро»', () => {
   const date = items[1];
   assert.ok(date.kind === 'date' && date.years === 6);
 });
+
+test('у друга с выключенными уведомлениями события не планируются, а его напоминания — да', () => {
+  const now = new Date();
+  const base: AppData = { ...EMPTY_DATA, reminders: [reminder({ date: '2100-01-01' })] };
+  const loud = planNotifications({ ...base, friends: [friend({ birthday: '1995-11-20' })] }, now);
+  const quiet = planNotifications({ ...base, friends: [friend({ birthday: '1995-11-20', muted: true })] }, now);
+  assert.ok(loud.some((n) => n.title.includes('день рождения')));
+  assert.ok(!quiet.some((n) => n.title.includes('день рождения')));
+  assert.ok(quiet.some((n) => n.title === 'Купить цветы'), 'напоминание должно остаться');
+});

@@ -50,8 +50,13 @@ export default function FriendsScreen() {
   };
 
   const allFavorite = [...selected].every((id) => data.friends.find((f) => f.id === id)?.favorite);
+  const allMuted = [...selected].every((id) => data.friends.find((f) => f.id === id)?.muted);
   const toggleFavorites = () => {
     updateFriends((f) => (selected.has(f.id) ? { ...f, favorite: !allFavorite } : f));
+    clear();
+  };
+  const toggleMuted = () => {
+    updateFriends((f) => (selected.has(f.id) ? { ...f, muted: !allMuted } : f));
     clear();
   };
 
@@ -66,7 +71,15 @@ export default function FriendsScreen() {
         ListHeaderComponent={
           <>
             {selecting ? (
-              <SelectionBar count={selected.size} allFavorite={allFavorite} onClose={clear} onStar={toggleFavorites} onDelete={() => remove([...selected])} />
+              <SelectionBar
+                count={selected.size}
+                allFavorite={allFavorite}
+                allMuted={allMuted}
+                onClose={clear}
+                onStar={toggleFavorites}
+                onBell={toggleMuted}
+                onDelete={() => remove([...selected])}
+              />
             ) : (
               <ScreenHeader
                 title="Друзья"
@@ -129,8 +142,24 @@ export default function FriendsScreen() {
   );
 }
 
-/** Шапка режима выбора: закрыть, счётчик, «в избранное», удалить. */
-function SelectionBar({ count, allFavorite, onClose, onStar, onDelete }: { count: number; allFavorite: boolean; onClose: () => void; onStar: () => void; onDelete: () => void }) {
+/** Шапка режима выбора: закрыть, счётчик, «в избранное», уведомления, удалить. */
+function SelectionBar({
+  count,
+  allFavorite,
+  allMuted,
+  onClose,
+  onStar,
+  onBell,
+  onDelete,
+}: {
+  count: number;
+  allFavorite: boolean;
+  allMuted: boolean;
+  onClose: () => void;
+  onStar: () => void;
+  onBell: () => void;
+  onDelete: () => void;
+}) {
   const { colors, fonts } = useTheme();
   const insets = useSafeAreaInsets();
   return (
@@ -146,6 +175,7 @@ function SelectionBar({ count, allFavorite, onClose, onStar, onDelete }: { count
         fill={allFavorite ? colors.accent : undefined}
         onPress={onStar}
       />
+      <IconButton icon={allMuted ? 'bell' : 'bellOff'} label={allMuted ? 'Включить уведомления' : 'Выключить уведомления'} onPress={onBell} />
       <IconButton icon="trash" label="Удалить выбранных" color={colors.danger} onPress={onDelete} />
     </View>
   );
@@ -234,7 +264,12 @@ function FriendRow({
       }
       title={<Text style={s.name} numberOfLines={1}>{friend.name}</Text>}
       subtitle={<Text style={[s.muted, { fontVariant: ['tabular-nums'] }]} numberOfLines={1}>{sub}</Text>}
-      trailing={diff === 0 ? <Tag text="сегодня" tone="solid" /> : diff !== null && diff <= 7 ? <Tag text={relativeDay(next!, today)} tone="accent" /> : null}
+      trailing={
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          {friend.muted && <Icon name="bellOff" size={16} color={colors.text3} />}
+          {diff === 0 ? <Tag text="сегодня" tone="solid" /> : diff !== null && diff <= 7 ? <Tag text={relativeDay(next!, today)} tone="accent" /> : null}
+        </View>
+      }
       chevron={!selecting && (diff === null || diff > 7)}
       style={{ paddingVertical: 10, backgroundColor: selected ? colors.soft : undefined }}
     />

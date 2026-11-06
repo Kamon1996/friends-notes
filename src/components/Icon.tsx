@@ -43,7 +43,8 @@ export type IconName =
   | 'list'
   | 'book'
   | 'camera'
-  | 'star';
+  | 'star'
+  | 'bellOff';
 
 const PATHS: Record<IconName, ReactNode> = {
   calendar: (
@@ -191,6 +192,12 @@ const PATHS: Record<IconName, ReactNode> = {
     <>
       <Path d="M4 8h3l2-3h6l2 3h3v11H4z" />
       <Circle cx={12} cy={13} r={3.5} />
+    </>
+  ),
+  bellOff: (
+    <>
+      <Path d="M8.6 5.2A6 6 0 0 1 18 10v4l2 3h-5M6 10v4l-2 3h11M10 20a2 2 0 0 0 4 0" />
+      <Path d="M3 3l18 18" />
     </>
   ),
   star: <Path d="M12 3.6l2.5 5.3 5.8.7-4.3 4 1.1 5.8L12 16.6l-5.1 2.8 1.1-5.8-4.3-4 5.8-.7z" />,

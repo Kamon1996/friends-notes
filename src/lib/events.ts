@@ -131,6 +131,7 @@ export function planNotifications(data: AppData, now = new Date()): PlannedNotif
   };
 
   for (const f of data.friends) {
+    if (f.muted) continue; // уведомления о событиях этого человека выключены
     const url = `/friend/${f.id}`;
     if (f.birthday) {
       const year = parseISODate(today).getFullYear();

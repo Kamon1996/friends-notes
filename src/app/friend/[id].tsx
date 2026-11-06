@@ -4,7 +4,7 @@ import { Pressable, ScrollView, Text, View } from 'react-native';
 import { Avatar } from '@/components/Avatar';
 import { ContactButtons } from '@/components/ContactButtons';
 import { ReminderRow } from '@/components/ReminderRow';
-import type { IconName } from '@/components/Icon';
+import { Icon, type IconName } from '@/components/Icon';
 import { Button, Empty, Group, IconButton, IconCircle, ListRow, SectionTitle, Tag, useTheme } from '@/components/ui';
 import { ageOn, daysBetween, formatDate, hasYear, nextAnniversary, plural, relativeDay, todayISO } from '@/lib/dates';
 import { useFriend, useStore } from '@/lib/store';
@@ -50,6 +50,12 @@ export default function FriendScreen() {
                 fill={friend.favorite ? colors.accent : undefined}
                 onPress={() => saveFriend({ ...friend, favorite: !friend.favorite })}
               />
+              <IconButton
+                icon={friend.muted ? 'bellOff' : 'bell'}
+                label={friend.muted ? 'Включить уведомления' : 'Выключить уведомления'}
+                color={friend.muted ? colors.text3 : undefined}
+                onPress={() => saveFriend({ ...friend, muted: !friend.muted })}
+              />
               <IconButton icon="pencil" label="Изменить" onPress={() => router.push({ pathname: '/friend/edit', params: { id: friend.id } })} />
             </View>
           ),
@@ -79,6 +85,12 @@ export default function FriendScreen() {
             {friend.phone}
           </Text>
         ) : null}
+        {friend.muted && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Icon name="bellOff" size={14} color={colors.text3} />
+            <Text style={[s.caption, { color: colors.text3 }]}>Уведомления о событиях выключены</Text>
+          </View>
+        )}
       </View>
 
       <ContactButtons friend={friend} />

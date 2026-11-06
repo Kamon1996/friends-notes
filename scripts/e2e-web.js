@@ -115,6 +115,11 @@ const has = (t, s) => t.toLowerCase().includes(s.toLowerCase());
     await tap(page.getByText('Игорь Ветров')); await page.waitForTimeout(300);
     assert(await page.getByLabel('Выбрано: 2').count(), 'второй не отметился');
     await tap(page.getByText('Игорь Ветров')); await page.waitForTimeout(300);
+    // Колокольчик: выключить уведомления у Мамы, выделение снимается; затем выделить её снова и удалить.
+    await tap(page.getByLabel('Выключить уведомления')); await page.waitForTimeout(400);
+    assert.equal((await stored()).friends.find((x) => x.id === 'c').muted, true, 'уведомления не выключились');
+    assert.equal(await page.getByLabel('Удалить выбранных').count(), 0, 'выделение должно сняться');
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await page.mouse.down(); await page.waitForTimeout(700); await page.mouse.up(); await page.waitForTimeout(400);
     await tap(page.getByLabel('Удалить выбранных')); await page.waitForTimeout(600);
     t = await text(); assert(!has(t, 'Мама') && has(t, 'Игорь Ветров') && has(t, '2 человека'), 'Мама не удалилась: ' + t.slice(0, 200));
     assert(!(await stored()).friends.some((f) => f.id === 'c'));

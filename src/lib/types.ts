@@ -35,6 +35,8 @@ export interface Friend {
   thumbUri?: string | null;
   /** Избранный — выше остальных в списке друзей и в окне выбора. */
   favorite?: boolean;
+  /** Без уведомлений о дне рождения и важных датах этого человека (напоминания, созданные вручную, приходят). */
+  muted?: boolean;
 }
 
 export type RepeatUnit = 'day' | 'week' | 'month' | 'year';
