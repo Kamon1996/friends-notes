@@ -65,7 +65,9 @@ export function SocialLinkSheet({
       : parsed.kind === 'link'
         ? SOCIAL_COPY.link(parsed.network.name)
         : parsed.kind === 'handle'
-          ? SOCIAL_COPY.handle
+          ? chosen
+            ? null
+            : SOCIAL_COPY.handle
           : parsed.kind === 'site'
             ? SOCIAL_COPY.site
             : null;
