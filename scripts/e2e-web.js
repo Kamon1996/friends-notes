@@ -101,6 +101,10 @@ const has = (t, s) => t.toLowerCase().includes(s.toLowerCase());
     for (const s of ['3 человека', 'А', 'Аня Смирнова', 'сегодня', 'Игорь Ветров', 'через 3 дня', 'Мама']) assert(has(t, s), `нет «${s}»`);
     await input('Поиск по имени, еде, цветам…').fill('тюльп'); await page.waitForTimeout(500);
     t = await text(); assert(has(t, 'Мама') && !has(t, 'Игорь'), 'поиск по цветам не работает: ' + t.slice(0, 200));
+    await input('Поиск по имени, еде, цветам…').fill('smirnova'); await page.waitForTimeout(500);
+    t = await text(); assert(has(t, 'Аня Смирнова') && !has(t, 'Игорь'), 'поиск латиницей не работает: ' + t.slice(0, 200));
+    await input('Поиск по имени, еде, цветам…').fill('bujhm'); await page.waitForTimeout(500);
+    t = await text(); assert(has(t, 'Игорь Ветров') && !has(t, 'Аня'), 'поиск в другой раскладке не работает: ' + t.slice(0, 200));
     await input('Поиск по имени, еде, цветам…').fill(''); await page.waitForTimeout(300);
     await page.getByText('Скоро день рождения').click(); await page.waitForTimeout(400);
     t = await text(); assert(t.indexOf('Аня Смирнова') < t.indexOf('Игорь Ветров') && t.indexOf('Игорь Ветров') < t.indexOf('Мама'));
@@ -289,11 +293,9 @@ const has = (t, s) => t.toLowerCase().includes(s.toLowerCase());
     assert.equal((await stored()).settings.eventDayBefore, false);
   });
 
-  await step('Экраны Telegram и разработки открываются', async () => {
+  await step('Экраны Telegram и отчёта об ошибке открываются', async () => {
     await go('/telegram'); let t = await text(); assert(has(t, 'Без входа') && has(t, 'Вход доступен только в Android-приложении'), t.slice(0, 200));
-    await go('/sources'); t = await text(); assert(has(t, 'Это пример формата'));
     await go('/diagnostics'); t = await text(); assert(has(t, 'Отчёт доступен только в Android-приложении'));
-    await go('/contacts-debug'); t = await text(); assert(has(t, 'Сводка') || has(t, 'Ошибка'), t.slice(0, 200));
   });
 
   await step('Пустое состояние для нового пользователя', async () => {

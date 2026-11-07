@@ -12,6 +12,8 @@ import { StoreProvider } from '@/lib/store';
 import { TelegramSessionProvider } from '@/lib/telegramSession';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
+import { warmContacts } from '@/lib/contactsCache';
+
 import { ThemeProvider, useTheme } from '@/lib/themeContext';
 
 /** Переход по нажатию на уведомление или на его кнопку («Позвонить», «Написать»). */
@@ -50,8 +52,6 @@ function AppShell() {
         <Stack.Screen name="reminder/edit" options={{ presentation: 'modal', title: 'Напоминание' }} />
         <Stack.Screen name="settings" options={{ title: 'Настройки' }} />
         <Stack.Screen name="import" options={{ presentation: 'modal', title: 'Импорт контактов' }} />
-        <Stack.Screen name="contacts-debug" options={{ title: 'Диагностика контактов' }} />
-        <Stack.Screen name="sources" options={{ title: 'Данные из приложений' }} />
         <Stack.Screen name="telegram" options={{ presentation: 'modal', title: 'Импорт из Telegram' }} />
         <Stack.Screen name="diagnostics" options={{ title: 'Отчёт об ошибке' }} />
       </Stack>
@@ -75,6 +75,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     setupNotifications().catch(() => {});
+    warmContacts();
   }, []);
 
   // Пока шрифты грузятся — пустой экран цвета бумаги, чтобы текст не «прыгал» между гарнитурами.

@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { formatDate, hasYear } from '@/lib/dates';
 import { byName, favoritesFirst } from '@/lib/friendList';
+import { matchesName, prepareQuery } from '@/lib/search';
 import type { Friend } from '@/lib/types';
 import { Avatar } from './Avatar';
 import { Icon } from './Icon';
@@ -22,8 +23,8 @@ export function FriendPicker({ friends, value, onChange }: { friends: Friend[]; 
   const selected = friends.find((f) => f.id === value) ?? null;
 
   const visible = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return q ? sorted.filter((f) => f.name.toLowerCase().includes(q)) : sorted;
+    const q = prepareQuery(query);
+    return q ? sorted.filter((f) => matchesName(f.name, q)) : sorted;
   }, [sorted, query]);
 
   const pick = (id: string | null) => {

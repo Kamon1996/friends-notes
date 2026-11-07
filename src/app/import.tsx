@@ -5,11 +5,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/Avatar';
 import { Icon } from '@/components/Icon';
-import { Button, Card, Checkbox, Chip, Empty, GroupedRow, IconCircle, SearchField, Tag, useTheme } from '@/components/ui';
-import { loadContacts, pickMoreContacts } from '@/lib/contacts';
+import { Button, Card, Checkbox, Chip, Empty, GroupedRow, IconButton, IconCircle, SearchField, Tag, useTheme } from '@/components/ui';
+import { pickMoreContacts } from '@/lib/contacts';
+import { getContactsSnapshot, refreshContacts, type ContactsSnapshot } from '@/lib/contactsCache';
 import { candidateToFriend, phoneKey, toCandidates, type ImportCandidate } from '@/lib/contactsImport';
 import { applyEnrichment } from '@/lib/enrich';
 import { formatDateCompact, hasYear } from '@/lib/dates';
+import { matchesName, prepareQuery } from '@/lib/search';
 import { newId, useStore } from '@/lib/store';
 import { telegramAvailable } from '@/lib/telegramClient';
 import { tgToRawContact } from '@/lib/telegramImport';
@@ -43,9 +45,20 @@ export default function ImportScreen() {
   }, [data.friends]);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
+  const [refreshing, setRefreshing] = useState(false);
 
-  const load = useCallback(async () => {
-    setState({ kind: 'loading' });
+  /** Список кандидатов из снимка книги; при фоновом обновлении отмеченные остаются отмеченными. */
+  const applySnapshot = useCallback(
+    (snap: ContactsSnapshot, keepSelection: boolean) => {
+      const list = fromTgBook ? snap.contacts.filter((c) => c.links?.telegramId) : snap.contacts;
+      const candidates = toCandidates(list, friendsRef.current);
+      setState({ kind: 'ready', candidates, limited: snap.limited, sample: snap.sample });
+      if (!keepSelection) setSelected(new Set(candidates.filter((c) => !c.duplicateOf && c.birthday).map((c) => c.key)));
+    },
+    [fromTgBook],
+  );
+
+  const load = useCallback(async (opts?: { refresh?: boolean }) => {
     try {
       if (fromTelegram) {
         // Контакты уже загружены в фоне модулем Telegram.
@@ -59,17 +72,20 @@ export default function ImportScreen() {
         setSelected(new Set(candidates.filter((c) => !c.duplicateOf && c.birthday).map((c) => c.key)));
         return;
       }
-      const res = await loadContacts();
+      // Книга уже прочитана (при старте или в прошлый раз) — показываем сразу, а свежую версию дочитываем в фоне.
+      const snap = getContactsSnapshot();
+      const instant = !!snap && !opts?.refresh;
+      if (instant) applySnapshot(snap, false);
+      else setState({ kind: 'loading' });
+      setRefreshing(true);
+      const res = await refreshContacts().finally(() => setRefreshing(false));
       if (res.status === 'denied') {
-        setState({ kind: 'denied', canAskAgain: res.canAskAgain });
+        if (!instant) setState({ kind: 'denied', canAskAgain: res.canAskAgain });
         return;
       }
       // Без входа: только те, кого Telegram добавил в телефонную книгу.
-      const list = fromTgBook ? res.contacts.filter((c) => c.links?.telegramId) : res.contacts;
-      const candidates = toCandidates(list, friendsRef.current);
-      setState({ kind: 'ready', candidates, limited: res.limited, sample: res.sample });
       // По умолчанию отмечаем новых людей, у которых указан день рождения.
-      setSelected(new Set(candidates.filter((c) => !c.duplicateOf && c.birthday).map((c) => c.key)));
+      applySnapshot(getContactsSnapshot()!, instant || !!opts?.refresh);
     } catch (e) {
       setState({ kind: 'error', message: e instanceof Error ? e.message : String(e) });
     }
@@ -86,11 +102,12 @@ export default function ImportScreen() {
   const withBirthday = useMemo(() => all.filter((c) => c.birthday).length, [all]);
   const withPhone = useMemo(() => all.filter((c) => c.phone).length, [all]);
   const visible = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = prepareQuery(query);
+    const digits = q ? q.raw.replace(/\D/g, '') : '';
     return all.filter(
       (c) =>
         (filter === 'all' || (filter === 'birthday' ? c.birthday : c.phone)) &&
-        (!q || c.name.toLowerCase().includes(q) || c.phone.replace(/\D/g, '').includes(q.replace(/\D/g, '') || '—')),
+        (!q || matchesName(c.name, q) || (digits.length >= 3 && c.phone.replace(/\D/g, '').includes(digits))),
     );
   }, [all, query, filter]);
 
@@ -196,7 +213,19 @@ export default function ImportScreen() {
         keyboardShouldPersistTaps="handled"
         ListHeaderComponent={
           <View style={{ gap: 12, marginBottom: 10 }}>
-            <Stack.Screen options={{ title: fromTelegram || fromTgBook ? 'Контакты Telegram' : 'Импорт контактов' }} />
+            <Stack.Screen
+              options={{
+                title: fromTelegram || fromTgBook ? 'Контакты Telegram' : 'Импорт контактов',
+                headerRight: fromTelegram
+                  ? undefined
+                  : () =>
+                      refreshing ? (
+                        <ActivityIndicator color={colors.accent} style={{ marginRight: 12 }} />
+                      ) : (
+                        <IconButton icon="refresh" label="Перечитать контакты" onPress={() => load({ refresh: true })} />
+                      ),
+              }}
+            />
             {(fromTelegram || fromTgBook) && (
               <View style={{ paddingTop: 2, paddingBottom: 4 }}>
                 <Stepper steps={TG_STEPS} active={4} />
@@ -233,13 +262,8 @@ export default function ImportScreen() {
             {state.limited && Platform.OS === 'ios' && (
               <Card style={{ gap: 8 }}>
                 <Text style={styles.muted}>Приложению доступны только выбранные контакты.</Text>
-                <Button title="Выбрать ещё контакты" variant="secondary" onPress={() => pickMoreContacts().then(load)} />
+                <Button title="Выбрать ещё контакты" variant="secondary" onPress={() => pickMoreContacts().then(() => load())} />
               </Card>
-            )}
-            {!fromTelegram && !fromTgBook && (
-              <Pressable onPress={() => router.push('/sources')} hitSlop={8}>
-                <Text style={[styles.muted, { color: colors.info }]}>Что лежит в контактах от Telegram, WhatsApp, Viber →</Text>
-              </Pressable>
             )}
             <SearchField value={query} onChangeText={setQuery} placeholder="Имя или телефон" />
             <View style={[styles.chips, { alignItems: 'center' }]}>

@@ -145,23 +145,28 @@ class ContactsRawModule : Module() {
       val placeholders = mimetypes.joinToString(",") { "?" }
       resolver.query(
         Data.CONTENT_URI,
-        arrayOf(Data.CONTACT_ID, Data.RAW_CONTACT_ID, Data.MIMETYPE, Data.DATA1, Data.DATA4),
+        arrayOf(Data.CONTACT_ID, Data.RAW_CONTACT_ID, Data.MIMETYPE, Data.DATA1, Data.DATA4, Data.DATA2, Data.DATA3),
         "${Data.MIMETYPE} IN ($placeholders)",
         mimetypes.toTypedArray(),
         null
       )?.use { c ->
         while (c.moveToNext()) {
+          // Строки удалённых (ещё не синхронизированных) raw-контактов пропускаем.
           val account = accounts[c.getLong(1)]
-          rows.add(
-            mapOf(
-              "contactId" to c.getLong(0).toString(),
-              "mimetype" to (c.getString(2) ?: ""),
-              "data1" to (c.getString(3) ?: ""),
-              "data4" to (c.getString(4) ?: ""),
-              "accountName" to (account?.first ?: ""),
-              "sync1" to (account?.second ?: "")
+          if (account != null) {
+            rows.add(
+              mapOf(
+                "contactId" to c.getLong(0).toString(),
+                "mimetype" to (c.getString(2) ?: ""),
+                "data1" to (c.getString(3) ?: ""),
+                "data4" to (c.getString(4) ?: ""),
+                "data2" to (c.getString(5) ?: ""),
+                "data3" to (c.getString(6) ?: ""),
+                "accountName" to account.first,
+                "sync1" to account.second
+              )
             )
-          )
+          }
         }
       }
       rows

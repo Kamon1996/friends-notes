@@ -3,6 +3,7 @@ name: Android APK
 # Запуск:
 #  - коммитом со словом «[apk]» — сборка прямо на машине GitHub (квота EAS не тратится),
 #    готовый APK прикрепляется к релизу на GitHub, ссылка в итогах запуска;
+#  - коммитом со словом «[aab]» — то же, но Android App Bundle для Google Play (профиль production);
 #  - коммитом со словом «[apk-cloud]» — облачная сборка в EAS, как раньше;
 #  - вручную: вкладка Actions → «Android APK» → Run workflow, там же выбирается режим.
 # Нужны секреты репозитория EXPO_TOKEN (подпись и проект EAS), TG_API_ID и TG_API_HASH
@@ -14,7 +15,7 @@ on:
         description: 'Где собирать'
         type: choice
         default: local
-        options: [local, cloud]
+        options: [local, aab, cloud]
   push:
     branches: [main, claude/mobile-project-creation-pgqs46]
 
@@ -32,11 +33,13 @@ jobs:
     name: Сборка на машине GitHub
     if: >-
       (github.event_name == 'workflow_dispatch' && github.event.inputs.mode != 'cloud') ||
-      (github.event_name == 'push' && contains(github.event.head_commit.message, '[apk]'))
+      (github.event_name == 'push' && (contains(github.event.head_commit.message, '[apk]') || contains(github.event.head_commit.message, '[aab]')))
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      # aab — Android App Bundle для Google Play (профиль production), иначе APK для прямой установки.
+      BUNDLE: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'aab') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[aab]')) }}
     steps:
       - name: Check EXPO_TOKEN
         run: |
@@ -89,7 +92,7 @@ jobs:
             console.log("Telegram keys:", apiId && apiHash ? "set" : "MISSING");
           '
 
-      - name: Build APK on this machine
+      - name: Build on this machine
         env:
           # Собираем рабочую папку как есть (с подставленными ключами), а не последний коммит.
           EAS_NO_VCS: '1'
@@ -99,18 +102,25 @@ jobs:
           ORG_GRADLE_PROJECT_reactNativeArchitectures: arm64-v8a
         run: |
           mkdir -p "$EAS_LOCAL_BUILD_WORKINGDIR"
-          npx eas-cli@latest build --platform android --profile preview --local --non-interactive --output "$PWD/friends-notes.apk"
-          ls -la friends-notes.apk
+          if [ "$BUNDLE" = "true" ]; then
+            npx eas-cli@latest build --platform android --profile production --local --non-interactive --output "$PWD/friends-notes.aab"
+            ls -la friends-notes.aab
+          else
+            npx eas-cli@latest build --platform android --profile preview --local --non-interactive --output "$PWD/friends-notes.apk"
+            ls -la friends-notes.apk
+            # Какие разрешения реально попали в сборку — пригодится для анкет магазинов.
+            AAPT=$(ls -d "$ANDROID_HOME"/build-tools/*/aapt | tail -1)
+            { echo "### Разрешения в APK"; echo '```'; "$AAPT" dump permissions friends-notes.apk | grep -o "android.permission.[A-Z_]*" | sort -u; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          fi
           df -h / | tail -1
 
-      - name: Attach APK to a GitHub release
+      - name: Attach the build to a GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           VERSION=$(node -p "require('./app.json').expo.version")
           TAG="v$VERSION"
-          FILE="friends-notes-$VERSION.apk"
-          cp friends-notes.apk "$FILE"
+          if [ "$BUNDLE" = "true" ]; then FILE="friends-notes-$VERSION.aab"; cp friends-notes.aab "$FILE"; else FILE="friends-notes-$VERSION.apk"; cp friends-notes.apk "$FILE"; fi
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             gh release create "$TAG" --target "$GITHUB_SHA" --title "Друзья $VERSION" \
               --notes "APK собран в GitHub Actions из коммита $GITHUB_SHA. Подпись та же, что у сборок EAS: ставится поверх прошлой версии."
@@ -118,9 +128,9 @@ jobs:
           gh release upload "$TAG" "$FILE" --clobber
           URL="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/$FILE"
           {
-            echo "### ✅ APK готов"
+            if [ "$BUNDLE" = "true" ]; then echo "### ✅ AAB для Google Play готов"; else echo "### ✅ APK готов"; fi
             echo ""
-            echo "Скачать на телефон: $URL"
+            echo "Файл: $URL"
             echo ""
             echo "Все версии: https://github.com/$GITHUB_REPOSITORY/releases"
           } >> "$GITHUB_STEP_SUMMARY"
@@ -128,8 +138,11 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: friends-notes-apk
-          path: friends-notes.apk
+          name: friends-notes-build
+          path: |
+            friends-notes.apk
+            friends-notes.aab
+          if-no-files-found: ignore
           retention-days: 14
 
   # Облачный путь (EAS): быстрая проверка нативного кода, потом сборка на серверах Expo.

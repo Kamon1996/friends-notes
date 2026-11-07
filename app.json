@@ -4,7 +4,7 @@
     "slug": "friends-notes",
     "owner": "kamon1996",
     "scheme": "friendsnotes",
-    "version": "1.14.0",
+    "version": "1.15.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -23,7 +23,8 @@
       },
       "predictiveBackGestureEnabled": false,
       "blockedPermissions": [
-        "android.permission.WRITE_CONTACTS"
+        "android.permission.WRITE_CONTACTS",
+        "android.permission.SYSTEM_ALERT_WINDOW"
       ],
       "userInterfaceStyle": "automatic"
     },

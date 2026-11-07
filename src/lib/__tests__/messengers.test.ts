@@ -5,7 +5,6 @@ import { test } from 'node:test';
 import { toCandidates, candidateToFriend } from '../contactsImport';
 import { applyEnrichment } from '../enrich';
 import { MIME, buildPhoneIndex, isServiceNumber, phoneKey, telegramUrl, viberUrl, whatsappUrl } from '../messengers';
-import { filterDumpsByMime } from '../sources';
 import type { Friend } from '../types';
 
 const row = (contactId: string, mimetype: string, data1: string, extra: Partial<{ data4: string; accountName: string; sync1: string }> = {}) => ({
@@ -90,22 +89,3 @@ test('автоподтягивание для уже добавленных др
   assert.equal(applyEnrichment(friends, map).changed, 0);
 });
 
-test('Viber ищется по типу данных во всех аккаунтах', () => {
-  const dumps = filterDumpsByMime(
-    [
-      {
-        accountType: 'vnd.sec.contact.phone',
-        total: 2,
-        items: [
-          { raw: { _id: 1 }, data: [{ mimetype: 'vnd.android.cursor.item/name' }] },
-          { raw: { _id: 2 }, data: [{ mimetype: 'vnd.android.cursor.item/vnd.com.viber.voip.viber_number_message' }] },
-        ],
-      },
-      { accountType: 'com.google', total: 1, items: [{ raw: { _id: 3 }, data: [{ mimetype: 'vnd.android.cursor.item/phone_v2' }] }] },
-    ],
-    /viber/i,
-  );
-  assert.equal(dumps.length, 1);
-  assert.equal(dumps[0].total, 1);
-  assert.equal(dumps[0].items[0].raw._id, 2);
-});

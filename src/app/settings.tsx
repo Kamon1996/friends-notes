@@ -156,11 +156,9 @@ export default function SettingsScreen() {
       )}
 
       <View style={{ gap: 8 }}>
-        <SectionTitle style={{ marginBottom: 0 }}>Для разработки</SectionTitle>
+        <SectionTitle style={{ marginBottom: 0 }}>Помощь</SectionTitle>
         <Group inset={62}>
-          <ListRow leading={<IconCircle icon="flask" />} title="Данные из приложений" subtitle="Что Telegram, WhatsApp и Viber кладут в контакты" chevron onPress={() => router.push('/sources')} />
-          <ListRow leading={<IconCircle icon="search" />} title="Диагностика контактов" chevron onPress={() => router.push('/contacts-debug')} />
-          <ListRow leading={<IconCircle icon="info" />} title="Отчёт об ошибке" chevron onPress={() => router.push('/diagnostics')} />
+          <ListRow leading={<IconCircle icon="info" />} title="Отчёт об ошибке" subtitle="Если что-то пошло не так — отправь отчёт" chevron onPress={() => router.push('/diagnostics')} />
         </Group>
       </View>
 

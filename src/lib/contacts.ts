@@ -3,7 +3,7 @@ import * as Legacy from 'expo-contacts/legacy';
 import { Platform } from 'react-native';
 
 import { contactPhotos, contactsRawAvailable, dataRows } from '../../modules/contacts-raw';
-import { fromLegacyContact, type LegacyContact, type RawContact } from './contactsImport';
+import { fromLegacyContact, isBirthdayLabel, parseLooseDate, type LegacyContact, type RawContact } from './contactsImport';
 import { LINK_MIMETYPES, buildPhoneIndex, phoneKey, type Links } from './messengers';
 
 export type ContactsResult =
@@ -42,6 +42,67 @@ async function loadNext(): Promise<RawContact[]> {
   return details as unknown as RawContact[];
 }
 
+const NAME_MIME = 'vnd.android.cursor.item/name';
+const PHONE_MIME = 'vnd.android.cursor.item/phone_v2';
+const EVENT_MIME = 'vnd.android.cursor.item/contact_event';
+const NOTE_MIME = 'vnd.android.cursor.item/note';
+
+/**
+ * Быстрый путь на Android: вся книга одним запросом к таблице data (имена, номера, даты, заметки
+ * и строки мессенджеров) плюс фото. На 10 тысячах контактов это доли секунды, тогда как expo-contacts
+ * собирает каждый контакт отдельно.
+ */
+async function loadViaRaw(): Promise<RawContact[]> {
+  const [rows, photos] = await Promise.all([dataRows([NAME_MIME, PHONE_MIME, EVENT_MIME, NOTE_MIME, ...LINK_MIMETYPES]), contactPhotos()]);
+  const byId = new Map<string, RawContact>();
+  const get = (id: string) => {
+    let c = byId.get(id);
+    if (!c) {
+      c = { id, phones: [], dates: [], normalizedPhones: [] };
+      byId.set(id, c);
+    }
+    return c;
+  };
+  for (const r of rows) {
+    if (r.mimetype === NAME_MIME) {
+      const c = get(r.contactId);
+      if (!c.fullName && r.data1) {
+        c.fullName = r.data1;
+        c.givenName = r.data2 || null;
+        c.familyName = r.data3 || null;
+      }
+    } else if (r.mimetype === PHONE_MIME) {
+      const c = get(r.contactId);
+      if (r.data1) c.phones!.push({ number: r.data1 });
+      if (r.data4) c.normalizedPhones!.push(r.data4);
+    } else if (r.mimetype === EVENT_MIME) {
+      const date = parseLooseDate(r.data1);
+      if (!date) continue;
+      const c = get(r.contactId);
+      const label = r.data2 === '3' ? 'birthday' : r.data2 === '1' ? 'anniversary' : r.data2 === '0' ? r.data3 || 'other' : 'other';
+      if (isBirthdayLabel(label) && !c.birthday) c.birthday = date;
+      else c.dates!.push({ label, date });
+    } else if (r.mimetype === NOTE_MIME) {
+      const c = get(r.contactId);
+      if (r.data1 && !c.note) c.note = r.data1;
+    }
+  }
+  const index = buildPhoneIndex(rows);
+  const photoMap = new Map(photos.map((p) => [p.contactId, p]));
+  const list = [...byId.values()].map((c) => {
+    const byPhone = (c.normalizedPhones ?? []).map((p) => index.byPhone.get(phoneKey(p))).find(Boolean);
+    return {
+      ...c,
+      links: { ...byPhone, ...index.byContact.get(c.id) },
+      photoUri: photoMap.get(c.id)?.photoUri ?? null,
+      thumbUri: photoMap.get(c.id)?.thumbUri ?? null,
+      isSelf: index.selfContactIds.has(c.id),
+    };
+  });
+  const nameOf = (c: RawContact) => c.fullName ?? '';
+  return list.sort((a, b) => nameOf(a).localeCompare(nameOf(b), 'ru'));
+}
+
 /** Запрашивает доступ и читает телефонную книгу. */
 export async function loadContacts(): Promise<ContactsResult> {
   const perm = await requestPermissionsAsync();
@@ -49,7 +110,7 @@ export async function loadContacts(): Promise<ContactsResult> {
 
   let contacts: RawContact[];
   if (Platform.OS === 'android') {
-    contacts = await attachPhoneData(await loadLegacy());
+    contacts = contactsRawAvailable ? await loadViaRaw().catch((e) => (console.warn('Быстрое чтение книги не сработало, читаю через expo-contacts', e), loadLegacy().then(attachPhoneData))) : await attachPhoneData(await loadLegacy());
   } else {
     try {
       contacts = await loadNext();

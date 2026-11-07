@@ -36,7 +36,8 @@ export async function loadContacts(): Promise<ContactsResult> {
       });
     }
   }
-  return { status: 'granted', contacts, limited: false, sample: true };
+  // «friends-notes/sample-quiet» = 1 прячет плашку «это пример» — для скриншотов витрины.
+  return { status: 'granted', contacts, limited: false, sample: globalThis.localStorage?.getItem('friends-notes/sample-quiet') !== '1' };
 }
 
 export async function pickMoreContacts(): Promise<void> {}

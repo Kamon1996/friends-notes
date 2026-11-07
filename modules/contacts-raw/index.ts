@@ -25,6 +25,9 @@ export interface DataRow {
   mimetype: string;
   data1: string;
   data4: string;
+  /** Для имени — имя и фамилия, для события — тип (3 = день рождения) и своя метка, для телефона — тип. */
+  data2?: string;
+  data3?: string;
   accountName: string;
   sync1: string;
 }

@@ -1,4 +1,5 @@
 import { daysBetween, nextAnniversary } from './dates';
+import { matchesAny, prepareQuery } from './search';
 import type { Friend } from './types';
 
 export type FriendSort = 'name' | 'date';
@@ -22,8 +23,8 @@ export function letterOf(f: Friend): string {
 }
 
 export function matchesQuery(f: Friend, query: string): boolean {
-  const q = query.trim().toLowerCase();
-  return !q || [f.name, f.food, f.flowers, f.gifts, f.notes].some((x) => x.toLowerCase().includes(q));
+  const q = prepareQuery(query);
+  return !q || matchesAny(f.name, [f.food, f.flowers, f.gifts, f.notes, f.phone], q);
 }
 
 /**
@@ -31,7 +32,8 @@ export function matchesQuery(f: Friend, query: string): boolean {
  * по буквам или, при сортировке по дате, одним списком «Остальные».
  */
 export function buildFriendList(friends: Friend[], query: string, sort: FriendSort, today: string): FriendListItem[] {
-  const list = friends.filter((f) => matchesQuery(f, query));
+  const q = prepareQuery(query);
+  const list = q ? friends.filter((f) => matchesAny(f.name, [f.food, f.flowers, f.gifts, f.notes, f.phone], q)) : [...friends];
   const next = (f: Friend) => (f.birthday ? daysBetween(today, nextAnniversary(f.birthday, today)) : 10_000);
   const cmp = sort === 'date' ? (a: Friend, b: Friend) => next(a) - next(b) || byName(a, b) : byName;
   list.sort(favoritesFirst(cmp));
