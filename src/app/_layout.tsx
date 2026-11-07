@@ -6,7 +6,6 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { Platform, View, useColorScheme } from 'react-native';
 
-import { TelegramBanner } from '@/components/TelegramBanner';
 import { WhatsNewSheet } from '@/components/WhatsNewSheet';
 import { handleNotificationResponse, setupNotifications } from '@/lib/notifications';
 import { StoreProvider } from '@/lib/store';
@@ -57,7 +56,6 @@ function AppShell() {
         <Stack.Screen name="diagnostics" options={{ title: 'Отчёт об ошибке' }} />
         <Stack.Screen name="whats-new" options={{ title: 'Что нового' }} />
       </Stack>
-      <TelegramBanner />
       <WhatsNewSheet />
     </>
   );

@@ -391,6 +391,30 @@ const has = (t, s) => t.toLowerCase().includes(s.toLowerCase());
     await ctx2.close();
   });
 
+  await step('Импорт из Telegram: карточка в ленте «Скоро» и в списке друзей вместо плавающей плашки', async () => {
+    for (const [preview, expect] of [['loading', ['Импорт из Telegram', '154 из 248']], ['done', ['Telegram: 248 контактов', 'Выбери, кого добавить']], ['code', ['Вход в Telegram ждёт тебя', 'Код из приложения Telegram']]]) {
+      const ctx2 = await browser.newContext({ ...devices['iPhone 13'], locale: 'ru-RU' });
+      await ctx2.addInitScript(([d, p]) => { localStorage.setItem('friends-notes/data/v1', d); localStorage.setItem('friends-notes/tg-preview', p); }, [JSON.stringify(seed), preview]);
+      const p2 = await ctx2.newPage();
+      const t2 = async () => (await p2.evaluate(() => document.body.innerText)).replace(/\s+/g, ' ');
+      await p2.goto('http://localhost:8096/'); await p2.waitForTimeout(1500);
+      let t = await t2();
+      for (const x of expect) assert(has(t, x), `${preview}: нет «${x}»: ` + t.slice(0, 300));
+      assert(!has(t, 'загружены ('), 'старая плашка не должна показываться');
+      const box = await p2.getByText(expect[0], { exact: true }).first().boundingBox();
+      assert(box && box.y < 400, `${preview}: карточка должна быть в начале ленты, y=${box && box.y}`);
+      await p2.screenshot({ path: `${out}/e2e-tg-card-${preview}.png` });
+      await p2.getByText('Друзья', { exact: true }).last().click(); await p2.waitForTimeout(700);
+      t = await t2(); assert(has(t, expect[0]), `${preview}: карточки нет в списке друзей`);
+      if (preview === 'done') {
+        await p2.getByText(expect[0], { exact: true }).last().click(); await p2.waitForTimeout(900);
+        // В браузере результата импорта нет (он живёт в нативном модуле), поэтому проверяем только переход на экран импорта.
+        t = await t2(); assert(has(t, 'Импорт контактов'), 'нажатие на готовый импорт должно открыть экран импорта: ' + t.slice(0, 200));
+      }
+      await ctx2.close();
+    }
+  });
+
   await step('Экраны Telegram и отчёта об ошибке открываются', async () => {
     await go('/telegram'); let t = await text(); assert(has(t, 'Импорт из Telegram') && has(t, 'Вход доступен только в Android-приложении'), t.slice(0, 200));
     await go('/diagnostics'); t = await text(); assert(has(t, 'Отчёт доступен только в Android-приложении'));

@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/Avatar';
 import { Icon } from '@/components/Icon';
+import { TelegramImportCard } from '@/components/TelegramImportCard';
 import { Button, Chip, Empty, Fab, GroupedRow, IconButton, ListRow, ScreenHeader, SearchField, Tag, useTheme } from '@/components/ui';
 import { confirm } from '@/lib/confirm';
 import { ageOn, daysBetween, formatDate, hasYear, nextAnniversary, plural, relativeDay, todayISO } from '@/lib/dates';
@@ -95,6 +96,7 @@ export default function FriendsScreen() {
                 </View>
               </View>
             )}
+            <TelegramImportCard style={{ marginHorizontal: 20, marginBottom: 12 }} />
           </>
         }
         renderItem={({ item }) =>

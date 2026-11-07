@@ -5,6 +5,7 @@ import { FlatList, Pressable, Text, View } from 'react-native';
 import { Avatar } from '@/components/Avatar';
 import { Icon } from '@/components/Icon';
 import { ReminderRow } from '@/components/ReminderRow';
+import { TelegramImportCard } from '@/components/TelegramImportCard';
 import { TodayCard, type TodayEvent } from '@/components/TodayCard';
 import { Empty, GroupedRow, IconButton, IconCircle, ListRow, ScreenHeader, Tag, useTheme } from '@/components/ui';
 import { daysBetween, formatDateLong, formatDayShort, plural, relativeDay, todayISO } from '@/lib/dates';
@@ -105,16 +106,19 @@ export default function UpcomingScreen() {
         keyExtractor={(r) => r.key}
         contentContainerStyle={{ paddingBottom: 120 }}
         ListHeaderComponent={
-          <ScreenHeader
-            title="Скоро"
-            subtitle={formatDateLong(today)}
-            right={
-              <>
-                <IconButton icon="import" label="Импорт друзей" onPress={() => router.push('/import')} />
-                <IconButton icon="sliders" label="Настройки" onPress={() => router.push('/settings')} />
-              </>
-            }
-          />
+          <>
+            <ScreenHeader
+              title="Скоро"
+              subtitle={formatDateLong(today)}
+              right={
+                <>
+                  <IconButton icon="import" label="Импорт друзей" onPress={() => router.push('/import')} />
+                  <IconButton icon="sliders" label="Настройки" onPress={() => router.push('/settings')} />
+                </>
+              }
+            />
+            <TelegramImportCard style={{ marginHorizontal: 20, marginTop: 16 }} />
+          </>
         }
         renderItem={({ item: row }) => {
           switch (row.type) {
