@@ -139,8 +139,9 @@ test('Telegram: преобразование контакта и разбор о
   assert.equal(raw.fullName, 'Лена Ким');
   assert.deepEqual(raw.phones, [{ number: '+79991112233' }]);
   assert.deepEqual(raw.birthday, { day: 5, month: 3, year: undefined });
-  assert.equal(raw.note, 'Telegram: @lena_k\nО себе: Люблю горы');
+  assert.equal(raw.note, 'О себе: Люблю горы');
   assert.deepEqual(raw.links, { telegramId: 42 });
+  assert.deepEqual(raw.socials?.map((l) => [l.network, l.handle, l.url]), [['telegram', 'lena_k', 'https://t.me/lena_k']], 'ник — ссылка на Telegram, не заметка');
   assert.equal(raw.photoUri, null);
   const withPhoto = tgToRawContact({ id: 7, firstName: 'Ира', lastName: '', phoneNumber: '', usernames: [], birthdate: null, bio: null, photoUri: 'file:///x/7_big.jpg', thumbUri: 'file:///x/7.jpg' });
   const ira = toCandidates([withPhoto], [])[0];

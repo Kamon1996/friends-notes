@@ -46,6 +46,7 @@ const NAME_MIME = 'vnd.android.cursor.item/name';
 const PHONE_MIME = 'vnd.android.cursor.item/phone_v2';
 const EVENT_MIME = 'vnd.android.cursor.item/contact_event';
 const NOTE_MIME = 'vnd.android.cursor.item/note';
+const WEBSITE_MIME = 'vnd.android.cursor.item/website';
 
 /**
  * Быстрый путь на Android: вся книга одним запросом к таблице data (имена, номера, даты, заметки
@@ -53,7 +54,7 @@ const NOTE_MIME = 'vnd.android.cursor.item/note';
  * собирает каждый контакт отдельно.
  */
 async function loadViaRaw(): Promise<RawContact[]> {
-  const [rows, photos] = await Promise.all([dataRows([NAME_MIME, PHONE_MIME, EVENT_MIME, NOTE_MIME, ...LINK_MIMETYPES]), contactPhotos()]);
+  const [rows, photos] = await Promise.all([dataRows([NAME_MIME, PHONE_MIME, EVENT_MIME, NOTE_MIME, WEBSITE_MIME, ...LINK_MIMETYPES]), contactPhotos()]);
   const byId = new Map<string, RawContact>();
   const get = (id: string) => {
     let c = byId.get(id);
@@ -85,6 +86,9 @@ async function loadViaRaw(): Promise<RawContact[]> {
     } else if (r.mimetype === NOTE_MIME) {
       const c = get(r.contactId);
       if (r.data1 && !c.note) c.note = r.data1;
+    } else if (r.mimetype === WEBSITE_MIME) {
+      const c = get(r.contactId);
+      if (r.data1) (c.websites ??= []).push(r.data1);
     }
   }
   const index = buildPhoneIndex(rows);

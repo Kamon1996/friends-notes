@@ -4,10 +4,13 @@ import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, Tex
 
 import { AvatarPicker } from '@/components/AvatarPicker';
 import { BirthdayField } from '@/components/BirthdayField';
-import { Button, Card, Chip, Field, Label, SectionTitle, SwitchRow, useTheme } from '@/components/ui';
+import { NetworkBadge } from '@/components/NetworkBadge';
+import { SocialLinkSheet } from '@/components/SocialLinkSheet';
+import { Button, Card, Chip, Field, IconButton, Label, ListRow, SectionTitle, SwitchRow, useTheme } from '@/components/ui';
 import { cleanupAvatars, deleteOwnedFiles } from '@/lib/avatars';
 import { todayISO } from '@/lib/dates';
 import { confirm } from '@/lib/confirm';
+import { linkSubtitle, linkTitle, mergeLinks } from '@/lib/socials';
 import { newId, useFriend, useStore } from '@/lib/store';
 import type { Friend, ImportantDate } from '@/lib/types';
 
@@ -36,6 +39,7 @@ function FriendForm() {
   const { saveFriend, deleteFriend } = useStore();
   const { s, colors, fonts } = useTheme();
   const [f, setF] = useState<Friend>(() => existing ?? blankFriend());
+  const [addSocial, setAddSocial] = useState(false);
   const set = <K extends keyof Friend>(key: K, value: Friend[K]) => setF((prev) => ({ ...prev, [key]: value }));
 
   const updateDate = (dateId: string, patch: Partial<ImportantDate>) =>
@@ -99,6 +103,29 @@ function FriendForm() {
         <Field label="Цветы" value={f.flowers} onChangeText={(v) => set('flowers', v)} placeholder="Пионы, белые розы…" multiline />
         <Field label="Идеи подарков" value={f.gifts} onChangeText={(v) => set('gifts', v)} placeholder="Хотела книгу…" multiline />
         <Field label="Заметки" value={f.notes} onChangeText={(v) => set('notes', v)} placeholder="Всё, что важно не забыть" multiline />
+
+        <SectionTitle style={{ marginBottom: 6 }}>Соцсети</SectionTitle>
+        {(f.socials ?? []).length > 0 && (
+          <Card style={{ paddingVertical: 2, paddingHorizontal: 4, marginBottom: 10 }}>
+            {(f.socials ?? []).map((l) => (
+              <ListRow
+                key={l.id}
+                leading={<NetworkBadge network={l.network} />}
+                title={linkTitle(l)}
+                subtitle={linkSubtitle(l)}
+                trailing={<IconButton icon="close" label={`Убрать ${linkTitle(l)}`} size={18} onPress={() => set('socials', (f.socials ?? []).filter((x) => x.id !== l.id))} />}
+                style={{ paddingVertical: 6, paddingHorizontal: 8 }}
+              />
+            ))}
+          </Card>
+        )}
+        <View style={[s.chips, { marginBottom: 14 }]}>
+          <Chip label="Добавить соцсеть" icon="plus" onPress={() => setAddSocial(true)} />
+        </View>
+        <Text style={[s.caption, { marginTop: -8, marginBottom: 14, paddingHorizontal: 4 }]}>
+          Сюда же попадают ссылки из «О себе» в Telegram и из контактов телефона.
+        </Text>
+        <SocialLinkSheet visible={addSocial} existing={f.socials} onClose={() => setAddSocial(false)} onAdd={(link) => set('socials', mergeLinks(f.socials, [link]))} />
 
         <SectionTitle style={{ marginBottom: 6 }}>Важные даты</SectionTitle>
         {f.dates.map((d) => (

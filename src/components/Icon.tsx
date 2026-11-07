@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import Svg, { Circle, Path, Rect } from 'react-native-svg';
+import Svg, { Circle, Path, Rect, Text as SvgText } from 'react-native-svg';
 
 export type IconName =
   | 'calendar'
@@ -45,7 +45,33 @@ export type IconName =
   | 'camera'
   | 'star'
   | 'bellOff'
-  | 'minus';
+  | 'minus'
+  | 'globe'
+  | 'link'
+  | 'open'
+  | 'copy'
+  | 'instagram'
+  | 'tiktok'
+  | 'youtube'
+  | 'vk'
+  | 'facebook'
+  | 'x'
+  | 'pinterest'
+  | 'linkedin'
+  | 'behance'
+  | 'github'
+  | 'twitch';
+
+/** Буквенные значки сетей без простого контура: заливка цветом обводки, без своей обводки. */
+const mono = (text: string, fontSize = 12.5) => (
+  <SvgText x={12} y={16.5} textAnchor="middle" fontSize={fontSize} fontWeight="700" stroke="none" fill="currentColor">
+    {text}
+  </SvgText>
+);
+const MONO_VK = mono('vk');
+const MONO_P = mono('P', 13.5);
+const MONO_IN = mono('in');
+const MONO_BE = mono('Be');
 
 const PATHS: Record<IconName, ReactNode> = {
   calendar: (
@@ -203,6 +229,49 @@ const PATHS: Record<IconName, ReactNode> = {
   ),
   minus: <Path d="M6 12h12" />,
   star: <Path d="M12 3.6l2.5 5.3 5.8.7-4.3 4 1.1 5.8L12 16.6l-5.1 2.8 1.1-5.8-4.3-4 5.8-.7z" />,
+  globe: (
+    <>
+      <Circle cx={12} cy={12} r={9} />
+      <Path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
+    </>
+  ),
+  link: <Path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />,
+  open: <Path d="M14 4h6v6M20 4l-9 9M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5" />,
+  copy: (
+    <>
+      <Rect x={9} y={9} width={11} height={11} rx={2} />
+      <Path d="M5 15V5a1 1 0 0 1 1-1h10" />
+    </>
+  ),
+  instagram: (
+    <>
+      <Rect x={4} y={4} width={16} height={16} rx={5} />
+      <Circle cx={12} cy={12} r={3.5} />
+      <Circle cx={16.8} cy={7.2} r={0.9} fill="currentColor" />
+    </>
+  ),
+  tiktok: <Path d="M14 4c.3 2.7 2 4.4 4.6 4.6M14 4v11a4 4 0 1 1-4-4" />,
+  youtube: (
+    <>
+      <Rect x={3} y={6} width={18} height={12} rx={4} />
+      <Path d="M10 9.5v5l4.5-2.5z" fill="currentColor" />
+    </>
+  ),
+  vk: MONO_VK,
+  facebook: <Path d="M14 8h3V4h-3a4 4 0 0 0-4 4v3H7v4h3v6h4v-6h3l1-4h-4V8z" />,
+  x: <Path d="M5 4l14 16M19 4L5 20" />,
+  pinterest: MONO_P,
+  linkedin: MONO_IN,
+  behance: MONO_BE,
+  github: (
+    <Path d="M9 19c-4 1-4-2-6-2M15 21v-3.5a3 3 0 0 0-.8-2.3c2.7-.3 5.5-1.3 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.3 4.3 0 0 0-.1-3.2s-1-.3-3.3 1.3a11.4 11.4 0 0 0-6 0C6.7 2.5 5.7 2.8 5.7 2.8a4.3 4.3 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.3 9.2c0 4.7 2.8 5.7 5.5 6a3 3 0 0 0-.8 2.3V21" />
+  ),
+  twitch: (
+    <>
+      <Path d="M4 3h16v11l-4 4h-4l-3 3v-3H5V3z" />
+      <Path d="M10 8v4M15 8v4" />
+    </>
+  ),
 };
 
 /** Иконки одной линии (1.75 px) — вместо эмодзи. `fill` — для «включённых» состояний, например закрашенной звезды. */
@@ -224,6 +293,7 @@ export function Icon({
       width={size}
       height={size}
       viewBox="0 0 24 24"
+      color={color}
       fill={fill}
       stroke={color}
       strokeWidth={strokeWidth}

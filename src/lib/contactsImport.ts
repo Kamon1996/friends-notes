@@ -1,6 +1,7 @@
 import { UNKNOWN_YEAR } from './dates';
 import { isServiceNumber, phoneKey, type Links } from './messengers';
-import type { Friend, ISODate } from './types';
+import { mergeLinks, parseSocialInput, linkFromInput } from './socials';
+import type { Friend, ISODate, SocialLink } from './types';
 
 export { phoneKey };
 
@@ -18,6 +19,10 @@ export interface RawContact {
   normalizedPhones?: string[];
   /** Мессенджеры, в которых есть человек. */
   links?: Links;
+  /** Соцсети, уже разобранные источником (Telegram). */
+  socials?: SocialLink[];
+  /** Адреса сайтов из телефонной книги — разбираем по каталогу сетей. */
+  websites?: string[];
   photoUri?: string | null;
   thumbUri?: string | null;
   /** Это ты сам (своя запись Telegram в телефонной книге). */
@@ -98,8 +103,18 @@ export interface ImportCandidate {
   /** Имя друга, который уже есть в приложении (по имени или телефону). */
   duplicateOf: string | null;
   links: Links;
+  socials: SocialLink[];
   photoUri: string | null;
   thumbUri: string | null;
+}
+
+let seq = 0;
+const linkId = () => `cl-${Date.now().toString(36)}-${(seq++).toString(36)}`;
+
+/** Соцсети контакта: готовые от источника плюс адреса сайтов, разобранные по каталогу. */
+function contactSocials(c: RawContact): SocialLink[] {
+  const fromSites = (c.websites ?? []).map((w) => linkFromInput(parseSocialInput(w), null, linkId(), 'contacts')).filter((l): l is SocialLink => !!l);
+  return mergeLinks(c.socials, fromSites);
 }
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -182,6 +197,7 @@ export function toCandidates(raw: RawContact[], friends: Friend[]): ImportCandid
     const same = pk.length >= 7 ? byPhoneIndex.get(pk) : undefined;
     if (same) {
       same.links = { ...links, ...same.links };
+      same.socials = mergeLinks(same.socials, contactSocials(c));
       if (!same.photoUri && photoUri) {
         same.photoUri = photoUri;
         same.thumbUri = thumbUri;
@@ -192,7 +208,7 @@ export function toCandidates(raw: RawContact[], friends: Friend[]): ImportCandid
     }
 
     const duplicateOf = byName.get(nameKey(name)) ?? (pk.length >= 7 ? byPhone.get(pk) : undefined) ?? null;
-    const candidate: ImportCandidate = { key: c.id, name, phone, birthday, dates, note: c.note?.trim() ?? '', duplicateOf, links, photoUri, thumbUri };
+    const candidate: ImportCandidate = { key: c.id, name, phone, birthday, dates, note: c.note?.trim() ?? '', duplicateOf, links, socials: contactSocials(c), photoUri, thumbUri };
     if (pk.length >= 7) byPhoneIndex.set(pk, candidate);
     out.push(candidate);
   }
@@ -222,6 +238,7 @@ export function candidateToFriend(c: ImportCandidate, id: string, idFor: () => s
     telegramId: c.links.telegramId ?? null,
     whatsapp: c.links.whatsapp ?? null,
     viber: c.links.viber ?? null,
+    socials: c.socials.length ? c.socials : undefined,
     photoUri: c.photoUri,
     thumbUri: c.thumbUri,
   };

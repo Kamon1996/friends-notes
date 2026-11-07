@@ -1,4 +1,6 @@
 import type { RawContact } from './contactsImport';
+import { extractLinks, mergeLinks } from './socials';
+import type { SocialLink } from './types';
 
 /** Данные пользователя Telegram, нужные для импорта (совпадает с тем, что отдаёт модуль). */
 export interface TgPerson {
@@ -13,20 +15,25 @@ export interface TgPerson {
   thumbUri?: string | null;
 }
 
-/** Контакт Telegram → формат общего импорта. */
+let seq = 0;
+const linkId = () => `tgl-${Date.now().toString(36)}-${(seq++).toString(36)}`;
+
+/**
+ * Контакт Telegram → формат общего импорта. @username становится ссылкой на Telegram, ссылки и @ники
+ * из «О себе» — соцсетями, остаток текста «О себе» — заметкой.
+ */
 export function tgToRawContact(p: TgPerson): RawContact {
   const phone = p.phoneNumber ? (p.phoneNumber.startsWith('+') ? p.phoneNumber : `+${p.phoneNumber}`) : '';
-  const notes = [
-    p.usernames.length ? `Telegram: ${p.usernames.map((u) => '@' + u).join(', ')}` : '',
-    p.bio ? `О себе: ${p.bio}` : '',
-  ].filter(Boolean);
+  const own: SocialLink[] = p.usernames.map((u) => ({ id: linkId(), network: 'telegram', url: `https://t.me/${u}`, handle: u, source: 'tg' }));
+  const bio = p.bio ? extractLinks(p.bio, linkId) : { links: [], rest: '' };
   return {
     id: `tg-${p.id}`,
     fullName: [p.firstName, p.lastName].filter(Boolean).join(' ').trim(),
     phones: phone ? [{ number: phone }] : [],
     birthday: p.birthdate ? { day: p.birthdate.day, month: p.birthdate.month, year: p.birthdate.year || undefined } : null,
-    note: notes.join('\n'),
+    note: bio.rest ? `О себе: ${bio.rest}` : '',
     links: { telegramId: p.id },
+    socials: mergeLinks(own, bio.links),
     photoUri: p.photoUri ?? null,
     thumbUri: p.thumbUri ?? null,
   };

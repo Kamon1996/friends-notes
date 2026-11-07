@@ -18,7 +18,7 @@ const md = (n, y) => `${y}-${day(n).slice(5)}`;
 const seed = {
   version: 1, settings: { eventTime: '10:00', eventDayBefore: true, theme: 'light', accentLight: 'terracotta', accentDark: 'terracotta', lastSeenVersion: VERSION },
   friends: [
-    { id: 'a', name: 'Аня Смирнова', emoji: '🌸', birthday: md(0, 1995), phone: '+7 999 123-45-67', telegramId: 123456789, whatsapp: '79991234567', food: 'Суши, тирамису', flowers: 'Пионы', gifts: 'Керамика', notes: 'Любит настолки', dates: [{ id: 'd1', title: 'Познакомились', date: md(12, 2018), yearly: true }], createdAt: 1 },
+    { id: 'a', name: 'Аня Смирнова', emoji: '🌸', birthday: md(0, 1995), phone: '+7 999 123-45-67', telegramId: 123456789, whatsapp: '79991234567', food: 'Суши, тирамису', flowers: 'Пионы', gifts: 'Керамика', notes: 'Любит настолки', dates: [{ id: 'd1', title: 'Познакомились', date: md(12, 2018), yearly: true }], createdAt: 1, socials: [{ id: 'sa1', network: 'tiktok', url: 'https://www.tiktok.com/@anya', handle: 'anya', source: 'tg' }, { id: 'sa2', network: 'site', url: 'https://anya.design', label: 'anya.design', source: 'manual' }] },
     { id: 'b', name: 'Игорь Ветров', emoji: '😎', birthday: md(3, 1992), phone: '+375 29 111-22-33', viber: '375291112233', food: 'Стейк', flowers: '', gifts: '', notes: '', dates: [], createdAt: 2 },
     { id: 'c', name: 'Мама', emoji: '❤️', birthday: md(40, 1966), phone: '', food: '', flowers: 'Тюльпаны', gifts: '', notes: '', dates: [], createdAt: 3 },
   ],
@@ -146,6 +146,42 @@ const has = (t, s) => t.toLowerCase().includes(s.toLowerCase());
     assert(!has(t, 'Viber'), 'Viber не должен показываться без номера');
     await shot('friend');
   });
+  await step('Соцсети: чипы в карточке, добавление по ссылке и по нику, сайт, ошибка, дубликат, форма', async () => {
+    await go('/friend/a');
+    let t = await text(); assert(has(t, 'Соцсети') && has(t, 'TikTok') && has(t, 'anya.design'), t.slice(0, 300));
+    await tap(page.getByLabel('Добавить соцсеть')); await page.waitForTimeout(500);
+    const field = page.getByPlaceholder('instagram.com/… или @ник');
+    await field.fill('https://www.youtube.com/@anyasings'); await page.waitForTimeout(300);
+    t = await text(); assert(has(t, 'Похоже на YouTube') && has(t, '@anyasings'), t.slice(-300));
+    await page.getByText('Добавить YouTube', { exact: true }).click(); await page.waitForTimeout(600);
+    let socials = (await stored()).friends.find((f) => f.id === 'a').socials;
+    assert.equal(socials.length, 3); assert.equal(socials[2].network, 'youtube');
+    t = await text(); assert(has(t, 'YouTube'), 'чип не появился');
+    await tap(page.getByLabel('Добавить соцсеть')); await page.waitForTimeout(500);
+    await field.fill('@anya.ig'); await page.waitForTimeout(300);
+    t = await text(); assert(has(t, 'Хороший ник'), t.slice(-300));
+    await page.getByLabel('Instagram', { exact: true }).click(); await page.waitForTimeout(300);
+    t = await text(); assert(has(t, 'Добавить Instagram') && has(t, '@anya.ig'), t.slice(-300));
+    await page.getByText('Добавить Instagram', { exact: true }).click(); await page.waitForTimeout(600);
+    socials = (await stored()).friends.find((f) => f.id === 'a').socials;
+    assert.equal(socials[3].url, 'https://instagram.com/anya.ig');
+    await tap(page.getByLabel('Добавить соцсеть')); await page.waitForTimeout(500);
+    await field.fill('аня певица'); await page.waitForTimeout(300);
+    t = await text(); assert(has(t, 'Ник без пробелов или ссылка'), t.slice(-300));
+    await field.fill('kattysings.ru/about'); await page.waitForTimeout(300);
+    t = await text(); assert(has(t, 'Такую сеть не узнаём') && has(t, 'Да, это сайт'), t.slice(-300));
+    await field.fill('https://www.tiktok.com/@anya'); await page.waitForTimeout(300);
+    t = await text(); assert(has(t, 'уже есть'), 'дубликат не распознан: ' + t.slice(-200));
+    await page.getByLabel('Закрыть').last().click(); await page.waitForTimeout(400);
+    await tap(page.getByLabel('Изменить')); await page.waitForTimeout(900);
+    t = await text(); assert(has(t, 'Соцсети') && has(t, '@anyasings'), t.slice(0, 300));
+    await page.getByLabel('Убрать YouTube').click(); await page.waitForTimeout(300);
+    await page.getByText('Готово', { exact: true }).click(); await page.waitForTimeout(800);
+    socials = (await stored()).friends.find((f) => f.id === 'a').socials;
+    assert.deepEqual(socials.map((l) => l.network), ['tiktok', 'site', 'instagram']);
+    await shot('socials');
+  });
+
   await step('Карточка друга: звезда в шапке — в избранное, в списке выше остальных', async () => {
     await tap(page.getByLabel('В избранное')); await page.waitForTimeout(400);
     assert.equal((await stored()).friends.find((x) => x.id === 'a').favorite, true);
@@ -255,6 +291,8 @@ const has = (t, s) => t.toLowerCase().includes(s.toLowerCase());
     assert(boris && boris.birthday === '1904-09-03', 'день рождения без года');
     const serg = d.friends.find((f) => f.name === 'Серёжа Волков');
     assert(serg && serg.telegramId === 444 && serg.viber === '79253334455', 'мессенджеры не перенесены');
+    const katya = d.friends.find((f) => f.name === 'Катя Орлова');
+    assert(katya && katya.socials && katya.socials[0].network === 'instagram' && katya.socials[0].handle === 'katya.orlova', 'сайт из контактов не стал соцсетью');
   });
 
   await step('Напоминание: выбор друга через окно с поиском (когда друзей много)', async () => {

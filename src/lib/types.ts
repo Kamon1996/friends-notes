@@ -11,6 +11,20 @@ export interface ImportantDate {
   yearly: boolean;
 }
 
+/** Ссылка на профиль в соцсети: сеть из каталога (`src/lib/socials.ts`) или «site» для любого другого адреса. */
+export interface SocialLink {
+  id: string;
+  network: string;
+  /** Полный адрес; пустой, если у сети нет ссылок на профиль (только ник). */
+  url: string;
+  /** Ник без @, если известен. */
+  handle?: string;
+  /** Подпись чипа «Сайт»: домен или своё название. */
+  label?: string;
+  /** Откуда: из «О себе» Telegram, из контактов телефона или вручную. */
+  source?: 'tg' | 'contacts' | 'manual';
+}
+
 export interface Friend {
   id: string;
   name: string;
@@ -37,6 +51,8 @@ export interface Friend {
   favorite?: boolean;
   /** Без уведомлений о дне рождения и важных датах этого человека (напоминания, созданные вручную, приходят). */
   muted?: boolean;
+  /** Соцсети и сайты человека. */
+  socials?: SocialLink[];
 }
 
 export type RepeatUnit = 'day' | 'week' | 'month' | 'year';

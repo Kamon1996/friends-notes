@@ -1,12 +1,16 @@
 import { Stack, router, useLocalSearchParams } from 'expo-router';
+import { useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import { Avatar } from '@/components/Avatar';
 import { ContactButtons } from '@/components/ContactButtons';
+import { SocialChips } from '@/components/SocialChips';
+import { SocialLinkSheet } from '@/components/SocialLinkSheet';
 import { ReminderRow } from '@/components/ReminderRow';
 import { Icon, type IconName } from '@/components/Icon';
 import { Button, Empty, Group, IconButton, IconCircle, ListRow, SectionTitle, Tag, useTheme } from '@/components/ui';
 import { ageOn, daysBetween, formatDate, hasYear, nextAnniversary, plural, relativeDay, todayISO } from '@/lib/dates';
+import { mergeLinks } from '@/lib/socials';
 import { useFriend, useStore } from '@/lib/store';
 
 export default function FriendScreen() {
@@ -14,6 +18,7 @@ export default function FriendScreen() {
   const friend = useFriend(id);
   const { data, ready, saveFriend } = useStore();
   const { s, colors, fonts } = useTheme();
+  const [addSocial, setAddSocial] = useState(false);
 
   if (!ready) return null;
   if (!friend) return <Empty icon="person" title="Друг не найден" text="Возможно, его удалили." />;
@@ -94,6 +99,17 @@ export default function FriendScreen() {
       </View>
 
       <ContactButtons friend={friend} />
+
+      <View style={{ gap: 8 }}>
+        <SectionTitle style={{ marginBottom: 0 }}>Соцсети</SectionTitle>
+        <SocialChips links={friend.socials ?? []} onAdd={() => setAddSocial(true)} />
+      </View>
+      <SocialLinkSheet
+        visible={addSocial}
+        existing={friend.socials}
+        onClose={() => setAddSocial(false)}
+        onAdd={(link) => saveFriend({ ...friend, socials: mergeLinks(friend.socials, [link]) })}
+      />
 
       {prefs.length === 0 && (
         <Pressable
