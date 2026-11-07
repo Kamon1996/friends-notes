@@ -132,16 +132,48 @@ jobs:
           fi
           df -h / | tail -1
 
+      # Сначала сохраняем сборку артефактом запуска: даже если релиз не создастся, файл не пропадёт.
+      - uses: actions/upload-artifact@v4
+        id: artifact
+        with:
+          name: friends-notes-build
+          path: |
+            friends-notes.apk
+            friends-notes.aab
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Attach the build to a GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
+          ARTIFACT_URL: ${{ steps.artifact.outputs.artifact-url }}
         run: |
           VERSION=$(node -p "require('./app.json').expo.version")
           TAG="v$VERSION"
           if [ "$BUNDLE" = "true" ]; then FILE="friends-notes-$VERSION.aab"; cp friends-notes.aab "$FILE"; else FILE="friends-notes-$VERSION.apk"; cp friends-notes.apk "$FILE"; fi
           if ! gh release view "$TAG" >/dev/null 2>&1; then
-            gh release create "$TAG" --target "$GITHUB_SHA" --title "Друзья $VERSION" \
-              --notes "APK собран в GitHub Actions из коммита $GITHUB_SHA. Подпись та же, что у сборок EAS: ставится поверх прошлой версии."
+            # Через gh api, а не gh release create: при отказе GitHub показывает полный ответ, а не одну строку.
+            if ! gh api -X POST "repos/$GITHUB_REPOSITORY/releases" \
+                -f tag_name="$TAG" -f target_commitish="$GITHUB_SHA" -f name="Друзья $VERSION" \
+                -f body="APK собран в GitHub Actions из коммита $GITHUB_SHA. Подпись та же, что у сборок EAS: ставится поверх прошлой версии." >release.log 2>&1; then
+              cat release.log
+              echo "Правила для тегов (Settings → Rules → Rulesets):"
+              gh api "repos/$GITHUB_REPOSITORY/rulesets?targets=tag" --jq '.[] | "  \(.name): \(.enforcement)"' || true
+              {
+                echo "### ⚠️ Сборка готова, но релиз не создан"
+                echo ""
+                echo "Файл лежит в артефактах этого запуска (архив, нужен вход в GitHub): $ARTIFACT_URL"
+                echo ""
+                echo "Ответ GitHub:"
+                echo '```'
+                cat release.log
+                echo '```'
+                echo ""
+                echo "Что проверить: Settings → Rules → Rulesets (правило на теги мешает роботу Actions создать тег) и Settings → Actions → General → Workflow permissions («Read and write permissions»)."
+              } >> "$GITHUB_STEP_SUMMARY"
+              echo "::error::Не удалось создать релиз $TAG, сборка сохранена артефактом: $ARTIFACT_URL"
+              exit 1
+            fi
           fi
           gh release upload "$TAG" "$FILE" --clobber
           URL="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/$FILE"
@@ -153,15 +185,6 @@ jobs:
             echo "Все версии: https://github.com/$GITHUB_REPOSITORY/releases"
           } >> "$GITHUB_STEP_SUMMARY"
           echo "APK: $URL"
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: friends-notes-build
-          path: |
-            friends-notes.apk
-            friends-notes.aab
-          if-no-files-found: ignore
-          retention-days: 14
 
   # Облачный путь (EAS): быстрая проверка нативного кода, потом сборка на серверах Expo.
   compile:
