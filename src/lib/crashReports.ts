@@ -46,6 +46,13 @@ export async function stopCrashReports(): Promise<void> {
   await Sentry.close().catch(() => {});
 }
 
+/** Тестовое событие для проверки, что отчёты доходят до Sentry: пять нажатий на версию в настройках. */
+export function sendTestReport(): boolean {
+  if (!started) return false;
+  Sentry.captureMessage(`Проверка отчётов о сбоях · ${APP_VERSION}`, 'info');
+  return true;
+}
+
 /** Номер последнего отправленного отчёта — чтобы приложить к сообщению разработчику. */
 export function lastCrashId(): string | undefined {
   return started ? Sentry.lastEventId() : undefined;

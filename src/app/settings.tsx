@@ -1,11 +1,12 @@
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Linking, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { DateField } from '@/components/DateField';
 import { Icon } from '@/components/Icon';
 import { Button, Card, Chip, Group, IconCircle, ListRow, SectionTitle, SwitchRow, useTheme } from '@/components/ui';
 import { APP_VERSION } from '@/lib/changelog';
+import { sendTestReport } from '@/lib/crashReports';
 import { loadEnrichment } from '@/lib/contacts';
 import { applyEnrichment } from '@/lib/enrich';
 import { notificationsAllowed, setupNotifications } from '@/lib/notifications';
@@ -88,6 +89,17 @@ export default function SettingsScreen() {
 
   const { settings } = data;
 
+  // Пять быстрых нажатий на версию внизу — тестовое событие в Sentry, чтобы проверить, что отчёты доходят.
+  const taps = useRef({ n: 0, at: 0 });
+  const tapVersion = () => {
+    const now = Date.now();
+    taps.current = { n: now - taps.current.at < 1500 ? taps.current.n + 1 : 1, at: now };
+    if (taps.current.n < 5) return;
+    taps.current = { n: 0, at: 0 };
+    const sent = sendTestReport();
+    Alert.alert(sent ? 'Тестовый отчёт отправлен' : 'Отчёты о сбоях выключены', sent ? 'Через минуту он появится в Sentry.' : 'Включи их выше или дождись сборки с Sentry.');
+  };
+
   return (
     <ScrollView style={s.screen} contentContainerStyle={s.content}>
       <View style={{ gap: 8 }}>
@@ -160,7 +172,9 @@ export default function SettingsScreen() {
         </Card>
       </View>
 
-      <Text style={[s.caption, { textAlign: 'center', color: colors.text3 }]}>{`«Друзья» ${APP_VERSION}\nВсе данные хранятся только на этом телефоне.`}</Text>
+      <Pressable onPress={tapVersion} accessibilityLabel={`Версия ${APP_VERSION}`}>
+        <Text style={[s.caption, { textAlign: 'center', color: colors.text3 }]}>{`«Друзья» ${APP_VERSION}\nВсе данные хранятся только на этом телефоне.`}</Text>
+      </Pressable>
     </ScrollView>
   );
 }
