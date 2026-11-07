@@ -108,13 +108,3 @@ export function handleNotificationResponse(response: Notifications.NotificationR
   }
   return typeof data.url === 'string' ? data.url : null;
 }
-
-/** Тестовое уведомление через 5 секунд — проверить, что всё работает. */
-export async function sendTestNotification(): Promise<boolean> {
-  if (!(await setupNotifications())) return false;
-  await Notifications.scheduleNotificationAsync({
-    content: { title: 'Проверка связи', body: 'Уведомления работают. Так будут приходить напоминания.', sound: true },
-    trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: 5, channelId: CHANNEL_ID },
-  });
-  return true;
-}

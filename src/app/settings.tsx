@@ -7,7 +7,7 @@ import { Icon } from '@/components/Icon';
 import { Button, Card, Chip, Group, IconCircle, ListRow, SectionTitle, SwitchRow, useTheme } from '@/components/ui';
 import { loadEnrichment } from '@/lib/contacts';
 import { applyEnrichment } from '@/lib/enrich';
-import { notificationsAllowed, sendTestNotification, setupNotifications } from '@/lib/notifications';
+import { notificationsAllowed, setupNotifications } from '@/lib/notifications';
 import { useStore } from '@/lib/store';
 import { ACCENTS, type AccentId, type Scheme } from '@/lib/theme';
 import type { ThemeMode } from '@/lib/types';
@@ -85,12 +85,6 @@ export default function SettingsScreen() {
     }
   };
 
-  const test = async () => {
-    const ok = await sendTestNotification();
-    if (ok) Alert.alert('Отправлено', 'Уведомление придёт через 5 секунд. Можно свернуть приложение.');
-    else enable();
-  };
-
   const { settings } = data;
 
   return (
@@ -109,7 +103,6 @@ export default function SettingsScreen() {
                 </Text>
               </View>
               {!allowed && <Button title="Включить уведомления" onPress={enable} />}
-              <Button title="Отправить тестовое" variant="secondary" onPress={test} />
             </>
           )}
         </Card>
