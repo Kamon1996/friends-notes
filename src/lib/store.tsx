@@ -23,7 +23,10 @@ interface Store {
   deleteFriends: (ids: string[]) => void;
   saveReminder: (r: Reminder) => void;
   deleteReminder: (id: string) => void;
+  deleteReminders: (ids: string[]) => void;
   toggleReminderDone: (id: string) => void;
+  /** Отметить несколько сделанными (повторяющиеся переносятся на следующий раз) или вернуть в активные. */
+  setRemindersDone: (ids: string[], done: boolean) => void;
   updateSettings: (patch: Partial<Settings>) => void;
 }
 
@@ -103,8 +106,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const deleteReminder = useCallback((id: string) => {
-    setData((d) => ({ ...d, reminders: d.reminders.filter((r) => r.id !== id) }));
+  const deleteReminders = useCallback((ids: string[]) => {
+    const gone = new Set(ids);
+    setData((d) => ({ ...d, reminders: d.reminders.filter((r) => !gone.has(r.id)) }));
+  }, []);
+  const deleteReminder = useCallback((id: string) => deleteReminders([id]), [deleteReminders]);
+
+  const setRemindersDone = useCallback((ids: string[], done: boolean) => {
+    const chosen = new Set(ids);
+    setData((d) => ({
+      ...d,
+      reminders: d.reminders.map((r) => {
+        if (!chosen.has(r.id)) return r;
+        if (!done) return r.done ? { ...r, done: false } : r;
+        return r.done ? r : completeReminder(r);
+      }),
+    }));
   }, []);
 
   const toggleReminderDone = useCallback((id: string) => {
@@ -123,8 +140,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ ready, data, saveFriend, addFriends, updateFriends, deleteFriend, deleteFriends, saveReminder, deleteReminder, toggleReminderDone, updateSettings }),
-    [ready, data, saveFriend, addFriends, updateFriends, deleteFriend, deleteFriends, saveReminder, deleteReminder, toggleReminderDone, updateSettings],
+    () => ({ ready, data, saveFriend, addFriends, updateFriends, deleteFriend, deleteFriends, saveReminder, deleteReminder, deleteReminders, toggleReminderDone, setRemindersDone, updateSettings }),
+    [ready, data, saveFriend, addFriends, updateFriends, deleteFriend, deleteFriends, saveReminder, deleteReminder, deleteReminders, toggleReminderDone, setRemindersDone, updateSettings],
   );
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

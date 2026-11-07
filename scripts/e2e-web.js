@@ -271,14 +271,46 @@ const has = (t, s) => t.toLowerCase().includes(s.toLowerCase());
     assert.deepEqual(r.repeat, { every: 3, unit: 'week' });
     assert(has(await text(), 'каждые 3 недели'));
   });
-  await step('Напоминания: фильтры и сделанные', async () => {
+  await step('Напоминания: фильтры, «Все», режим выбора — сделать несколько и удалить', async () => {
     await page.getByText('Сделанные').click(); await page.waitForTimeout(400);
     let t = await text(); assert(has(t, 'Написать Диме') && has(t, 'Сделано'), t.slice(0, 300));
     await page.getByText('Для себя').click(); await page.waitForTimeout(400);
     t = await text(); assert(has(t, 'Сдать проект') && !has(t, 'Игорь Ветров'));
     await page.getByText('Друзья', { exact: true }).first().click(); await page.waitForTimeout(400);
     t = await text(); assert(has(t, 'Игорь Ветров') && !has(t, 'Сдать проект'));
+    await page.getByText('Все', { exact: true }).click(); await page.waitForTimeout(400);
+    t = await text(); assert(has(t, 'Активные') && has(t, 'Сделанные') && has(t, 'Сдать проект') && has(t, 'Написать Диме'), '«Все»: ' + t.slice(0, 300));
     await shot('reminders');
+    // Долгое нажатие — режим выбора. «Написать Диме» сделано: вернуть в активные, снова отметить сделанным, удалить.
+    const press = async (title) => {
+      const b = await page.getByText(title, { exact: true }).last().boundingBox();
+      await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2); await page.mouse.down(); await page.waitForTimeout(700); await page.mouse.up(); await page.waitForTimeout(400);
+      return b.y;
+    };
+    const before = await page.getByText('Написать Диме', { exact: true }).last().boundingBox();
+    await press('Написать Диме');
+    assert(await page.getByLabel('Выбрано: 1').count(), 'режим выбора не включился');
+    const after = await page.getByText('Написать Диме', { exact: true }).last().boundingBox();
+    assert(Math.abs(after.y - before.y) < 2, 'список прыгнул при входе в режим выбора');
+    await tap(page.getByLabel('Вернуть в активные')); await page.waitForTimeout(500);
+    let r3 = (await stored()).reminders.find((r) => r.id === 'r3');
+    assert(r3 && r3.done === false, 'напоминание не вернулось в активные');
+    assert.equal(await page.getByLabel('Удалить выбранные').count(), 0, 'выделение должно сняться');
+    await press('Написать Диме');
+    await tap(page.getByLabel('Отметить сделанными')); await page.waitForTimeout(500);
+    r3 = (await stored()).reminders.find((r) => r.id === 'r3');
+    assert(r3 && r3.done === true, 'однократное напоминание не отмечено сделанным');
+    // Повторяющееся «сделано» переносит на следующий раз, а не ставит галочку.
+    const r5before = (await stored()).reminders.find((r) => r.title === 'Сдать проект');
+    await press('Сдать проект');
+    await tap(page.getByLabel('Отметить сделанными')); await page.waitForTimeout(500);
+    const r5 = (await stored()).reminders.find((r) => r.title === 'Сдать проект');
+    assert(r5 && r5.done === false && r5.date > r5before.date, `повторяющееся должно перенестись: ${r5before.date} → ${r5 && r5.date}`);
+    // Удалить выбранные с подтверждением (диалог принимается автоматически).
+    await press('Написать Диме');
+    await tap(page.getByLabel('Удалить выбранные')); await page.waitForTimeout(600);
+    assert(!(await stored()).reminders.some((r) => r.id === 'r3'), 'напоминание не удалилось');
+    await page.getByText('Активные', { exact: true }).first().click(); await page.waitForTimeout(400);
   });
 
   await step('Импорт: пример контактов, фильтры, выбрать все, добавить, дубликаты', async () => {
@@ -367,7 +399,7 @@ const has = (t, s) => t.toLowerCase().includes(s.toLowerCase());
     await p2.goto('http://localhost:8096/'); await p2.waitForTimeout(2200);
     let t = await t2();
     assert(has(t, 'Что нового') && has(t, `обновилось до версии ${VERSION}`), t.slice(0, 300));
-    assert(has(t, '1.13.0') && has(t, 'Тишина для отдельных людей') && !has(t, 'Свайп строки влево'), 'показываем только версии новее 1.12.0');
+    assert(has(t, '1.13.0') && has(t, 'Тишина для отдельных людей') && !has(t, 'Свайп влево удаляет друга'), 'показываем только версии новее 1.12.0');
     await p2.screenshot({ path: `${out}/e2e-whats-new-sheet.png` });
     await p2.getByText('Понятно', { exact: true }).click(); await p2.waitForTimeout(700);
     t = await t2(); assert(!has(t, 'обновилось до версии'), 'шторка закрылась');

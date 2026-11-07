@@ -16,11 +16,21 @@ export function ReminderRow({
   friend,
   showFriend = true,
   showDate = true,
+  selected = false,
+  selecting = false,
+  onPress,
+  onLongPress,
 }: {
   reminder: Reminder;
   friend?: Friend | null;
   showFriend?: boolean;
   showDate?: boolean;
+  /** Режим выбора: строка отмечена. */
+  selected?: boolean;
+  /** Режим выбора включён — нажатие отмечает строку, а не открывает её. */
+  selecting?: boolean;
+  onPress?: () => void;
+  onLongPress?: () => void;
 }) {
   const { toggleReminderDone } = useStore();
   const { s, colors } = useTheme();
@@ -40,10 +50,16 @@ export function ReminderRow({
 
   return (
     <ListRow
-      onPress={() => router.push({ pathname: '/reminder/edit', params: { id: reminder.id } })}
+      onPress={onPress ?? (() => router.push({ pathname: '/reminder/edit', params: { id: reminder.id } }))}
+      onLongPress={onLongPress}
+      style={selected ? { backgroundColor: colors.soft } : undefined}
       leading={
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingLeft: 6 }}>
-          <Checkbox checked={reminder.done} done onPress={() => toggleReminderDone(reminder.id)} />
+          {selecting ? (
+            <Checkbox checked={selected} onPress={onPress ?? (() => {})} />
+          ) : (
+            <Checkbox checked={reminder.done} done onPress={() => toggleReminderDone(reminder.id)} />
+          )}
           {showFriend && (friend ? <Avatar friend={friend} size={30} /> : <IconCircle icon="person" size={30} />)}
         </View>
       }

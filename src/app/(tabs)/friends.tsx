@@ -1,11 +1,11 @@
 import { router } from 'expo-router';
 import { useMemo, useRef, useState, type ReactNode } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, Text, View } from 'react-native';
 import ReanimatedSwipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/Avatar';
 import { Icon } from '@/components/Icon';
+import { SelectionBar } from '@/components/SelectionBar';
 import { TelegramImportCard } from '@/components/TelegramImportCard';
 import { Button, Chip, Empty, Fab, GroupedRow, IconButton, ListRow, ScreenHeader, SearchField, Tag, useTheme } from '@/components/ui';
 import { confirm } from '@/lib/confirm';
@@ -141,76 +141,16 @@ export default function FriendsScreen() {
       {selecting && (
         <SelectionBar
           count={selected.size}
-          allFavorite={allFavorite}
-          allMuted={allMuted}
           scrolled={scrolled}
           onClose={clear}
-          onStar={toggleFavorites}
-          onBell={toggleMuted}
-          onDelete={() => remove([...selected])}
+          actions={[
+            { icon: 'star', label: allFavorite ? 'Убрать из избранного' : 'В избранное', color: allFavorite ? colors.accent : undefined, fill: allFavorite ? colors.accent : undefined, onPress: toggleFavorites },
+            { icon: allMuted ? 'bell' : 'bellOff', label: allMuted ? 'Включить уведомления' : 'Выключить уведомления', onPress: toggleMuted },
+            { icon: 'trash', label: 'Удалить выбранных', color: colors.danger, onPress: () => remove([...selected]) },
+          ]}
         />
       )}
       {!selecting && <Fab onPress={() => router.push('/friend/edit')} label="Добавить друга" />}
-    </View>
-  );
-}
-
-/**
- * Панель режима выбора: закрыть, счётчик, «в избранное», уведомления, удалить.
- * Лежит поверх списка на месте заголовка и не уезжает при прокрутке; при прокрутке снизу появляется линия.
- */
-function SelectionBar({
-  count,
-  allFavorite,
-  allMuted,
-  scrolled,
-  onClose,
-  onStar,
-  onBell,
-  onDelete,
-}: {
-  count: number;
-  allFavorite: boolean;
-  allMuted: boolean;
-  scrolled: boolean;
-  onClose: () => void;
-  onStar: () => void;
-  onBell: () => void;
-  onDelete: () => void;
-}) {
-  const { colors, fonts } = useTheme();
-  const insets = useSafeAreaInsets();
-  return (
-    <View
-      style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        backgroundColor: colors.bg,
-        paddingTop: insets.top + 12,
-        paddingBottom: 6,
-        paddingHorizontal: 8,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-        borderBottomWidth: StyleSheet.hairlineWidth,
-        borderBottomColor: scrolled ? colors.hairline : 'transparent',
-      }}
-    >
-      <IconButton icon="close" label="Снять выделение" onPress={onClose} />
-      <Text style={{ fontFamily: fonts.display, fontSize: 24, color: colors.text, flex: 1, paddingLeft: 4 }} accessibilityLabel={`Выбрано: ${count}`}>
-        {count}
-      </Text>
-      <IconButton
-        icon="star"
-        label={allFavorite ? 'Убрать из избранного' : 'В избранное'}
-        color={allFavorite ? colors.accent : undefined}
-        fill={allFavorite ? colors.accent : undefined}
-        onPress={onStar}
-      />
-      <IconButton icon={allMuted ? 'bell' : 'bellOff'} label={allMuted ? 'Включить уведомления' : 'Выключить уведомления'} onPress={onBell} />
-      <IconButton icon="trash" label="Удалить выбранных" color={colors.danger} onPress={onDelete} />
     </View>
   );
 }
