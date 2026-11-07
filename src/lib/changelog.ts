@@ -14,6 +14,11 @@ export interface Release {
  */
 export const CHANGELOG: Release[] = [
   {
+    version: '1.17.1',
+    date: '2026-11-07',
+    items: ['Панель действий в режиме выбора друзей больше не сдвигает список и остаётся сверху при прокрутке.'],
+  },
+  {
     version: '1.17.0',
     date: '2026-11-07',
     items: [

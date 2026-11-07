@@ -119,8 +119,15 @@ const has = (t, s) => t.toLowerCase().includes(s.toLowerCase());
     const row = page.getByText('Мама', { exact: true }).last(); const box = await row.boundingBox();
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await page.mouse.down(); await page.waitForTimeout(700); await page.mouse.up(); await page.waitForTimeout(400);
     let t = await text(); assert(has(t, 'Выбрано: 1') || (await page.getByLabel('Удалить выбранных').count()) > 0, 'режим выбора не включился: ' + t.slice(0, 200));
+    const after = await page.getByText('Мама', { exact: true }).last().boundingBox();
+    assert(Math.abs(after.y - box.y) < 2, `список прыгнул при входе в режим выбора: ${box.y} → ${after.y}`);
     await tap(page.getByText('Игорь Ветров')); await page.waitForTimeout(300);
     assert(await page.getByLabel('Выбрано: 2').count(), 'второй не отметился');
+    // Панель действий липкая: после прокрутки остаётся у верхнего края.
+    await page.mouse.wheel(0, 300); await page.waitForTimeout(400);
+    const bar = await page.getByLabel('Удалить выбранных').boundingBox();
+    assert(bar && bar.y >= 0 && bar.y < 120, 'панель выбора уехала при прокрутке: ' + (bar && bar.y));
+    await page.mouse.wheel(0, -600); await page.waitForTimeout(400);
     await tap(page.getByText('Игорь Ветров')); await page.waitForTimeout(300);
     // Колокольчик: выключить уведомления у Мамы, выделение снимается; затем выделить её снова и удалить.
     await tap(page.getByLabel('Выключить уведомления')); await page.waitForTimeout(400);

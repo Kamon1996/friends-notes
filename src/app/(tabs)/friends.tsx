@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useMemo, useRef, useState, type ReactNode } from 'react';
-import { FlatList, Pressable, Text, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import ReanimatedSwipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -22,6 +22,7 @@ export default function FriendsScreen() {
   // Режим выбора (долгое нажатие на строку): отмеченные друзья, как в Telegram.
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
   const selecting = selected.size > 0;
+  const [scrolled, setScrolled] = useState(false);
   const today = todayISO();
 
   const items = useMemo(() => buildFriendList(data.friends, query, sort, today), [data.friends, query, sort, today]);
@@ -68,19 +69,12 @@ export default function FriendsScreen() {
         extraData={selected}
         contentContainerStyle={{ paddingBottom: 120 }}
         keyboardShouldPersistTaps="handled"
+        onScroll={(e) => setScrolled(e.nativeEvent.contentOffset.y > 2)}
+        scrollEventThrottle={32}
         ListHeaderComponent={
           <>
-            {selecting ? (
-              <SelectionBar
-                count={selected.size}
-                allFavorite={allFavorite}
-                allMuted={allMuted}
-                onClose={clear}
-                onStar={toggleFavorites}
-                onBell={toggleMuted}
-                onDelete={() => remove([...selected])}
-              />
-            ) : (
+            {/* В режиме выбора шапка остаётся на месте, но прячется: панель действий ложится поверх, и список не прыгает. */}
+            <View style={{ opacity: selecting ? 0 : 1, pointerEvents: selecting ? 'none' : 'auto' }} importantForAccessibility={selecting ? 'no-hide-descendants' : 'auto'}>
               <ScreenHeader
                 title="Друзья"
                 subtitle={n ? `${n} ${plural(n, 'человек', 'человека', 'человек')}${inMonth ? ` · ${inMonth} ${plural(inMonth, 'день рождения', 'дня рождения', 'дней рождения')} в ближайший месяц` : ''}` : undefined}
@@ -91,7 +85,7 @@ export default function FriendsScreen() {
                   </>
                 }
               />
-            )}
+            </View>
             {n > 0 && (
               <View style={{ padding: 20, paddingTop: 14, paddingBottom: 16, gap: 10 }}>
                 <SearchField value={query} onChangeText={setQuery} placeholder="Поиск по имени" />
@@ -142,16 +136,32 @@ export default function FriendsScreen() {
           )
         }
       />
+      {selecting && (
+        <SelectionBar
+          count={selected.size}
+          allFavorite={allFavorite}
+          allMuted={allMuted}
+          scrolled={scrolled}
+          onClose={clear}
+          onStar={toggleFavorites}
+          onBell={toggleMuted}
+          onDelete={() => remove([...selected])}
+        />
+      )}
       {!selecting && <Fab onPress={() => router.push('/friend/edit')} label="Добавить друга" />}
     </View>
   );
 }
 
-/** Шапка режима выбора: закрыть, счётчик, «в избранное», уведомления, удалить. */
+/**
+ * Панель режима выбора: закрыть, счётчик, «в избранное», уведомления, удалить.
+ * Лежит поверх списка на месте заголовка и не уезжает при прокрутке; при прокрутке снизу появляется линия.
+ */
 function SelectionBar({
   count,
   allFavorite,
   allMuted,
+  scrolled,
   onClose,
   onStar,
   onBell,
@@ -160,6 +170,7 @@ function SelectionBar({
   count: number;
   allFavorite: boolean;
   allMuted: boolean;
+  scrolled: boolean;
   onClose: () => void;
   onStar: () => void;
   onBell: () => void;
@@ -168,7 +179,23 @@ function SelectionBar({
   const { colors, fonts } = useTheme();
   const insets = useSafeAreaInsets();
   return (
-    <View style={{ paddingTop: insets.top + 8, paddingHorizontal: 8, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+    <View
+      style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: colors.bg,
+        paddingTop: insets.top + 12,
+        paddingBottom: 6,
+        paddingHorizontal: 8,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        borderBottomColor: scrolled ? colors.hairline : 'transparent',
+      }}
+    >
       <IconButton icon="close" label="Снять выделение" onPress={onClose} />
       <Text style={{ fontFamily: fonts.display, fontSize: 24, color: colors.text, flex: 1, paddingLeft: 4 }} accessibilityLabel={`Выбрано: ${count}`}>
         {count}
