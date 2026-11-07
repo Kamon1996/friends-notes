@@ -64,7 +64,8 @@ function Body({ scheme, onSchemeChange }: { scheme: Scheme; onSchemeChange: (s: 
                 accessibilityRole="button"
                 accessibilityLabel={x.a11y}
                 aria-selected={on}
-                style={({ pressed }) => ({ paddingHorizontal: 11, paddingVertical: 6, backgroundColor: on ? colors.text : 'transparent', opacity: pressed ? 0.7 : 1 })}
+                hitSlop={{ top: 8, bottom: 8 }}
+                style={({ pressed }) => ({ paddingHorizontal: 12, paddingVertical: 8, backgroundColor: on ? colors.text : 'transparent', opacity: pressed ? 0.7 : 1 })}
               >
                 <Text style={{ fontFamily: fonts.semibold, fontSize: 12, lineHeight: 16, color: on ? colors.bg : colors.text2 }}>{x.label}</Text>
               </Pressable>

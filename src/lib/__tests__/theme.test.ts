@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { birthdayHint, giftHint, notificationActions } from '../events';
-import { ACCENTS, AVATAR_TINTS, avatarTint, buildColors, initials } from '../theme';
+import { ACCENTS, AVATAR_TINTS, AVATAR_TINTS_DARK, avatarTint, buildColors, initials } from '../theme';
 
 /** Контраст по WCAG — чтобы белый текст на акцентных кнопках читался (AA: не меньше 4.5). */
 function contrast(hexA: string, hexB: string): number {
@@ -41,6 +41,10 @@ test('акценты: текст на кнопке читается в обеи�
     assert.ok(contrast(a.light.tint, a.light.accentText) >= 4.5, `${a.id} chip light`);
   }
   for (const t of AVATAR_TINTS) assert.ok(contrast(t.bg, t.fg) >= 4.5);
+  for (const t of AVATAR_TINTS_DARK) assert.ok(contrast(t.bg, t.fg) >= 4.5, `${t.fg} на ${t.bg}`);
+  assert.equal(AVATAR_TINTS_DARK.length, AVATAR_TINTS.length);
+  // Один человек — один и тот же оттенок в обеих темах.
+  assert.equal(AVATAR_TINTS_DARK.indexOf(avatarTint('Аня Смирнова', 'dark')), AVATAR_TINTS.indexOf(avatarTint('Аня Смирнова')));
 });
 
 test('цвета темы: по умолчанию терракота, тёмная тема меняет бумагу', () => {

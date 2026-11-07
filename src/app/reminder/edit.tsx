@@ -1,11 +1,11 @@
 import { Stack, router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from 'react-native';
+import { useRef, useState, type ComponentRef } from 'react';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from 'react-native';
 
 import { FriendPicker } from '@/components/FriendPicker';
 import { DateField } from '@/components/DateField';
-import { Button, Card, Chip, Field, Label, SectionTitle, SwitchRow, useTheme } from '@/components/ui';
-import { confirm } from '@/lib/confirm';
+import { Button, Card, Chip, Empty, Field, Label, SectionTitle, SwitchRow, useTheme } from '@/components/ui';
+import { confirm, notify } from '@/lib/confirm';
 import { addInterval, formatRepeat, todayISO } from '@/lib/dates';
 import { newId, useStore } from '@/lib/store';
 import type { Advance, Reminder, Repeat, RepeatUnit } from '@/lib/types';
@@ -42,9 +42,24 @@ const sameRepeat = (a: Repeat | null, b: Repeat | null) =>
   a === b || (!!a && !!b && a.every === b.every && a.unit === b.unit);
 
 export default function EditReminderScreen() {
-  const { ready } = useStore();
+  const { ready, data } = useStore();
+  const { id } = useLocalSearchParams<{ id?: string }>();
   // Ждём загрузки данных, иначе при открытии из уведомления форма стартует пустой.
-  return ready ? <ReminderForm /> : null;
+  if (!ready) return null;
+  // Старое уведомление или ссылка на удалённое напоминание — не подсовываем пустую форму «Новое напоминание».
+  if (id && !data.reminders.some((r) => r.id === id)) return <ReminderNotFound />;
+  return <ReminderForm />;
+}
+
+function ReminderNotFound() {
+  return (
+    <>
+      <Stack.Screen options={{ title: 'Напоминание' }} />
+      <Empty icon="bell" title="Напоминание не найдено" text="Возможно, его уже удалили или отметили и убрали.">
+        <Button title="К напоминаниям" variant="secondary" onPress={() => router.replace('/reminders')} style={{ marginTop: 8 }} />
+      </Empty>
+    </>
+  );
 }
 
 function ReminderForm() {
@@ -77,15 +92,31 @@ function ReminderForm() {
     () => !!r.repeat && !REPEAT_PRESETS.some((p) => sameRepeat(p.repeat, r.repeat)),
   );
 
+  // Поля даты и времени, где набранное не совпадает с тем, что сохранится: тогда не сохраняем.
+  const [invalid, setInvalid] = useState<{ date?: boolean; time?: boolean }>({});
+  const [attempted, setAttempted] = useState(false);
+  const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
+  const whenY = useRef(0);
+  const markInvalid = (key: 'date' | 'time') => (bad: boolean) => setInvalid((prev) => (!!prev[key] === bad ? prev : { ...prev, [key]: bad }));
+
   const friend = data.friends.find((f) => f.id === r.friendId);
   const templates = r.friendId ? FRIEND_TEMPLATES : PERSONAL_TEMPLATES;
 
   const save = () => {
     if (!r.title.trim()) {
-      Alert.alert('Что напомнить?', 'Введи текст напоминания.');
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
+      notify('Что напомнить?', 'Введи текст напоминания.');
       return;
     }
-    saveReminder({ ...r, title: r.title.trim() });
+    if (invalid.date || invalid.time) {
+      setAttempted(true);
+      scrollRef.current?.scrollTo({ y: Math.max(0, whenY.current - 16), animated: true });
+      notify(invalid.date ? 'Проверь дату' : 'Проверь время', 'Такой даты или времени нет, либо они не дописаны. Поправь, и напоминание сохранится.');
+      return;
+    }
+    // Новая дата или другой повтор — новая серия: старый якорь больше не нужен.
+    const sameSeries = !!existing && existing.date === r.date && sameRepeat(existing.repeat, r.repeat);
+    saveReminder({ ...r, title: r.title.trim(), anchor: sameSeries ? r.anchor : undefined });
     router.back();
   };
 
@@ -102,12 +133,12 @@ function ReminderForm() {
           title: existing ? 'Напоминание' : 'Новое напоминание',
           headerRight: () => (
             <Pressable onPress={save} hitSlop={10} style={{ paddingHorizontal: Platform.OS === 'web' ? 16 : 4, minHeight: 44, justifyContent: 'center' }}>
-              <Text style={{ color: colors.accent, fontSize: 16, fontFamily: fonts.semibold }}>Готово</Text>
+              <Text style={{ color: colors.accent, fontSize: 16, fontFamily: fonts.semibold }}>Сохранить</Text>
             </Pressable>
           ),
         }}
       />
-      <ScrollView style={s.screen} contentContainerStyle={[s.content, { gap: 0 }]} keyboardShouldPersistTaps="handled">
+      <ScrollView ref={scrollRef} style={s.screen} contentContainerStyle={[s.content, { gap: 0 }]} keyboardShouldPersistTaps="handled">
         <Field
           label="Что сделать"
           value={r.title}
@@ -131,17 +162,19 @@ function ReminderForm() {
           <FriendPicker friends={data.friends} value={r.friendId} onChange={(id) => set('friendId', id)} />
         </View>
 
-        <View style={stackDateTime ? undefined : { flexDirection: 'row', gap: 10 }}>
+        <View onLayout={(e) => (whenY.current = e.nativeEvent.layout.y)} style={stackDateTime ? undefined : { flexDirection: 'row', gap: 10 }}>
           <View style={stackDateTime ? undefined : { flex: 4 }}>
             <DateField
               mode="date"
               label={r.repeat ? 'Ближайший раз' : 'Дата или дедлайн'}
               value={r.date}
               onChange={(v) => set('date', v)}
+              showIncomplete={attempted}
+              onInvalidChange={markInvalid('date')}
             />
           </View>
           <View style={stackDateTime ? undefined : { flex: 3 }}>
-            <DateField mode="time" label="Время" value={r.time} onChange={(v) => set('time', v)} />
+            <DateField mode="time" label="Время" value={r.time} onChange={(v) => set('time', v)} showIncomplete={attempted} onInvalidChange={markInvalid('time')} />
           </View>
         </View>
         <Text style={[s.caption, { marginTop: -8, marginBottom: 14, paddingHorizontal: 4 }]}>Вводи цифрами — точки подставятся сами.</Text>

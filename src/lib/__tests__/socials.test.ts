@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { NETWORKS, extractLinks, linkFromInput, linkSubtitle, linkTitle, mergeLinks, parseSocialInput, searchNetworks, siteLabel } from '../socials';
+import { NETWORKS, extractLinks, isWebUrl, linkFromInput, linkSubtitle, linkTitle, mergeLinks, parseSocialInput, searchNetworks, siteLabel } from '../socials';
 
 const ids = () => {
   let n = 0;
@@ -84,4 +84,13 @@ test('каталог: уникальные id и домены, поиск по �
   assert.ok(searchNetworks('одно').some((n) => n.id === 'ok'));
   assert.ok(searchNetworks('t.me').some((n) => n.id === 'telegram'));
   assert.equal(searchNetworks('').length, NETWORKS.length);
+});
+
+test('в соцсети и сайты попадают только веб-адреса: чужие схемы из контактов отбрасываются', () => {
+  assert.equal(parseSocialInput('someapp://evil.example/x').kind, 'invalid');
+  assert.equal(parseSocialInput('intent://evil.example/#Intent;end').kind, 'invalid');
+  assert.equal(parseSocialInput('javascript://evil.example/%0aalert(1)').kind, 'invalid');
+  assert.equal(parseSocialInput('http://kattysings.ru').kind, 'site');
+  assert.equal(parseSocialInput('kattysings.ru').kind, 'site');
+  assert.ok(isWebUrl('https://vk.com/x') && isWebUrl('HTTP://a.ru') && !isWebUrl('tel:+7999') && !isWebUrl('content://x/y'));
 });

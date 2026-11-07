@@ -150,11 +150,18 @@ export const TOP_NETWORKS = NETWORKS.filter((n) => n.top);
 function splitUrl(raw: string): { url: string; host: string; path: string } | null {
   let s = raw.trim();
   if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(s)) s = `https://${s}`;
+  // Только веб-адреса: «someapp://…» из поля «сайт» в контактах не должен становиться ссылкой, которая откроет чужое приложение.
+  if (!isWebUrl(s)) return null;
   const m = /^[a-z][a-z0-9+.-]*:\/\/([^/?#]+)([^?#]*)/i.exec(s);
   if (!m) return null;
   const host = m[1].replace(/^.*@/, '').replace(/:\d+$/, '').toLowerCase();
   if (!/^([a-z0-9_-]+\.)+[a-z]{2,}$/.test(host)) return null;
   return { url: s, host, path: m[2] || '/' };
+}
+
+/** Адрес можно открыть как страницу в браузере: только http и https. */
+export function isWebUrl(url: string): boolean {
+  return /^https?:\/\/[^\s/?#]+/i.test(url.trim());
 }
 
 const stripWww = (host: string) => host.replace(/^(www|m|mobile)\./, '');
@@ -311,7 +318,20 @@ export function extractLinks(text: string, idFor: () => string, source: SocialLi
   const links = found.sort((a, b) => a.pos - b.pos).map((f) => f.link);
   // «inst:» без ника после удалённой ссылки — просто мусор.
   rest = rest.replace(DANGLING_LABEL, (_m, before: string) => before);
-  rest = rest.replace(/[ \t]+/g, ' ').replace(/ ?\n ?/g, '\n').trim();
+  rest = rest
+    .split('\n')
+    .map((line) =>
+      line
+        .replace(/[ \t]+/g, ' ')
+        // Разделители, между которыми стояли ссылки («Фотограф · · ·»), сводим к одному…
+        .replace(/ ?([·•|,;/–—]) ?(?:[·•|,;/–—] ?)+/g, (_m, sep: string) => (sep === ',' || sep === ';' ? `${sep} ` : ` ${sep} `))
+        // …а по краям строки они не нужны вовсе.
+        .replace(/^[\s·•|,;/–—-]+|[\s·•|,;/–—-]+$/g, ''),
+    )
+    // Строка без букв и цифр («📸» от вырезанной ссылки) — украшение, а не текст.
+    .filter((line) => /[\p{L}\p{N}]/u.test(line))
+    .join('\n')
+    .trim();
   if (!/[\p{L}\p{N}]/u.test(rest)) rest = '';
   return { links: mergeLinks(links), rest };
 }
@@ -329,12 +349,13 @@ export function networkNames(n: Network): string[] {
 export function searchNetworks(query: string): Network[] {
   const q = prepareQuery(query);
   if (!q) return NETWORKS;
-  const exact: Network[] = [];
-  const rest: Network[] = [];
-  for (const n of NETWORKS) {
-    const names = networkNames(n);
-    if (names.includes(q.raw)) exact.push(n);
-    else if (names.some((x) => x.includes(q.raw)) || matchesName(n.name, q) || (n.aliases ?? []).some((a) => matchesName(a, q))) rest.push(n);
-  }
+  const exact = NETWORKS.filter((n) => networkNames(n).includes(q.raw));
+  // Запрос уже совпал с названием или сокращением («вк») — другую раскладку не подмешиваем («вк» → «dr» → Dribbble).
+  const fuzzy = exact.length ? { ...q, variants: q.variants.slice(0, 1) } : q;
+  const rest = NETWORKS.filter(
+    (n) =>
+      !exact.includes(n) &&
+      (networkNames(n).some((x) => x.includes(q.raw)) || matchesName(n.name, fuzzy) || (n.aliases ?? []).some((a) => matchesName(a, fuzzy))),
+  );
   return [...exact, ...rest];
 }

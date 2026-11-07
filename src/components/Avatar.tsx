@@ -3,6 +3,7 @@ import { Image, Text, View } from 'react-native';
 
 import { avatarTint, fonts, initials } from '@/lib/theme';
 import { Icon } from './Icon';
+import { useTheme } from './ui';
 import type { Friend } from '@/lib/types';
 
 /** Фото из контактов, а без него — инициалы серифом на мягком оттенке, выбранном по имени. */
@@ -19,7 +20,8 @@ export function Avatar({
   fg?: string;
 }) {
   const [failed, setFailed] = useState(false);
-  const tint = avatarTint(friend.name);
+  const { scheme } = useTheme();
+  const tint = avatarTint(friend.name, scheme);
   const box = {
     width: size,
     height: size,

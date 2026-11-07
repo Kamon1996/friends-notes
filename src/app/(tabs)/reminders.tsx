@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useMemo, useRef, useState, type ReactNode } from 'react';
-import { FlatList, Pressable, Text, View } from 'react-native';
+import { FlatList, Pressable, ScrollView, Text, View } from 'react-native';
 import ReanimatedSwipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 
 import { Icon } from '@/components/Icon';
@@ -115,11 +115,12 @@ export default function RemindersScreen() {
                 subtitle={active.length ? `${active.length} ${plural(active.length, 'активное', 'активных', 'активных')}${todayCount ? ` · ${todayCount} сегодня` : ''}` : undefined}
               />
             </View>
-            <View style={[s.chips, { padding: 20, paddingTop: 14, paddingBottom: 8 }]}>
+            {/* Фильтры одной строкой с прокруткой: не занимают полэкрана над списком. */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 20, paddingTop: 14, paddingBottom: 8 }}>
               {FILTERS.map((f) => (
                 <Chip key={f.key} label={f.label} selected={filter === f.key} onPress={() => setFilter(f.key)} />
               ))}
-            </View>
+            </ScrollView>
           </>
         }
         renderItem={({ item }) =>

@@ -5,7 +5,8 @@ import { AppState } from 'react-native';
 import { cleanupAvatars, deleteOwnedFiles } from './avatars';
 import { completeReminder } from './events';
 import { syncNotifications } from './notifications';
-import { DEFAULT_SETTINGS, EMPTY_DATA, type AppData, type Friend, type Reminder, type Settings } from './types';
+import { parseStored } from './storage';
+import { EMPTY_DATA, type AppData, type Friend, type Reminder, type Settings } from './types';
 
 const STORAGE_KEY = 'friends-notes/data/v1';
 
@@ -40,24 +41,34 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     dataRef.current = data;
   }, [data]);
 
+  // Если прочитать хранилище не удалось, ничего не записываем до следующего запуска: иначе пустые данные затрут настоящие.
+  const [canPersist, setCanPersist] = useState(true);
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY)
-      .then((raw) => {
-        if (!raw) return;
-        const parsed = JSON.parse(raw) as AppData;
-        setData({ ...EMPTY_DATA, ...parsed, settings: { ...DEFAULT_SETTINGS, ...parsed.settings } });
-      })
-      .catch((e) => console.warn('Не удалось загрузить данные', e))
-      .finally(() => setReady(true));
+    (async () => {
+      let raw: string | null;
+      try {
+        raw = await AsyncStorage.getItem(STORAGE_KEY);
+      } catch (e) {
+        console.warn('Не удалось прочитать данные', e);
+        setCanPersist(false);
+        return;
+      }
+      const { data: loaded, broken } = parseStored(raw);
+      if (broken && raw !== null) {
+        // Разобрать нельзя — откладываем как есть в резервную копию, а не теряем.
+        await AsyncStorage.setItem(`${STORAGE_KEY}.broken-${Date.now()}`, raw).catch(() => setCanPersist(false));
+      }
+      if (loaded) setData(loaded);
+    })().finally(() => setReady(true));
   }, []);
 
   // Сохраняем и перепланируем уведомления после каждого изменения.
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || !canPersist) return;
     AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(data)).catch((e) => console.warn('Не удалось сохранить', e));
     const t = setTimeout(() => syncNotifications(data), 400);
     return () => clearTimeout(t);
-  }, [data, ready]);
+  }, [data, ready, canPersist]);
 
   // При возврате в приложение — пересчитываем окно уведомлений (их число ограничено).
   useEffect(() => {

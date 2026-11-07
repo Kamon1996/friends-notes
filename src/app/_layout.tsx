@@ -69,6 +69,7 @@ function AppShell() {
         <Stack.Screen name="telegram" options={{ presentation: 'modal', title: 'Импорт из Telegram' }} />
         <Stack.Screen name="diagnostics" options={{ title: 'Сообщить о проблеме' }} />
         <Stack.Screen name="whats-new" options={{ title: 'Что нового' }} />
+        <Stack.Screen name="+not-found" options={{ title: 'Не нашлось' }} />
       </Stack>
       <WhatsNewSheet />
       <CrashReportsGate />

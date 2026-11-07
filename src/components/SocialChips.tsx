@@ -2,7 +2,7 @@ import * as Clipboard from 'expo-clipboard';
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
-import { linkSubtitle, linkTitle } from '@/lib/socials';
+import { isWebUrl, linkSubtitle, linkTitle } from '@/lib/socials';
 import type { SocialLink } from '@/lib/types';
 import { openExternal } from './ContactButtons';
 import { Icon } from './Icon';
@@ -14,7 +14,7 @@ import { useTheme } from './ui';
  * у сети без ссылок (WeChat) нажатие копирует ник. Пунктирный чип в конце — добавить.
  */
 export function SocialChips({ links, onAdd }: { links: SocialLink[]; onAdd?: () => void }) {
-  const { s, colors } = useTheme();
+  const { s, colors, fonts } = useTheme();
   const [toast, setToast] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(
@@ -38,10 +38,11 @@ export function SocialChips({ links, onAdd }: { links: SocialLink[]; onAdd?: () 
       flash('Не получилось скопировать');
     }
   };
-  const open = (l: SocialLink) => (l.url ? openExternal(l.url, linkTitle(l)) : copy(l));
+  // Открываем только веб-адреса; что-то другое (например, из старых данных) — копируем, а не запускаем.
+  const open = (l: SocialLink) => (l.url && isWebUrl(l.url) ? openExternal(l.url, linkTitle(l)) : copy(l));
 
   return (
-    <View style={{ gap: 6 }}>
+    <View>
       <View style={s.chips}>
         {links.map((l) => (
           <Pressable
@@ -71,7 +72,16 @@ export function SocialChips({ links, onAdd }: { links: SocialLink[]; onAdd?: () 
           </Pressable>
         )}
       </View>
-      {toast && <Text style={[s.caption, { paddingHorizontal: 4 }]}>{toast}</Text>}
+      {/* Короткое сообщение поверх подписи «Соцсети», а не строкой под чипами: карточка ниже не прыгает и не закрывает его. */}
+      {toast && (
+        <View
+          pointerEvents="none"
+          accessibilityLiveRegion="polite"
+          style={{ position: 'absolute', left: 0, right: 0, top: -40, alignItems: 'center' }}
+        >
+          <Text style={{ backgroundColor: colors.banner, color: colors.onBanner, fontFamily: fonts.medium, fontSize: 13, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, overflow: 'hidden' }}>{toast}</Text>
+        </View>
+      )}
     </View>
   );
 }

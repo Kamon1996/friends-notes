@@ -45,7 +45,8 @@ export function TodayCard({ friend, events }: { friend: Friend; events: TodayEve
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
         <Avatar friend={friend} size={48} bg={colors.card} fg={colors.accentText} />
         <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
-          <Text style={{ fontFamily: fonts.display, fontSize: 20, lineHeight: 24, color: colors.text }} numberOfLines={1}>
+          {/* Имя — главное на карточке: на узком экране переносится на вторую строку, а не обрезается. */}
+          <Text style={{ fontFamily: fonts.display, fontSize: 20, lineHeight: 24, color: colors.text }} numberOfLines={2}>
             {friend.name}
           </Text>
           {lines.map((line, i) => (

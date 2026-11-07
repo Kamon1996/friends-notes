@@ -75,6 +75,11 @@ export interface Reminder {
   date: ISODate;
   time: TimeOfDay;
   repeat: Repeat | null;
+  /**
+   * С какой даты считается серия повторяющегося напоминания. `date` после «сделано» переезжает на следующий раз,
+   * а отсчёт ведётся отсюда, чтобы «каждое 31-е» после февраля вернулось на 31-е. Нет — значит с `date`.
+   */
+  anchor?: ISODate;
   advance: Advance;
   done: boolean;
   createdAt: number;

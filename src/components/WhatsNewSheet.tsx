@@ -75,9 +75,9 @@ function SheetBody({ releases, onClose, onHistory }: { releases: Release[]; onCl
           <ReleaseNotes key={r.version} release={r} compact />
         ))}
       </ScrollView>
-      <View style={{ paddingHorizontal: 20, gap: 12 }}>
+      <View style={{ paddingHorizontal: 20, gap: 4 }}>
         <Button title="Понятно" onPress={onClose} />
-        <Pressable onPress={onHistory} hitSlop={6} accessibilityRole="button" style={({ pressed }) => ({ alignSelf: 'center', opacity: pressed ? 0.6 : 1 })}>
+        <Pressable onPress={onHistory} accessibilityRole="button" style={({ pressed }) => ({ alignSelf: 'center', minHeight: 44, paddingHorizontal: 16, justifyContent: 'center', opacity: pressed ? 0.6 : 1 })}>
           <Text style={[s.muted, { color: colors.accentText, fontFamily: fonts.medium }]}>Вся история изменений →</Text>
         </Pressable>
       </View>

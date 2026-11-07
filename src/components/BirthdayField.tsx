@@ -1,7 +1,7 @@
-import { useRef, useState, type ComponentRef } from 'react';
+import { useEffect, useEffectEvent, useRef, useState, type ComponentRef } from 'react';
 import { Pressable, Text, TextInput, View, type TextInputKeyPressEvent } from 'react-native';
 
-import { EMPTY_PARTS, composeDate, partsErrors, splitDate, type DateParts } from '@/lib/birthday';
+import { EMPTY_PARTS, composeDate, dateIssue, partsErrors, splitDate, type DateParts } from '@/lib/birthday';
 import type { ISODate } from '@/lib/types';
 import { DatePickerButton } from './DatePickerButton';
 import { Icon } from './Icon';
@@ -18,11 +18,20 @@ export function BirthdayField({
   value,
   onChange,
   hint = 'Год можно не указывать — тогда напомним без возраста.',
+  required = false,
+  showIncomplete = false,
+  onInvalidChange,
 }: {
   label: string;
   value: ISODate | null;
   onChange: (v: ISODate | null) => void;
   hint?: string;
+  /** Пустая дата — тоже проблема (у важной даты с названием). */
+  required?: boolean;
+  /** Показывать и недописанную дату как ошибку — после попытки сохранить. */
+  showIncomplete?: boolean;
+  /** Набранное нельзя сохранить: форма не должна сохраняться молча с другой датой. */
+  onInvalidChange?: (invalid: boolean) => void;
 }) {
   const { s, colors } = useTheme();
   const [parts, setParts] = useState<DateParts>(() => splitDate(value));
@@ -36,8 +45,16 @@ export function BirthdayField({
   const monthRef = useRef<ComponentRef<typeof TextInput>>(null);
   const yearRef = useRef<ComponentRef<typeof TextInput>>(null);
   const errors = partsErrors(parts);
-  const hasError = errors.day || errors.month || errors.year;
+  const issue = dateIssue(parts, required);
+  const shownIssue = issue && (issue.hard || showIncomplete) ? issue : null;
   const filled = !!(parts.day || parts.month || parts.year);
+  const invalid = !!issue;
+  const report = useEffectEvent((bad: boolean) => onInvalidChange?.(bad));
+  useEffect(() => {
+    report(invalid);
+  }, [invalid]);
+  // Поле убрали (удалили важную дату) — его ошибка больше не мешает сохранению.
+  useEffect(() => () => report(false), []);
 
   const commit = (next: DateParts) => {
     setParts(next);
@@ -74,7 +91,7 @@ export function BirthdayField({
           maxLength={2}
           maxFontSizeMultiplier={1.3}
           accessibilityLabel="День"
-          style={[...cellStyle(errors.day), { width: 64 }]}
+          style={[...cellStyle(errors.day || (!!shownIssue && !parts.day)), { width: 64 }]}
         />
         <TextInput
           ref={monthRef}
@@ -93,7 +110,7 @@ export function BirthdayField({
           maxLength={2}
           maxFontSizeMultiplier={1.3}
           accessibilityLabel="Месяц"
-          style={[...cellStyle(errors.month), { width: 64 }]}
+          style={[...cellStyle(errors.month || (!!shownIssue && !parts.month)), { width: 64 }]}
         />
         <View style={{ flex: 1, minWidth: 0 }}>
           <TextInput
@@ -109,7 +126,7 @@ export function BirthdayField({
             maxLength={4}
             maxFontSizeMultiplier={1.3}
             accessibilityLabel="Год"
-            style={[...cellStyle(errors.year), filled && { paddingRight: 34 }]}
+            style={[...cellStyle(errors.year || (!!shownIssue && parts.year.length > 0 && parts.year.length < 4)), filled && { paddingRight: 34 }]}
           />
           {filled && (
             <Pressable
@@ -124,7 +141,7 @@ export function BirthdayField({
         </View>
         <DatePickerButton value={value} onChange={(iso) => onChange(iso)} />
       </View>
-      <Text style={[s.caption, { marginTop: 6, paddingHorizontal: 4 }, hasError && { color: colors.danger }]}>{hasError ? 'Такой даты нет — проверь число и месяц.' : hint}</Text>
+      <Text style={[s.caption, { marginTop: 6, paddingHorizontal: 4 }, shownIssue && { color: colors.danger }]}>{shownIssue ? shownIssue.message : hint}</Text>
     </View>
   );
 }

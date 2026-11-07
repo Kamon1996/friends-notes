@@ -106,7 +106,7 @@ describe('лента «Скоро»', () => {
     assert.deepEqual(overdue, { 'r-y': true, 'r-t': false });
   });
 
-  test('29 февраля в невисокосный год: праздник 28-го и возраст по годам', { todo: 'известная ошибка: показывает на год меньше' }, () => {
+  test('29 февраля в невисокосный год: праздник 28-го и возраст по годам', () => {
     const [item] = upcomingItems(appData({ friends: [friend({ birthday: '2000-02-29' })] }), 60, '2027-02-20');
     assert.equal(item.date, '2027-02-28');
     assert.ok(item.kind === 'birthday');
@@ -133,12 +133,23 @@ describe('«сделано» у повторяющегося напоминан�
     assert.deepEqual([done.done, done.date], [true, '2027-03-20']);
   });
 
-  test('ежемесячное на 31-е после февраля возвращается на 31-е', { todo: 'известная ошибка: после февраля остаётся 28-е' }, () => {
+  test('ежемесячное на 31-е после февраля возвращается на 31-е', () => {
     let r = reminder({ date: '2027-01-31', repeat: { every: 1, unit: 'month' } });
     r = completeReminder(r, new Date(2027, 1, 1, 12));
     assert.equal(r.date, '2027-02-28');
     r = completeReminder(r, new Date(2027, 2, 1, 12));
     assert.equal(r.date, '2027-03-31');
+  });
+
+  test('уведомления серии после февраля тоже идут 31-го', () => {
+    const r = reminder({ date: '2027-02-28', anchor: '2027-01-31', repeat: { every: 1, unit: 'month' } });
+    const plan = planNotifications(appData({ reminders: [r] }), new Date(2027, 1, 1, 12));
+    assert.deepEqual(plan.slice(0, 3).map((n) => toISODate(n.at)), ['2027-02-28', '2027-03-31', '2027-04-30']);
+  });
+
+  test('якорь позже ближайшего раза (дату передвинули) не мешает: считаем от ближайшего', () => {
+    const r = reminder({ date: '2027-03-05', anchor: '2027-04-10', repeat: { every: 1, unit: 'month' } });
+    assert.equal(completeReminder(r, new Date(2027, 2, 1, 12)).date, '2027-04-05');
   });
 });
 

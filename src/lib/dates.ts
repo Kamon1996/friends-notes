@@ -106,14 +106,14 @@ export function daysBetween(a: ISODate, b: ISODate): number {
   return Math.round(ms / 86_400_000);
 }
 
+/**
+ * Сколько полных лет исполнилось к дате `on`. Годовщина считается по `sameDayInYear`, поэтому у родившихся
+ * 29 февраля в невисокосный год новый возраст наступает 28 февраля — в тот же день, когда приложение их поздравляет.
+ */
 export function ageOn(birthday: ISODate, on: ISODate): number {
-  const b = parseISODate(birthday);
-  const o = parseISODate(on);
-  let age = o.getFullYear() - b.getFullYear();
-  if (o.getMonth() < b.getMonth() || (o.getMonth() === b.getMonth() && o.getDate() < b.getDate())) {
-    age--;
-  }
-  return age;
+  const year = parseISODate(on).getFullYear();
+  const age = year - parseISODate(birthday).getFullYear();
+  return on < sameDayInYear(birthday, year) ? age - 1 : age;
 }
 
 export function formatDate(date: ISODate, withYear = true): string {
@@ -127,10 +127,16 @@ export function formatDateShort(date: ISODate): string {
   return `${d.getDate()} ${MONTHS_GEN[d.getMonth()].slice(0, 3)}, ${WEEKDAYS_SHORT[d.getDay()]}`;
 }
 
-/** «вт, 9 ноя» — для правого края строк. */
-export function formatDayShort(date: ISODate): string {
+/**
+ * «вт, 9 ноя» — для правого края строк. Год добавляется, если дата в другом году и уже прошла
+ * или ещё далеко (больше полугода): «ср, 1 янв 2020» не спутать с ближайшим 1 января.
+ */
+export function formatDayShort(date: ISODate, today: ISODate = todayISO()): string {
   const d = parseISODate(date);
-  return `${WEEKDAYS_SHORT[d.getDay()]}, ${d.getDate()} ${MONTHS_GEN[d.getMonth()].slice(0, 3)}`;
+  const base = `${WEEKDAYS_SHORT[d.getDay()]}, ${d.getDate()} ${MONTHS_GEN[d.getMonth()].slice(0, 3)}`;
+  const otherYear = date.slice(0, 4) !== today.slice(0, 4);
+  const diff = daysBetween(today, date);
+  return otherYear && (diff < 0 || diff > 183) ? `${base} ${d.getFullYear()}` : base;
 }
 
 /** «12 апр 1997» / «12 апр» — компактная дата для плотных строк. */

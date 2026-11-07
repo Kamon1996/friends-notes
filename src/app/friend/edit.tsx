@@ -1,6 +1,6 @@
 import { Stack, router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { useRef, useState, type ComponentRef } from 'react';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
 import { AvatarPicker } from '@/components/AvatarPicker';
 import { BirthdayField } from '@/components/BirthdayField';
@@ -8,8 +8,7 @@ import { NetworkBadge } from '@/components/NetworkBadge';
 import { SocialLinkSheet } from '@/components/SocialLinkSheet';
 import { Button, Card, Chip, Field, IconButton, Label, ListRow, SectionTitle, SwitchRow, useTheme } from '@/components/ui';
 import { cleanupAvatars, deleteOwnedFiles } from '@/lib/avatars';
-import { todayISO } from '@/lib/dates';
-import { confirm } from '@/lib/confirm';
+import { confirm, notify } from '@/lib/confirm';
 import { linkSubtitle, linkTitle, mergeLinks } from '@/lib/socials';
 import { newId, useFriend, useStore } from '@/lib/store';
 import type { Friend, ImportantDate } from '@/lib/types';
@@ -41,13 +40,34 @@ function FriendForm() {
   const [f, setF] = useState<Friend>(() => existing ?? blankFriend());
   const [addSocial, setAddSocial] = useState(false);
   const set = <K extends keyof Friend>(key: K, value: Friend[K]) => setF((prev) => ({ ...prev, [key]: value }));
+  // Поля дат, где набранное нельзя сохранить, и где они на экране — чтобы не сохранить молча другую дату и показать, что поправить.
+  const [invalid, setInvalid] = useState<Record<string, boolean>>({});
+  const [attempted, setAttempted] = useState(false);
+  const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
+  const positions = useRef<Record<string, number>>({});
+  const markInvalid = (key: string) => (bad: boolean) => setInvalid((prev) => (!!prev[key] === bad ? prev : { ...prev, [key]: bad }));
 
   const updateDate = (dateId: string, patch: Partial<ImportantDate>) =>
     set('dates', f.dates.map((d) => (d.id === dateId ? { ...d, ...patch } : d)));
 
   const save = () => {
     if (!f.name.trim()) {
-      Alert.alert('Как зовут друга?', 'Введи имя, чтобы сохранить.');
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
+      notify('Как зовут друга?', 'Введи имя, чтобы сохранить.');
+      return;
+    }
+    const bad = Object.keys(invalid).filter((k) => invalid[k]);
+    const untitled = f.dates.filter((d) => d.date && !d.title.trim()).map((d) => `date-${d.id}`);
+    if (bad.length || untitled.length) {
+      setAttempted(true);
+      const ys = [...bad, ...untitled].map((k) => positions.current[k]).filter((y): y is number => y !== undefined);
+      if (ys.length) scrollRef.current?.scrollTo({ y: Math.max(0, Math.min(...ys) - 16), animated: true });
+      notify(
+        'Проверь даты',
+        bad.includes('birthday')
+          ? 'В дне рождения такой даты нет или она не дописана. Поправь её или очисти поле.'
+          : 'У важной даты не хватает названия или числа. Допиши её или удали.',
+      );
       return;
     }
     saveFriend({ ...f, name: f.name.trim(), dates: f.dates.filter((d) => d.title.trim() && d.date) });
@@ -58,7 +78,7 @@ function FriendForm() {
   };
 
   const remove = async () => {
-    if (!(await confirm(`Удалить ${f.name}?`, 'Вместе с другом удалятся и его напоминания.'))) return;
+    if (!(await confirm(`Удалить «${f.name}»?`, 'Вместе с другом удалятся и его напоминания.'))) return;
     deleteFriend(f.id);
     router.dismissTo('/friends');
   };
@@ -70,12 +90,12 @@ function FriendForm() {
           title: existing ? 'Редактировать' : 'Новый друг',
           headerRight: () => (
             <Pressable onPress={save} hitSlop={10} style={{ paddingHorizontal: Platform.OS === 'web' ? 16 : 4, minHeight: 44, justifyContent: 'center' }}>
-              <Text style={{ color: colors.accent, fontSize: 16, fontFamily: fonts.semibold }}>Готово</Text>
+              <Text style={{ color: colors.accent, fontSize: 16, fontFamily: fonts.semibold }}>Сохранить</Text>
             </Pressable>
           ),
         }}
       />
-      <ScrollView style={s.screen} contentContainerStyle={[s.content, { gap: 0 }]} keyboardShouldPersistTaps="handled">
+      <ScrollView ref={scrollRef} style={s.screen} contentContainerStyle={[s.content, { gap: 0 }]} keyboardShouldPersistTaps="handled">
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 14 }}>
           <AvatarPicker
             friend={{ id: f.id, name: f.name || '?', phone: f.phone, photoUri: f.photoUri, thumbUri: f.thumbUri }}
@@ -90,7 +110,15 @@ function FriendForm() {
           {f.photoUri ? 'Нажми на фото, чтобы заменить или убрать.' : 'Нажми на кружок, чтобы добавить фото. Без фото — инициалы.'}
         </Text>
 
-        <BirthdayField label="День рождения" value={f.birthday} onChange={(v) => set('birthday', v)} />
+        <View onLayout={(e) => (positions.current.birthday = e.nativeEvent.layout.y)}>
+          <BirthdayField
+            label="День рождения"
+            value={f.birthday}
+            onChange={(v) => set('birthday', v)}
+            showIncomplete={attempted}
+            onInvalidChange={markInvalid('birthday')}
+          />
+        </View>
 
         <Field label="Телефон" value={f.phone} onChangeText={(v) => set('phone', v)} placeholder="+7…" keyboardType="phone-pad" />
         <Card style={{ paddingVertical: 4, marginBottom: 14 }}>
@@ -129,19 +157,32 @@ function FriendForm() {
 
         <SectionTitle style={{ marginBottom: 6 }}>Важные даты</SectionTitle>
         {f.dates.map((d) => (
-          <Card key={d.id} style={{ paddingBottom: 4, marginBottom: 10 }}>
+          <View key={d.id} onLayout={(e) => (positions.current[`date-${d.id}`] = e.nativeEvent.layout.y)}>
+          <Card style={{ paddingBottom: 4, marginBottom: 10 }}>
             <Label>Название</Label>
             <TextInput
               value={d.title}
               onChangeText={(v) => updateDate(d.id, { title: v })}
-              placeholder="Годовщина знакомства"
+              placeholder="Например, годовщина знакомства"
               placeholderTextColor={colors.placeholder}
-              style={[s.input, { marginBottom: 14 }]}
+              style={[s.input, { marginBottom: attempted && d.date && !d.title.trim() ? 4 : 14 }, attempted && !!d.date && !d.title.trim() && { borderColor: colors.danger, borderWidth: 1.5 }]}
             />
-            <BirthdayField label="Дата" value={d.date || null} onChange={(v) => updateDate(d.id, { date: v ?? '' })} hint="Год можно не указывать." />
+            {attempted && !!d.date && !d.title.trim() && (
+              <Text style={[s.caption, { color: colors.danger, marginBottom: 14, paddingHorizontal: 4 }]}>Назови дату, например «Свадьба».</Text>
+            )}
+            <BirthdayField
+              label="Дата"
+              value={d.date || null}
+              onChange={(v) => updateDate(d.id, { date: v ?? '' })}
+              hint="Год можно не указывать."
+              required={!!d.title.trim()}
+              showIncomplete={attempted}
+              onInvalidChange={markInvalid(`date-${d.id}`)}
+            />
             <SwitchRow label="Повторять каждый год" value={d.yearly} onChange={(v) => updateDate(d.id, { yearly: v })} />
             <Button title="Удалить дату" variant="danger" onPress={() => set('dates', f.dates.filter((x) => x.id !== d.id))} />
           </Card>
+          </View>
         ))}
         <View style={s.chips}>
           {['Годовщина знакомства', 'Свадьба', 'День рождения ребёнка'].map((t) => (
@@ -149,13 +190,13 @@ function FriendForm() {
               key={t}
               label={t}
               icon="plus"
-              onPress={() => set('dates', [...f.dates, { id: newId(), title: t, date: todayISO(), yearly: true }])}
+              onPress={() => set('dates', [...f.dates, { id: newId(), title: t, date: '', yearly: true }])}
             />
           ))}
           <Chip
             label="Своя дата"
             icon="plus"
-            onPress={() => set('dates', [...f.dates, { id: newId(), title: '', date: todayISO(), yearly: true }])}
+            onPress={() => set('dates', [...f.dates, { id: newId(), title: '', date: '', yearly: true }])}
           />
         </View>
 

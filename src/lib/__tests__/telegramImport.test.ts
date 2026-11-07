@@ -51,9 +51,13 @@ test('«О себе» без ссылок целиком становится з
   assert.equal(tgToRawContact(person({ bio: '' })).note, '');
 });
 
-test('после вырезанных ссылок в заметке не остаются висячие разделители', { todo: 'известная ошибка: остаётся «Фотограф. · ·»' }, () => {
+test('после вырезанных ссылок в заметке не остаются висячие разделители', () => {
   const c = tgToRawContact(person({ bio: 'Фотограф. inst: anya.photo · vk.com/anya_s' }));
   assert.equal(c.note, 'О себе: Фотограф.');
+  const middle = tgToRawContact(person({ bio: 'Фотограф · inst: anya.photo · vk.com/anya_s · Москва' }));
+  assert.equal(middle.note, 'О себе: Фотограф · Москва');
+  const lines = tgToRawContact(person({ bio: 'Пою и рисую\n📸 inst: anya.photo\nМосква, Питер' }));
+  assert.equal(lines.note, 'О себе: Пою и рисую\nМосква, Питер');
 });
 
 test('ожидание от Telegram и понятные тексты ошибок', () => {

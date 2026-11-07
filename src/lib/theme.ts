@@ -176,10 +176,20 @@ export const AVATAR_TINTS: { bg: string; fg: string }[] = [
   { bg: '#DCE4EE', fg: '#3C5676' },
 ];
 
-export function avatarTint(name: string): { bg: string; fg: string } {
+/** Те же шесть оттенков для тёмной темы: приглушённый фон и светлые буквы, чтобы кружки не горели на тёмном. */
+export const AVATAR_TINTS_DARK: { bg: string; fg: string }[] = [
+  { bg: '#3D2A21', fg: '#F0B49C' },
+  { bg: '#3A2E18', fg: '#F2C98A' },
+  { bg: '#2E3320', fg: '#CFDA9A' },
+  { bg: '#1F3328', fg: '#A9D4B4' },
+  { bg: '#33263A', fg: '#D9BCD7' },
+  { bg: '#232C3D', fg: '#B6C6E6' },
+];
+
+export function avatarTint(name: string, scheme: Scheme = 'light'): { bg: string; fg: string } {
   let h = 0;
   for (const ch of name.trim().toLowerCase()) h = (h * 31 + ch.codePointAt(0)!) % 1_000_003;
-  return AVATAR_TINTS[h % AVATAR_TINTS.length];
+  return (scheme === 'dark' ? AVATAR_TINTS_DARK : AVATAR_TINTS)[h % AVATAR_TINTS.length];
 }
 
 /** Инициалы: первые буквы двух первых слов («Аня Смирнова» → «АС», «Мама» → «М»). */

@@ -179,7 +179,7 @@ export function SocialLinkSheet({
                   </Pressable>
                 ))}
               </View>
-              <Pressable onPress={() => setPicker(true)} hitSlop={6} accessibilityRole="button" style={({ pressed }) => ({ alignSelf: 'center', opacity: pressed ? 0.6 : 1 })}>
+              <Pressable onPress={() => setPicker(true)} accessibilityRole="button" style={({ pressed }) => ({ alignSelf: 'center', minHeight: 44, paddingHorizontal: 16, justifyContent: 'center', opacity: pressed ? 0.6 : 1 })}>
                 <Text style={[s.muted, { color: colors.accentText, fontFamily: fonts.medium }]}>{`Все сети · ${NETWORKS.length} →`}</Text>
               </Pressable>
             </View>

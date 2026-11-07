@@ -268,3 +268,9 @@ test('псевдонимы не пересекаются между сетями
     }
   }
 });
+
+test('поиск сети: точное сокращение не тянет за собой другую раскладку, бессмыслица ничего не находит', () => {
+  assert.deepEqual(searchNetworks('вк').map((n) => n.id), ['vk']);
+  assert.deepEqual(searchNetworks('qqqqq'), []);
+  assert.ok(searchNetworks('ntktuhfv').some((n) => n.id === 'telegram'), 'другая раскладка без точного совпадения работает');
+});

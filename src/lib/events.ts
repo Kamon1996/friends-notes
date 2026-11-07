@@ -67,10 +67,16 @@ export function upcomingItems(data: AppData, horizonDays = 60, today: ISODate = 
 /** «Сделано» для повторяющегося напоминания — перенос на следующее срабатывание. */
 export function completeReminder(r: Reminder, now = new Date()): Reminder {
   if (!r.repeat) return { ...r, done: true };
-  // Следующее срабатывание после текущего, но не в прошлом.
+  // Следующее срабатывание после текущего, но не в прошлом. Считаем от начала серии, чтобы 31-е не съехало на 28-е.
   const afterCurrent = combine(r.date, r.time) > now ? combine(r.date, r.time) : now;
-  const next = nextOccurrenceAfter(r.date, r.time, r.repeat, afterCurrent);
-  return { ...r, date: next, done: false };
+  const anchor = seriesStart(r);
+  const next = nextOccurrenceAfter(anchor, r.time, r.repeat, afterCurrent);
+  return { ...r, anchor, date: next, done: false };
+}
+
+/** Начало серии повторяющегося напоминания: якорь, если он не позже ближайшего раза, иначе сам ближайший раз. */
+export function seriesStart(r: Pick<Reminder, 'date' | 'anchor'>): ISODate {
+  return r.anchor && r.anchor <= r.date ? r.anchor : r.date;
 }
 
 export interface PlannedNotification {
@@ -183,7 +189,8 @@ export function planNotifications(data: AppData, now = new Date()): PlannedNotif
     }
 
     let n = 0;
-    for (const date of occurrences(r.date, r.repeat)) {
+    for (const date of occurrences(seriesStart(r), r.repeat)) {
+      if (date < r.date) continue; // прошедшие разы серии до ближайшего
       const at = combine(date, r.time);
       if (at > now) {
         out.push({ at, title, body, url });

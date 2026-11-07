@@ -5,12 +5,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/Avatar';
 import { Icon } from '@/components/Icon';
-import { Button, Card, Checkbox, Chip, Empty, GroupedRow, IconButton, IconCircle, SearchField, Tag, useTheme } from '@/components/ui';
+import { Button, Card, Checkbox, Chip, Empty, GroupedRow, IconButton, IconCircle, SearchField, useTheme } from '@/components/ui';
 import { pickMoreContacts } from '@/lib/contacts';
 import { getContactsSnapshot, refreshContacts, type ContactsSnapshot } from '@/lib/contactsCache';
 import { candidateToFriend, phoneKey, toCandidates, type ImportCandidate } from '@/lib/contactsImport';
 import { applyEnrichment } from '@/lib/enrich';
-import { formatDateCompact, hasYear } from '@/lib/dates';
+import { formatDateCompact, hasYear, plural } from '@/lib/dates';
 import { matchesName, prepareQuery } from '@/lib/search';
 import { newId, useStore } from '@/lib/store';
 import { telegramAvailable } from '@/lib/telegramClient';
@@ -304,7 +304,7 @@ export default function ImportScreen() {
         }}
       >
         <Button
-          title={count ? `Добавить ${count} ${count === 1 ? 'друга' : count < 5 ? 'друзей' : 'друзей'}` : 'Отметь, кого добавить'}
+          title={count ? `Добавить ${count} ${plural(count, 'друга', 'друзей', 'друзей')}` : 'Отметь, кого добавить'}
           onPress={doImport}
           disabled={!count}
         />
@@ -343,7 +343,6 @@ function ContactRow({ candidate: c, checked, onToggle }: { candidate: ImportCand
           ))}
         </View>
       )}
-      {dup && <Tag text="уже есть" tone="success" />}
     </Pressable>
   );
 }

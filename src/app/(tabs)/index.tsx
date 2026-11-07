@@ -7,7 +7,7 @@ import { Icon } from '@/components/Icon';
 import { ReminderRow } from '@/components/ReminderRow';
 import { TelegramImportCard } from '@/components/TelegramImportCard';
 import { TodayCard, type TodayEvent } from '@/components/TodayCard';
-import { Empty, GroupedRow, IconButton, IconCircle, ListRow, ScreenHeader, Tag, useTheme } from '@/components/ui';
+import { Button, Empty, GroupedRow, IconButton, IconCircle, ListRow, ScreenHeader, Tag, useTheme } from '@/components/ui';
 import { daysBetween, formatDateLong, formatDayShort, plural, relativeDay, todayISO } from '@/lib/dates';
 import { upcomingItems, type UpcomingItem } from '@/lib/events';
 import { useStore } from '@/lib/store';
@@ -25,7 +25,7 @@ type Row =
   | { type: 'event'; key: string; item: UpcomingItem; first: boolean; last: boolean }
   | { type: 'reminder'; key: string; item: Extract<UpcomingItem, { kind: 'reminder' }>; first: boolean; last: boolean; showDate: boolean }
   | { type: 'more'; key: string; count: number }
-  | { type: 'empty'; key: string; noFriends: boolean };
+  | { type: 'empty'; key: string; noFriends: boolean; withoutBirthday: number };
 
 export default function UpcomingScreen() {
   const { data, ready } = useStore();
@@ -90,10 +90,10 @@ export default function UpcomingScreen() {
         continue;
       }
 
-      pushGroup(g.key, g.items.filter((i) => i.kind !== 'reminder'), true);
-      pushGroup(g.key, g.items.filter((i) => i.kind === 'reminder'), true);
+      // Праздники и дела одной группы — одним списком по датам: дело на 9-е не должно идти после праздника 12-го.
+      pushGroup(g.key, g.items, true);
     }
-    if (!out.length) out.push({ type: 'empty', key: 'empty', noFriends: data.friends.length === 0 });
+    if (!out.length) out.push({ type: 'empty', key: 'empty', noFriends: data.friends.length === 0, withoutBirthday: data.friends.filter((f) => !f.birthday).length });
     return out;
   }, [data, today]);
 
@@ -169,7 +169,18 @@ export default function UpcomingScreen() {
               return (
                 <View style={{ padding: 20 }}>
                   {row.noFriends ? (
-                    <Empty icon="people" title="Пока никого" text="Добавь первого друга во вкладке «Друзья» или импортируй из контактов — дни рождения появятся здесь." />
+                    <Empty icon="people" title="Пока никого" text="Добавь первого друга или импортируй из контактов — дни рождения появятся здесь.">
+                      <Button title="Импорт из контактов" icon="import" onPress={() => router.push('/import')} style={{ marginTop: 8, alignSelf: 'stretch' }} />
+                      <Button title="Добавить друга" icon="plus" variant="secondary" onPress={() => router.push('/friend/edit')} style={{ alignSelf: 'stretch' }} />
+                    </Empty>
+                  ) : row.withoutBirthday > 0 ? (
+                    <Empty
+                      icon="calendar"
+                      title="Всё спокойно"
+                      text={`В ближайшие два месяца ничего не запланировано. У ${row.withoutBirthday} ${plural(row.withoutBirthday, 'друга', 'друзей', 'друзей')} не указан день рождения — добавь, и он появится здесь.`}
+                    >
+                      <Button title="Открыть друзей" variant="secondary" onPress={() => router.push('/friends')} style={{ marginTop: 8, alignSelf: 'stretch' }} />
+                    </Empty>
                   ) : (
                     <Empty icon="calendar" title="Всё спокойно" text="В ближайшие два месяца ничего не запланировано." />
                   )}

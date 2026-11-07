@@ -21,7 +21,12 @@ export default function FriendScreen() {
   const [addSocial, setAddSocial] = useState(false);
 
   if (!ready) return null;
-  if (!friend) return <Empty icon="person" title="Друг не найден" text="Возможно, его удалили." />;
+  if (!friend)
+    return (
+      <Empty icon="person" title="Друг не найден" text="Возможно, его удалили.">
+        <Button title="К друзьям" variant="secondary" onPress={() => router.replace('/friends')} style={{ marginTop: 8 }} />
+      </Empty>
+    );
 
   const reminders = data.reminders
     .filter((r) => r.friendId === friend.id)
@@ -84,6 +89,17 @@ export default function FriendScreen() {
               <Tag text={relativeDay(nextBirthday, today)} tone={diff !== null && diff <= 7 ? 'accent' : 'neutral'} />
             )}
           </View>
+        )}
+        {!friend.birthday && (
+          // Ради дней рождения приложение и существует: без даты о друге не напомним — подсказываем добавить.
+          <Pressable
+            onPress={() => router.push({ pathname: '/friend/edit', params: { id: friend.id } })}
+            accessibilityRole="button"
+            style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44, paddingHorizontal: 14, borderRadius: 22, backgroundColor: colors.soft, opacity: pressed ? 0.7 : 1 })}
+          >
+            <Icon name="cake" size={16} color={colors.accentText} />
+            <Text style={{ fontFamily: fonts.semibold, fontSize: 14, color: colors.accentText }}>Добавить день рождения</Text>
+          </Pressable>
         )}
         {friend.phone ? (
           <Text style={[s.muted, { fontSize: 14, fontVariant: ['tabular-nums'] }]} selectable>
@@ -153,7 +169,7 @@ export default function FriendScreen() {
                   key={d.id}
                   leading={<IconCircle icon="heart" tone="accent" />}
                   title={d.title}
-                  subtitle={[formatDate(d.date, hasYear(d.date)), d.yearly ? 'каждый год' : null].filter(Boolean).join(' · ')}
+                  subtitle={d.yearly ? formatDate(d.date, hasYear(d.date)) : `${formatDate(d.date, hasYear(d.date))} · один раз`}
                   trailing={
                     <View style={{ alignItems: 'flex-end', gap: 4 }}>
                       {years ? <Text style={[s.title, { fontSize: 13, fontVariant: ['tabular-nums'] }]}>{`${years} ${plural(years, 'год', 'года', 'лет')}`}</Text> : null}

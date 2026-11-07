@@ -42,3 +42,24 @@ export function composeDate(p: DateParts): ISODate | null {
   const year = p.year.length === 4 ? Number(p.year) : UNKNOWN_YEAR;
   return toISODate(new Date(year, Number(p.month) - 1, Number(p.day)));
 }
+
+/** Что не так с набранной датой. `hard` — ошибка видна сразу; иначе дата просто не дописана (показываем после «Сохранить»). */
+export interface DateIssue {
+  message: string;
+  hard: boolean;
+}
+
+/**
+ * Проблема с датой из трёх полей или null, если дату можно сохранить.
+ * Пустая дата — не проблема, если поле необязательное.
+ */
+export function dateIssue(p: DateParts, required = false): DateIssue | null {
+  const filled = !!(p.day || p.month || p.year);
+  if (!filled) return required ? { message: 'Укажи дату.', hard: false } : null;
+  const e = partsErrors(p);
+  if (e.day || e.month) return { message: 'Такой даты нет — проверь число и месяц.', hard: true };
+  if (e.year) return { message: `Проверь год: от 1900 до ${new Date().getFullYear()}.`, hard: true };
+  if (!p.day || !p.month) return { message: 'Допиши число и месяц.', hard: false };
+  if (p.year.length > 0 && p.year.length < 4) return { message: 'Год — четыре цифры. Или оставь его пустым.', hard: false };
+  return null;
+}

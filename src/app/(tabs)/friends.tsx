@@ -43,7 +43,7 @@ export default function FriendsScreen() {
   /** Удаление с подтверждением; возвращает false, если передумали. */
   const remove = async (ids: string[]) => {
     const first = data.friends.find((f) => f.id === ids[0]);
-    const title = ids.length === 1 && first ? `Удалить ${first.name}?` : `Удалить ${ids.length} ${plural(ids.length, 'друга', 'друзей', 'друзей')}?`;
+    const title = ids.length === 1 && first ? `Удалить «${first.name}»?` : `Удалить ${ids.length} ${plural(ids.length, 'друга', 'друзей', 'друзей')}?`;
     const text = ids.length === 1 ? 'Вместе с другом удалятся и его напоминания.' : 'Вместе с ними удалятся и их напоминания.';
     if (!(await confirm(title, text))) return false;
     deleteFriends(ids);
