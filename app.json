@@ -82,6 +82,9 @@
     "extra": {
       "eas": {
         "projectId": "dfc0aeba-21ab-471d-9968-3bde4741776e"
+      },
+      "sentry": {
+        "dsn": "https://0d05ef48f99116f4e2667433677ebfdc@o4509005617037312.ingest.us.sentry.io/4512391090143232"
       }
     }
   }

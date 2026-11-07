@@ -101,7 +101,7 @@ jobs:
             const a = JSON.parse(fs.readFileSync("app.json", "utf8"));
             const apiId = Number(process.env.TG_API_ID || 0);
             const apiHash = process.env.TG_API_HASH || "";
-            const dsn = process.env.SENTRY_DSN || "";
+            const dsn = process.env.SENTRY_DSN || (a.expo.extra && a.expo.extra.sentry && a.expo.extra.sentry.dsn) || "";
             a.expo.extra = { ...a.expo.extra, telegram: { apiId, apiHash }, sentry: { dsn } };
             fs.writeFileSync("app.json", JSON.stringify(a, null, 2));
             console.log("Telegram keys:", apiId && apiHash ? "set" : "MISSING", "· Sentry DSN:", dsn ? "set" : "MISSING");
@@ -226,7 +226,7 @@ jobs:
             const a = JSON.parse(fs.readFileSync("app.json", "utf8"));
             const apiId = Number(process.env.TG_API_ID || 0);
             const apiHash = process.env.TG_API_HASH || "";
-            const dsn = process.env.SENTRY_DSN || "";
+            const dsn = process.env.SENTRY_DSN || (a.expo.extra && a.expo.extra.sentry && a.expo.extra.sentry.dsn) || "";
             a.expo.extra = { ...a.expo.extra, telegram: { apiId, apiHash }, sentry: { dsn } };
             fs.writeFileSync("app.json", JSON.stringify(a, null, 2));
             console.log("Telegram keys:", apiId && apiHash ? "set" : "MISSING", "· Sentry DSN:", dsn ? "set" : "MISSING");
