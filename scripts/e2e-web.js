@@ -160,13 +160,13 @@ const has = (t, s) => t.toLowerCase().includes(s.toLowerCase());
   await step('Новый друг: имя, дата цифрами, год неизвестен, телефон, дата-событие', async () => {
     await go('/friend/edit');
     await input('Например, Аня').fill('Пётр Тестов');
-    const bd = input('ДД.ММ.ГГГГ');
-    await bd.click(); await bd.pressSequentially('15031990'); await page.waitForTimeout(300);
-    assert.equal(await bd.inputValue(), '15.03.1990');
-    await page.getByRole('switch').first().click(); await page.waitForTimeout(400);
-    assert.equal(await input('ДД.ММ').inputValue(), '15.03', 'без года');
-    await page.getByRole('switch').first().click(); await page.waitForTimeout(400);
-    assert.equal(await input('ДД.ММ.ГГГГ').inputValue(), '15.03.2001');
+    // Три поля: курсор сам переходит дальше, год можно стереть — дата остаётся без года.
+    await input('ДД').first().click(); await page.keyboard.type('1503'); await page.waitForTimeout(200);
+    assert.equal(await input('ММ').first().inputValue(), '03', 'курсор не перешёл в месяц');
+    await page.keyboard.type('1990'); await page.waitForTimeout(200);
+    assert.equal(await input('Год').first().inputValue(), '1990', 'курсор не перешёл в год');
+    await input('Год').first().fill(''); await page.waitForTimeout(200);
+    await input('Год').first().fill('2001'); await page.waitForTimeout(200);
     await input('+7…').fill('+375 29 111-00-11');
     await input('Любит суши, не ест острое…').fill('Пицца');
     await page.getByText('Свадьба').click(); await page.waitForTimeout(400);

@@ -3,10 +3,10 @@ import { useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
 import { AvatarPicker } from '@/components/AvatarPicker';
-import { DateField } from '@/components/DateField';
+import { BirthdayField } from '@/components/BirthdayField';
 import { Button, Card, Chip, Field, Label, SectionTitle, SwitchRow, useTheme } from '@/components/ui';
 import { cleanupAvatars, deleteOwnedFiles } from '@/lib/avatars';
-import { UNKNOWN_YEAR, hasYear, parseISODate, todayISO, toISODate } from '@/lib/dates';
+import { todayISO } from '@/lib/dates';
 import { confirm } from '@/lib/confirm';
 import { newId, useFriend, useStore } from '@/lib/store';
 import type { Friend, ImportantDate } from '@/lib/types';
@@ -38,22 +38,6 @@ function FriendForm() {
   const [f, setF] = useState<Friend>(() => existing ?? blankFriend());
   const set = <K extends keyof Friend>(key: K, value: Friend[K]) => setF((prev) => ({ ...prev, [key]: value }));
 
-  const yearUnknown = !!f.birthday && !hasYear(f.birthday);
-
-  const setBirthday = (date: string) => {
-    if (yearUnknown) {
-      const d = parseISODate(date);
-      set('birthday', toISODate(new Date(UNKNOWN_YEAR, d.getMonth(), d.getDate())));
-    } else set('birthday', date);
-  };
-
-  const toggleYearUnknown = (unknown: boolean) => {
-    if (!f.birthday) return;
-    const d = parseISODate(f.birthday);
-    const year = unknown ? UNKNOWN_YEAR : new Date().getFullYear() - 25;
-    set('birthday', toISODate(new Date(year, d.getMonth(), d.getDate())));
-  };
-
   const updateDate = (dateId: string, patch: Partial<ImportantDate>) =>
     set('dates', f.dates.map((d) => (d.id === dateId ? { ...d, ...patch } : d)));
 
@@ -62,7 +46,7 @@ function FriendForm() {
       Alert.alert('Как зовут друга?', 'Введи имя, чтобы сохранить.');
       return;
     }
-    saveFriend({ ...f, name: f.name.trim(), dates: f.dates.filter((d) => d.title.trim()) });
+    saveFriend({ ...f, name: f.name.trim(), dates: f.dates.filter((d) => d.title.trim() && d.date) });
     // Файлы фото, которые больше не используются (заменили или убрали), удаляем.
     cleanupAvatars(f.id, [f.photoUri, f.thumbUri]);
     if (existing) deleteOwnedFiles([existing.photoUri, existing.thumbUri].filter((u) => u !== f.photoUri && u !== f.thumbUri));
@@ -102,13 +86,7 @@ function FriendForm() {
           {f.photoUri ? 'Нажми на фото, чтобы заменить или убрать.' : 'Нажми на кружок, чтобы добавить фото. Без фото — инициалы.'}
         </Text>
 
-        <DateField mode="date" label="День рождения" value={f.birthday} onChange={setBirthday} noYear={yearUnknown} />
-        {f.birthday && (
-          <Card style={{ paddingVertical: 4, marginTop: -6, marginBottom: 14 }}>
-            <SwitchRow label="Год рождения неизвестен" value={yearUnknown} onChange={toggleYearUnknown} />
-            <Button title="Убрать день рождения" variant="danger" onPress={() => set('birthday', null)} />
-          </Card>
-        )}
+        <BirthdayField label="День рождения" value={f.birthday} onChange={(v) => set('birthday', v)} />
 
         <Field label="Телефон" value={f.phone} onChangeText={(v) => set('phone', v)} placeholder="+7…" keyboardType="phone-pad" />
         <Card style={{ paddingVertical: 4, marginBottom: 14 }}>
@@ -133,7 +111,7 @@ function FriendForm() {
               placeholderTextColor={colors.placeholder}
               style={[s.input, { marginBottom: 14 }]}
             />
-            <DateField mode="date" label="Дата" value={d.date} noYear={!hasYear(d.date)} onChange={(v) => updateDate(d.id, { date: v })} />
+            <BirthdayField label="Дата" value={d.date || null} onChange={(v) => updateDate(d.id, { date: v ?? '' })} hint="Год можно не указывать." />
             <SwitchRow label="Повторять каждый год" value={d.yearly} onChange={(v) => updateDate(d.id, { yearly: v })} />
             <Button title="Удалить дату" variant="danger" onPress={() => set('dates', f.dates.filter((x) => x.id !== d.id))} />
           </Card>
