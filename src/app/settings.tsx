@@ -153,8 +153,11 @@ export default function SettingsScreen() {
         <SectionTitle style={{ marginBottom: 0 }}>Помощь</SectionTitle>
         <Group inset={62}>
           <ListRow leading={<IconCircle icon="list" />} title="Что нового" subtitle="История изменений по версиям" chevron onPress={() => router.push('/whats-new')} />
-          <ListRow leading={<IconCircle icon="info" />} title="Отчёт об ошибке" subtitle="Если что-то пошло не так — отправь отчёт" chevron onPress={() => router.push('/diagnostics')} />
+          <ListRow leading={<IconCircle icon="send" />} title="Сообщить о проблеме" subtitle="Написать разработчику в Telegram" chevron onPress={() => router.push('/diagnostics')} />
         </Group>
+        <Card style={{ paddingVertical: 4 }}>
+          <SwitchRow icon="warning" label="Отправлять отчёты о сбоях" sub="Автоматически, через Sentry: стек ошибки, версия и модель телефона. Без имён, номеров и заметок." value={settings.crashReports} onChange={(v) => updateSettings({ crashReports: v })} />
+        </Card>
       </View>
 
       <Text style={[s.caption, { textAlign: 'center', color: colors.text3 }]}>{`«Друзья» ${APP_VERSION}\nВсе данные хранятся только на этом телефоне.`}</Text>

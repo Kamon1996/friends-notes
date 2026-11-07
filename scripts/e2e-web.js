@@ -415,9 +415,15 @@ const has = (t, s) => t.toLowerCase().includes(s.toLowerCase());
     }
   });
 
-  await step('Экраны Telegram и отчёта об ошибке открываются', async () => {
+  await step('Экраны Telegram и «Сообщить о проблеме», переключатель отчётов о сбоях', async () => {
     await go('/telegram'); let t = await text(); assert(has(t, 'Импорт из Telegram') && has(t, 'Вход доступен только в Android-приложении'), t.slice(0, 200));
-    await go('/diagnostics'); t = await text(); assert(has(t, 'Отчёт доступен только в Android-приложении'));
+    await go('/diagnostics'); t = await text();
+    assert(has(t, 'Напиши мне в Telegram') && has(t, `Друзья ${VERSION}`) && has(t, 'Написать в Telegram'), 'экран «Сообщить о проблеме»: ' + t.slice(0, 300));
+    await go('/settings'); t = await text();
+    assert(has(t, 'Сообщить о проблеме') && has(t, 'Отправлять отчёты о сбоях'), t.slice(-400));
+    assert.equal((await stored()).settings.crashReports, true, 'по умолчанию отчёты о сбоях включены');
+    await page.getByRole('switch').last().click(); await page.waitForTimeout(300);
+    assert.equal((await stored()).settings.crashReports, false, 'переключатель отчётов о сбоях');
   });
 
   await step('Пустое состояние для нового пользователя', async () => {

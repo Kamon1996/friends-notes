@@ -96,6 +96,8 @@ export interface Settings {
   accentDark: AccentId;
   /** Версия, изменения которой пользователь уже видел на экране «Что нового». Нет — ещё не показывали. */
   lastSeenVersion?: string;
+  /** Отправлять автоматические отчёты о сбоях (Sentry): только техническое, без данных людей. */
+  crashReports: boolean;
 }
 
 export interface AppData {
@@ -111,6 +113,7 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: 'system',
   accentLight: 'terracotta',
   accentDark: 'terracotta',
+  crashReports: true,
 };
 
 export const EMPTY_DATA: AppData = {

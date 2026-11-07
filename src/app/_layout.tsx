@@ -7,8 +7,9 @@ import { useEffect } from 'react';
 import { Platform, View, useColorScheme } from 'react-native';
 
 import { WhatsNewSheet } from '@/components/WhatsNewSheet';
+import { startCrashReports, stopCrashReports } from '@/lib/crashReports';
 import { handleNotificationResponse, setupNotifications } from '@/lib/notifications';
-import { StoreProvider } from '@/lib/store';
+import { StoreProvider, useStore } from '@/lib/store';
 import { TelegramSessionProvider } from '@/lib/telegramSession';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
@@ -29,6 +30,18 @@ function useNotificationNavigation() {
     const sub = Notifications.addNotificationResponseReceivedListener(open);
     return () => sub.remove();
   }, []);
+}
+
+/** Отчёты о сбоях включаются, как только известны настройки, и выключаются переключателем. */
+function CrashReportsGate() {
+  const { ready, data } = useStore();
+  const enabled = ready && data.settings.crashReports;
+  useEffect(() => {
+    if (!ready) return;
+    if (enabled) startCrashReports();
+    else stopCrashReports();
+  }, [ready, enabled]);
+  return null;
 }
 
 function AppShell() {
@@ -53,10 +66,11 @@ function AppShell() {
         <Stack.Screen name="settings" options={{ title: 'Настройки' }} />
         <Stack.Screen name="import" options={{ presentation: 'modal', title: 'Импорт контактов' }} />
         <Stack.Screen name="telegram" options={{ presentation: 'modal', title: 'Импорт из Telegram' }} />
-        <Stack.Screen name="diagnostics" options={{ title: 'Отчёт об ошибке' }} />
+        <Stack.Screen name="diagnostics" options={{ title: 'Сообщить о проблеме' }} />
         <Stack.Screen name="whats-new" options={{ title: 'Что нового' }} />
       </Stack>
       <WhatsNewSheet />
+      <CrashReportsGate />
     </>
   );
 }

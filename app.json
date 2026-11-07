@@ -4,7 +4,7 @@
     "slug": "friends-notes",
     "owner": "kamon1996",
     "scheme": "friendsnotes",
-    "version": "1.18.3",
+    "version": "1.19.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -66,6 +66,13 @@
           "dark": {
             "backgroundColor": "#17130F"
           }
+        }
+      ],
+      [
+        "@sentry/react-native/expo",
+        {
+          "organization": "testorg-oz",
+          "project": "friends-notes"
         }
       ]
     ],

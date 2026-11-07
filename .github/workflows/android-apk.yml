@@ -94,15 +94,17 @@ jobs:
         env:
           TG_API_ID: ${{ secrets.TG_API_ID }}
           TG_API_HASH: ${{ secrets.TG_API_HASH }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
         run: |
           node -e '
             const fs = require("fs");
             const a = JSON.parse(fs.readFileSync("app.json", "utf8"));
             const apiId = Number(process.env.TG_API_ID || 0);
             const apiHash = process.env.TG_API_HASH || "";
-            a.expo.extra = { ...a.expo.extra, telegram: { apiId, apiHash } };
+            const dsn = process.env.SENTRY_DSN || "";
+            a.expo.extra = { ...a.expo.extra, telegram: { apiId, apiHash }, sentry: { dsn } };
             fs.writeFileSync("app.json", JSON.stringify(a, null, 2));
-            console.log("Telegram keys:", apiId && apiHash ? "set" : "MISSING");
+            console.log("Telegram keys:", apiId && apiHash ? "set" : "MISSING", "· Sentry DSN:", dsn ? "set" : "MISSING");
           '
 
       - name: Build on this machine
@@ -113,7 +115,10 @@ jobs:
           EAS_SKIP_AUTO_FINGERPRINT: '1'
           # Телефоны — arm64; остальные архитектуры не собираем (TDLib в проекте только под arm64-v8a).
           ORG_GRADLE_PROJECT_reactNativeArchitectures: arm64-v8a
+          # Токен Sentry — для загрузки sourcemaps и символов; без него сборка идёт, а загрузка пропускается.
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         run: |
+          if [ -z "$SENTRY_AUTH_TOKEN" ]; then export SENTRY_DISABLE_AUTO_UPLOAD=true; echo "Sentry: токена нет, sourcemaps не загружаем"; fi
           mkdir -p "$EAS_LOCAL_BUILD_WORKINGDIR"
           if [ "$BUNDLE" = "true" ]; then
             npx eas-cli@latest build --platform android --profile production --local --non-interactive --output "$PWD/friends-notes.aab"
@@ -214,15 +219,17 @@ jobs:
         env:
           TG_API_ID: ${{ secrets.TG_API_ID }}
           TG_API_HASH: ${{ secrets.TG_API_HASH }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
         run: |
           node -e '
             const fs = require("fs");
             const a = JSON.parse(fs.readFileSync("app.json", "utf8"));
             const apiId = Number(process.env.TG_API_ID || 0);
             const apiHash = process.env.TG_API_HASH || "";
-            a.expo.extra = { ...a.expo.extra, telegram: { apiId, apiHash } };
+            const dsn = process.env.SENTRY_DSN || "";
+            a.expo.extra = { ...a.expo.extra, telegram: { apiId, apiHash }, sentry: { dsn } };
             fs.writeFileSync("app.json", JSON.stringify(a, null, 2));
-            console.log("Telegram keys:", apiId && apiHash ? "set" : "MISSING");
+            console.log("Telegram keys:", apiId && apiHash ? "set" : "MISSING", "· Sentry DSN:", dsn ? "set" : "MISSING");
           '
       - name: Start Android build
         env:
