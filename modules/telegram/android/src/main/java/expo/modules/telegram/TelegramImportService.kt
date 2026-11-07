@@ -9,16 +9,45 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.util.Log
 
 /**
  * Foreground-сервис на время входа в Telegram и загрузки контактов: с ним Android не усыпляет
  * приложение, когда оно свёрнуто. Сам ничего не делает — работа идёт в TelegramModule,
  * сервис только держит уведомление с прогрессом.
+ *
+ * Android 15 даёт сервису типа dataSync не больше шести часов, а потом роняет приложение
+ * (ForegroundServiceDidNotStopInTimeException), если сервис не остановился сам. Поэтому сервис
+ * живёт только пока идёт работа: ожидание кода ограничено сторожевым таймером, а по сигналу
+ * onTimeout он останавливается сразу — импорт при этом продолжается, пока приложение живо.
  */
 class TelegramImportService : Service() {
   override fun onBind(intent: Intent?): IBinder? = null
+
+  /** Android 14: сервис исчерпал лимит времени. */
+  override fun onTimeout(startId: Int) = stopNow("onTimeout")
+
+  /** Android 15: лимит времени для сервиса типа dataSync. */
+  override fun onTimeout(startId: Int, fgsType: Int) = stopNow("onTimeout(type)")
+
+  override fun onDestroy() {
+    running = false
+    super.onDestroy()
+  }
+
+  private fun stopNow(reason: String) {
+    Log.w(TAG, "Import service stopped: $reason")
+    running = false
+    try {
+      stopForeground(STOP_FOREGROUND_REMOVE)
+    } catch (t: Throwable) {
+      Log.w(TAG, "stopForeground failed", t)
+    }
+    stopSelf()
+  }
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     val text = intent?.getStringExtra(EXTRA_TEXT) ?: "Импорт из Telegram…"
@@ -48,9 +77,27 @@ class TelegramImportService : Service() {
     private const val EXTRA_TOTAL = "total"
 
     @Volatile private var running = false
+    private val watchdog = Handler(Looper.getMainLooper())
+    private var watchdogStop: Runnable? = null
+
+    /** Ожидание ввода кода или пароля не держит сервис дольше 20 минут, загрузка — дольше двух часов. */
+    private const val WAIT_LIMIT_MS = 20L * 60 * 1000
+    private const val WORK_LIMIT_MS = 2L * 60 * 60 * 1000
+
+    private fun armWatchdog(ctx: Context, limitMs: Long) {
+      watchdogStop?.let { watchdog.removeCallbacks(it) }
+      val app = ctx.applicationContext
+      val r = Runnable {
+        Log.w(TAG, "Import service watchdog: stopping after ${limitMs / 60000} min")
+        stop(app)
+      }
+      watchdogStop = r
+      watchdog.postDelayed(r, limitMs)
+    }
 
     /** Показать/обновить уведомление; при первом вызове запускает сервис. */
     fun show(ctx: Context, text: String, progress: Pair<Int, Int>?) {
+      armWatchdog(ctx, if (progress != null) WORK_LIMIT_MS else WAIT_LIMIT_MS)
       try {
         if (!running) {
           val intent = Intent(ctx, TelegramImportService::class.java)
@@ -69,6 +116,8 @@ class TelegramImportService : Service() {
     }
 
     fun stop(ctx: Context) {
+      watchdogStop?.let { watchdog.removeCallbacks(it) }
+      watchdogStop = null
       if (!running) return
       running = false
       try {

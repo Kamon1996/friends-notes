@@ -285,6 +285,10 @@ class TelegramModule : Module() {
         false
       }
       progress(if (cancelled) "cancelled" else "done", synchronized(people) { people.size }, mapOf("loggedOut" to loggedOut))
+      // Работа закончена — foreground-сервис больше не нужен, результат лежит в памяти модуля.
+      // Если выход не удался, закрываем сессию принудительно, иначе она (и сервис) зависли бы до лимита Android.
+      context?.let { TelegramImportService.stop(it) }
+      if (!loggedOut) closeSession()
     } catch (e: Throwable) {
       Log.e(TAG, "Import failed", e)
       progress("error", synchronized(people) { people.size }, mapOf("error" to (e.message ?: e.javaClass.simpleName)))

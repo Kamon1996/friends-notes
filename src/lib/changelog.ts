@@ -14,6 +14,11 @@ export interface Release {
  */
 export const CHANGELOG: Release[] = [
   {
+    version: '1.18.2',
+    date: '2026-11-07',
+    items: ['Починено падение на Android 15, когда вход в Telegram или импорт оставались открытыми дольше шести часов.'],
+  },
+  {
     version: '1.18.1',
     date: '2026-11-07',
     items: [
