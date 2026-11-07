@@ -7,6 +7,7 @@ import { useEffect } from 'react';
 import { Platform, View, useColorScheme } from 'react-native';
 
 import { TelegramBanner } from '@/components/TelegramBanner';
+import { WhatsNewSheet } from '@/components/WhatsNewSheet';
 import { handleNotificationResponse, setupNotifications } from '@/lib/notifications';
 import { StoreProvider } from '@/lib/store';
 import { TelegramSessionProvider } from '@/lib/telegramSession';
@@ -54,8 +55,10 @@ function AppShell() {
         <Stack.Screen name="import" options={{ presentation: 'modal', title: 'Импорт контактов' }} />
         <Stack.Screen name="telegram" options={{ presentation: 'modal', title: 'Импорт из Telegram' }} />
         <Stack.Screen name="diagnostics" options={{ title: 'Отчёт об ошибке' }} />
+        <Stack.Screen name="whats-new" options={{ title: 'Что нового' }} />
       </Stack>
       <TelegramBanner />
+      <WhatsNewSheet />
     </>
   );
 }

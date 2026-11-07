@@ -11,11 +11,12 @@ const srv = http.createServer((req, res) => {
   fs.createReadStream(p).pipe(res);
 }).listen(8096);
 const KEY = 'friends-notes/data/v1';
+const VERSION = require('../app.json').expo.version;
 const iso = (d) => d.toISOString().slice(0, 10);
 const day = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return iso(d); };
 const md = (n, y) => `${y}-${day(n).slice(5)}`;
 const seed = {
-  version: 1, settings: { eventTime: '10:00', eventDayBefore: true, theme: 'light', accentLight: 'terracotta', accentDark: 'terracotta' },
+  version: 1, settings: { eventTime: '10:00', eventDayBefore: true, theme: 'light', accentLight: 'terracotta', accentDark: 'terracotta', lastSeenVersion: VERSION },
   friends: [
     { id: 'a', name: 'Аня Смирнова', emoji: '🌸', birthday: md(0, 1995), phone: '+7 999 123-45-67', telegramId: 123456789, whatsapp: '79991234567', food: 'Суши, тирамису', flowers: 'Пионы', gifts: 'Керамика', notes: 'Любит настолки', dates: [{ id: 'd1', title: 'Познакомились', date: md(12, 2018), yearly: true }], createdAt: 1 },
     { id: 'b', name: 'Игорь Ветров', emoji: '😎', birthday: md(3, 1992), phone: '+375 29 111-22-33', viber: '375291112233', food: 'Стейк', flowers: '', gifts: '', notes: '', dates: [], createdAt: 2 },
@@ -295,6 +296,48 @@ const has = (t, s) => t.toLowerCase().includes(s.toLowerCase());
     assert.equal((await stored()).settings.eventDayBefore, false);
   });
 
+  await step('Настройки: «Что нового» — версия внизу, история по версиям', async () => {
+    await go('/settings'); let t = await text();
+    assert(has(t, 'Что нового') && has(t, `«Друзья» ${VERSION}`), t.slice(-300));
+    await tap(page.getByText('Что нового', { exact: true })); await page.waitForTimeout(700);
+    t = await text();
+    assert(has(t, `Установлена версия ${VERSION}`) && has(t, 'установлена') && has(t, '1.0.0') && has(t, 'Первая версия'), t.slice(0, 300));
+    await shot('whats-new');
+  });
+
+  await step('Шторка «Что нового» после обновления: показывает пропущенные версии, запоминает текущую', async () => {
+    const old = { ...seed, settings: { ...seed.settings, lastSeenVersion: '1.12.0' } };
+    const ctx2 = await browser.newContext({ ...devices['iPhone 13'], locale: 'ru-RU' });
+    await ctx2.addInitScript((d) => { if (!localStorage.getItem('friends-notes/data/v1')) localStorage.setItem('friends-notes/data/v1', d); }, JSON.stringify(old));
+    const p2 = await ctx2.newPage();
+    const t2 = async () => (await p2.evaluate(() => document.body.innerText)).replace(/\s+/g, ' ');
+    await p2.goto('http://localhost:8096/'); await p2.waitForTimeout(2200);
+    let t = await t2();
+    assert(has(t, 'Что нового') && has(t, `обновилось до версии ${VERSION}`), t.slice(0, 300));
+    assert(has(t, '1.13.0') && has(t, 'Тишина для отдельных людей') && !has(t, 'Свайп строки влево'), 'показываем только версии новее 1.12.0');
+    await p2.screenshot({ path: `${out}/e2e-whats-new-sheet.png` });
+    await p2.getByText('Понятно', { exact: true }).click(); await p2.waitForTimeout(700);
+    t = await t2(); assert(!has(t, 'обновилось до версии'), 'шторка закрылась');
+    assert.equal(JSON.parse(await p2.evaluate((k) => localStorage.getItem(k), KEY)).settings.lastSeenVersion, VERSION);
+    await p2.reload(); await p2.waitForTimeout(2200);
+    t = await t2(); assert(!has(t, 'обновилось до версии'), 'второй раз не показываем');
+    await ctx2.close();
+  });
+
+  await step('Шторка «Что нового»: ссылка «Вся история» открывает экран истории', async () => {
+    const old = { ...seed, settings: { ...seed.settings, lastSeenVersion: undefined } };
+    const ctx2 = await browser.newContext({ ...devices['iPhone 13'], locale: 'ru-RU' });
+    await ctx2.addInitScript((d) => { if (!localStorage.getItem('friends-notes/data/v1')) localStorage.setItem('friends-notes/data/v1', d); }, JSON.stringify(old));
+    const p2 = await ctx2.newPage();
+    const t2 = async () => (await p2.evaluate(() => document.body.innerText)).replace(/\s+/g, ' ');
+    await p2.goto('http://localhost:8096/'); await p2.waitForTimeout(2200);
+    let t = await t2();
+    assert(has(t, `обновилось до версии ${VERSION}.`) && !has(t, '1.16.5'), 'прошлая версия неизвестна — только текущая: ' + t.slice(0, 300));
+    await p2.getByText('Вся история изменений', { exact: false }).click(); await p2.waitForTimeout(900);
+    t = await t2(); assert(has(t, `Установлена версия ${VERSION}`) && has(t, '1.0.0'), t.slice(0, 300));
+    await ctx2.close();
+  });
+
   await step('Экраны Telegram и отчёта об ошибке открываются', async () => {
     await go('/telegram'); let t = await text(); assert(has(t, 'Импорт из Telegram') && has(t, 'Вход доступен только в Android-приложении'), t.slice(0, 200));
     await go('/diagnostics'); t = await text(); assert(has(t, 'Отчёт доступен только в Android-приложении'));
@@ -306,6 +349,8 @@ const has = (t, s) => t.toLowerCase().includes(s.toLowerCase());
     const t2 = async () => (await p2.evaluate(() => document.body.innerText)).replace(/\s+/g, ' ');
     await p2.goto('http://localhost:8096/'); await p2.waitForTimeout(1500);
     let t = await t2(); assert(has(t, 'Пока никого'), t.slice(0, 200));
+    assert(!has(t, 'обновилось до версии'), 'новой установке «Что нового» не показываем');
+    assert.equal(JSON.parse(await p2.evaluate((k) => localStorage.getItem(k), KEY)).settings.lastSeenVersion, VERSION);
     await p2.getByText('Друзья', { exact: true }).last().click(); await p2.waitForTimeout(700);
     t = await t2(); assert(has(t, 'Импорт из контактов'));
     await p2.getByText('Напоминания', { exact: true }).last().click(); await p2.waitForTimeout(700);

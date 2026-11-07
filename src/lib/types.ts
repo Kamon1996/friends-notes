@@ -78,6 +78,8 @@ export interface Settings {
   accentLight: AccentId;
   /** Акцентный цвет тёмной темы — может отличаться от светлой. */
   accentDark: AccentId;
+  /** Версия, изменения которой пользователь уже видел на экране «Что нового». Нет — ещё не показывали. */
+  lastSeenVersion?: string;
 }
 
 export interface AppData {

@@ -5,6 +5,7 @@ import { Alert, Linking, Platform, Pressable, ScrollView, Text, View } from 'rea
 import { DateField } from '@/components/DateField';
 import { Icon } from '@/components/Icon';
 import { Button, Card, Chip, Group, IconCircle, ListRow, SectionTitle, SwitchRow, useTheme } from '@/components/ui';
+import { APP_VERSION } from '@/lib/changelog';
 import { loadEnrichment } from '@/lib/contacts';
 import { applyEnrichment } from '@/lib/enrich';
 import { notificationsAllowed, setupNotifications } from '@/lib/notifications';
@@ -151,11 +152,12 @@ export default function SettingsScreen() {
       <View style={{ gap: 8 }}>
         <SectionTitle style={{ marginBottom: 0 }}>Помощь</SectionTitle>
         <Group inset={62}>
+          <ListRow leading={<IconCircle icon="list" />} title="Что нового" subtitle="История изменений по версиям" chevron onPress={() => router.push('/whats-new')} />
           <ListRow leading={<IconCircle icon="info" />} title="Отчёт об ошибке" subtitle="Если что-то пошло не так — отправь отчёт" chevron onPress={() => router.push('/diagnostics')} />
         </Group>
       </View>
 
-      <Text style={[s.caption, { textAlign: 'center', color: colors.text3 }]}>Все данные хранятся только на этом телефоне.</Text>
+      <Text style={[s.caption, { textAlign: 'center', color: colors.text3 }]}>{`«Друзья» ${APP_VERSION}\nВсе данные хранятся только на этом телефоне.`}</Text>
     </ScrollView>
   );
 }
