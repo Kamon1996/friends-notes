@@ -1,489 +1,788 @@
-// Сквозная проверка всех сценариев на веб-сборке: друзья, напоминания, импорт, настройки, темы.
-const http = require('http'), fs = require('fs'), path = require('path');
-const assert = require('assert');
+// Сквозные тесты на веб-сборке (npx expo export --platform web): каждый сценарий — в чистом браузере
+// со своими данными и замороженными часами, поэтому сценарии не зависят друг от друга и порядка запуска.
+//
+//   node scripts/e2e-web.js <папка веб-сборки> <папка для снимков сбоев> [--grep текст] [--workers N]
+//
+// Сценарий с пометкой `known` описывает правильное поведение для известной ошибки: пока ошибка есть,
+// он отмечается как «известная ошибка» и не валит прогон; когда начнёт проходить — прогон упадёт,
+// чтобы пометку сняли и тест стал обычным.
+const http = require('http');
+const fs = require('fs');
+const path = require('path');
+const assert = require('assert/strict');
 const { chromium, devices } = require('playwright');
-const root = process.argv[2], out = process.argv[3];
-const types = { '.js': 'application/javascript', '.html': 'text/html', '.ico': 'image/x-icon', '.png': 'image/png', '.ttf': 'font/ttf', '.json': 'application/json' };
-const srv = http.createServer((req, res) => {
-  let p = path.join(root, decodeURIComponent(req.url.split('?')[0]));
-  if (!fs.existsSync(p) || fs.statSync(p).isDirectory()) p = path.join(root, 'index.html');
-  res.writeHead(200, { 'content-type': types[path.extname(p)] || 'application/octet-stream' });
-  fs.createReadStream(p).pipe(res);
-}).listen(8096);
+
+const args = process.argv.slice(2);
+const root = args[0];
+const out = args[1] || 'e2e-results';
+const grep = args.includes('--grep') ? args[args.indexOf('--grep') + 1].toLowerCase() : '';
+const WORKERS = args.includes('--workers') ? Number(args[args.indexOf('--workers') + 1]) : 3;
+if (!root || !fs.existsSync(path.join(root, 'index.html'))) {
+  console.error('Укажи папку веб-сборки: node scripts/e2e-web.js dist-web e2e-results');
+  process.exit(2);
+}
+fs.mkdirSync(out, { recursive: true });
+
 const KEY = 'friends-notes/data/v1';
 const VERSION = require('../app.json').expo.version;
-const iso = (d) => d.toISOString().slice(0, 10);
-const day = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return iso(d); };
-const md = (n, y) => `${y}-${day(n).slice(5)}`;
-const seed = {
-  version: 1, settings: { eventTime: '10:00', eventDayBefore: true, theme: 'light', accentLight: 'terracotta', accentDark: 'terracotta', lastSeenVersion: VERSION },
-  friends: [
-    { id: 'a', name: 'Аня Смирнова', emoji: '🌸', birthday: md(0, 1995), phone: '+7 999 123-45-67', telegramId: 123456789, whatsapp: '79991234567', food: 'Суши, тирамису', flowers: 'Пионы', gifts: 'Керамика', notes: 'Любит настолки', dates: [{ id: 'd1', title: 'Познакомились', date: md(12, 2018), yearly: true }], createdAt: 1, socials: [{ id: 'sa1', network: 'tiktok', url: 'https://www.tiktok.com/@anya', handle: 'anya', source: 'tg' }, { id: 'sa2', network: 'site', url: 'https://anya.design', label: 'anya.design', source: 'manual' }] },
-    { id: 'b', name: 'Игорь Ветров', emoji: '😎', birthday: md(3, 1992), phone: '+375 29 111-22-33', viber: '375291112233', food: 'Стейк', flowers: '', gifts: '', notes: '', dates: [], createdAt: 2 },
-    { id: 'c', name: 'Мама', emoji: '❤️', birthday: md(40, 1966), phone: '', food: '', flowers: 'Тюльпаны', gifts: '', notes: '', dates: [], createdAt: 3 },
-  ],
-  reminders: [
-    { id: 'r1', title: 'Купить цветы — Аня', note: '', friendId: 'a', date: day(0), time: '18:00', repeat: { every: 2, unit: 'month' }, advance: 0, done: false, createdAt: 1 },
-    { id: 'r3', title: 'Написать Диме', note: '', friendId: null, date: day(-1), time: '20:00', repeat: null, advance: 1440, done: false, createdAt: 3 },
-  ],
+
+// ---------- Замороженное время: среда, 10 июня 2026, 12:00 по Москве ----------
+const TZ = 'Europe/Moscow';
+const NOW = new Date('2026-06-10T12:00:00+03:00');
+const TODAY = '2026-06-10';
+/** Дата через n дней от «сегодня» (n может быть отрицательным). */
+const d = (n) => {
+  const [y, m, dd] = TODAY.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, dd + n)).toISOString().slice(0, 10);
 };
-const results = [];
-let pageRef = null, outDir = null, n = 0;
-const step = async (name, fn) => {
-  n++;
-  try { await fn(); results.push(`ok   ${name}`); }
-  catch (e) {
-    results.push(`FAIL ${name}: ${String(e.message).split('\n')[0].slice(0, 300)}`);
-    try { await pageRef.screenshot({ path: `${outDir}/e2e-fail-${n}.png` }); } catch {}
-  }
-};
-const has = (t, s) => t.toLowerCase().includes(s.toLowerCase());
-(async () => {
-  const browser = await chromium.launch();
-  const ctx = await browser.newContext({ ...devices['iPhone 13'], locale: 'ru-RU' });
-  await ctx.addInitScript((d) => { if (!localStorage.getItem('friends-notes/data/v1')) localStorage.setItem('friends-notes/data/v1', d); }, JSON.stringify(seed));
-  const page = await ctx.newPage();
-  pageRef = page; outDir = out;
-  const errors = [];
-  page.on('pageerror', (e) => errors.push(e.message));
-  page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
-  page.on('dialog', (d) => d.accept());
-  const go = async (url) => { await page.goto('http://localhost:8096' + url); await page.waitForTimeout(1200); };
-  const stored = async () => JSON.parse(await page.evaluate((k) => localStorage.getItem(k), KEY));
-  // Текст только видимых элементов: неактивные вкладки остаются в DOM.
-  const text = async () =>
-    page.evaluate(() => {
-      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-      const out = [];
-      let n;
-      while ((n = walker.nextNode())) {
-        const el = n.parentElement;
-        if (!el || el.closest('[aria-hidden="true"]')) continue;
-        const r = el.getBoundingClientRect();
-        if (!r.width && !r.height) continue;
-        const cs = getComputedStyle(el);
-        if (cs.visibility === 'hidden' || cs.display === 'none' || cs.opacity === '0') continue;
-        out.push(n.textContent);
-      }
-      return out.join(' ').replace(/\s+/g, ' ');
-    });
-  // Нажать на последний элемент, который не спрятан (неактивные вкладки и экраны стека остаются в DOM с aria-hidden).
-  const tap = async (locator) => {
-    const handles = await locator.elementHandles();
-    let target = null;
-    for (const h of handles) if (!(await h.evaluate((e) => !!e.closest('[aria-hidden="true"]')))) target = h;
-    if (!target) throw new Error('нет видимого элемента: ' + locator);
-    await target.click();
-  };
-  const tab = async (name) => { await page.getByText(name, { exact: true }).last().click(); await page.waitForTimeout(700); };
-  const input = (placeholder) => page.getByPlaceholder(placeholder);
-  const shot = (name) => page.screenshot({ path: `${out}/e2e-${name}.png` });
+/** День рождения: тот же день, что через n дней, но в году y. */
+const bday = (n, y) => `${y}-${d(n).slice(5)}`;
 
-  await go('/');
-  await step('Скоро: секции, карточка «Сегодня», кнопки', async () => {
-    const t = await text();
-    for (const s of ['Скоро', 'Просрочено', 'Написать Диме', 'просрочено', 'Сегодня', 'Аня Смирнова', 'День рождения', '31', 'год', 'Позвонить', 'Поздравить', 'Купить цветы — Аня', 'На этой неделе', 'Игорь Ветров', 'через 3 дня', 'Мама']) assert(has(t, s), `нет «${s}»`);
-  });
-  await step('Скоро: отметить повторяющееся — переносится на следующий раз', async () => {
-    const box = page.getByRole('checkbox').nth(1); // первый — просроченное, второй — «Купить цветы»
-    await box.click(); await page.waitForTimeout(500);
-    const r = (await stored()).reminders.find((x) => x.id === 'r1');
-    assert.equal(r.done, false); assert(r.date > day(0), `дата не перенесена: ${r.date}`);
-  });
-  await step('Скоро: отметить разовое просроченное — уходит в сделанные', async () => {
-    await page.getByRole('checkbox').first().click(); await page.waitForTimeout(500);
-    assert.equal((await stored()).reminders.find((x) => x.id === 'r3').done, true);
-    assert(!has(await text(), 'Просрочено'));
-  });
+// ---------- Данные ----------
+const F = (o) => ({ emoji: '', phone: '', food: '', flowers: '', gifts: '', notes: '', dates: [], createdAt: 1, birthday: null, ...o });
+const R = (o) => ({ note: '', friendId: null, time: '12:00', repeat: null, advance: 0, done: false, createdAt: 1, ...o });
+const SETTINGS = { eventTime: '10:00', eventDayBefore: true, theme: 'light', accentLight: 'terracotta', accentDark: 'terracotta', crashReports: true, lastSeenVersion: VERSION };
+const ANYA = F({
+  id: 'a', name: 'Аня Смирнова', birthday: bday(0, 1995), phone: '+7 999 123-45-67', telegramId: 123456789, whatsapp: '79991234567',
+  food: 'Суши, тирамису', flowers: 'Пионы', gifts: 'Керамика', notes: 'Любит настолки',
+  dates: [{ id: 'd1', title: 'Познакомились', date: bday(12, 2018), yearly: true }],
+  socials: [{ id: 's1', network: 'tiktok', url: 'https://www.tiktok.com/@anya', handle: 'anya', source: 'tg' }, { id: 's2', network: 'site', url: 'https://anya.design', label: 'anya.design', source: 'manual' }],
+});
+const IGOR = F({ id: 'b', name: 'Игорь Ветров', birthday: bday(3, 1992), phone: '+375 29 111-22-33', viber: '375291112233', food: 'Стейк' });
+const MAMA = F({ id: 'c', name: 'Мама', birthday: bday(40, 1966), flowers: 'Тюльпаны' });
+const seed = (patch = {}) => ({
+  version: 1,
+  settings: { ...SETTINGS, ...(patch.settings || {}) },
+  friends: patch.friends || [ANYA, IGOR, MAMA],
+  reminders: patch.reminders || [
+    R({ id: 'r1', title: 'Купить цветы — Аня', friendId: 'a', date: d(0), time: '18:00', repeat: { every: 2, unit: 'month' } }),
+    R({ id: 'r3', title: 'Написать Диме', date: d(-1), time: '20:00', advance: 1440 }),
+    R({ id: 'r4', title: 'Сдать отчёт', date: d(-3), time: '09:00', done: true }),
+  ],
+});
+const MORE_FRIENDS = ['Дима Петров', 'Алина', 'Борис', 'Вера', 'Женя'].map((name, i) => F({ id: `m${i}`, name, birthday: bday(100 + i * 20, 1990) }));
 
-  await step('Друзья: список, буквы, поиск, сортировка по дате', async () => {
-    await tab('Друзья');
-    let t = await text();
-    for (const s of ['3 человека', 'А', 'Аня Смирнова', 'сегодня', 'Игорь Ветров', 'через 3 дня', 'Мама']) assert(has(t, s), `нет «${s}»`);
-    await input('Поиск по имени').fill('тюльп'); await page.waitForTimeout(500);
-    t = await text(); assert(!has(t, 'Мама') && has(t, 'Никого не нашлось'), 'поиск не должен искать по цветам: ' + t.slice(0, 200));
-    await input('Поиск по имени').fill('мам'); await page.waitForTimeout(500);
-    t = await text(); assert(has(t, 'Мама') && !has(t, 'Игорь'), 'поиск по имени не работает: ' + t.slice(0, 200));
-    await input('Поиск по имени').fill('smirnova'); await page.waitForTimeout(500);
-    t = await text(); assert(has(t, 'Аня Смирнова') && !has(t, 'Игорь'), 'поиск латиницей не работает: ' + t.slice(0, 200));
-    await input('Поиск по имени').fill('bujhm'); await page.waitForTimeout(500);
-    t = await text(); assert(has(t, 'Игорь Ветров') && !has(t, 'Аня'), 'поиск в другой раскладке не работает: ' + t.slice(0, 200));
-    await input('Поиск по имени').fill(''); await page.waitForTimeout(300);
-    await page.getByText('Скоро день рождения').click(); await page.waitForTimeout(400);
-    t = await text(); assert(t.indexOf('Аня Смирнова') < t.indexOf('Игорь Ветров') && t.indexOf('Игорь Ветров') < t.indexOf('Мама'));
-    await shot('friends');
-  });
+// ---------- Сценарии ----------
+const scenarios = [];
+const scenario = (name, fn, opts = {}) => scenarios.push({ name, fn, ...opts });
 
-  await step('Друзья: долгое нажатие — режим выбора, корзина удаляет с подтверждением', async () => {
-    await page.getByText('По имени', { exact: true }).click(); await page.waitForTimeout(300);
-    const row = page.getByText('Мама', { exact: true }).last(); const box = await row.boundingBox();
-    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await page.mouse.down(); await page.waitForTimeout(700); await page.mouse.up(); await page.waitForTimeout(400);
-    let t = await text(); assert(has(t, 'Выбрано: 1') || (await page.getByLabel('Удалить выбранных').count()) > 0, 'режим выбора не включился: ' + t.slice(0, 200));
-    const after = await page.getByText('Мама', { exact: true }).last().boundingBox();
-    assert(Math.abs(after.y - box.y) < 2, `список прыгнул при входе в режим выбора: ${box.y} → ${after.y}`);
-    await tap(page.getByText('Игорь Ветров')); await page.waitForTimeout(300);
-    assert(await page.getByLabel('Выбрано: 2').count(), 'второй не отметился');
-    // Панель действий липкая: после прокрутки остаётся у верхнего края.
-    await page.mouse.wheel(0, 300); await page.waitForTimeout(400);
-    const bar = await page.getByLabel('Удалить выбранных').boundingBox();
-    assert(bar && bar.y >= 0 && bar.y < 120, 'панель выбора уехала при прокрутке: ' + (bar && bar.y));
-    await page.mouse.wheel(0, -600); await page.waitForTimeout(400);
-    await tap(page.getByText('Игорь Ветров')); await page.waitForTimeout(300);
-    // Колокольчик: выключить уведомления у Мамы, выделение снимается; затем выделить её снова и удалить.
-    await tap(page.getByLabel('Выключить уведомления')); await page.waitForTimeout(400);
-    assert.equal((await stored()).friends.find((x) => x.id === 'c').muted, true, 'уведомления не выключились');
-    assert.equal(await page.getByLabel('Удалить выбранных').count(), 0, 'выделение должно сняться');
-    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await page.mouse.down(); await page.waitForTimeout(700); await page.mouse.up(); await page.waitForTimeout(400);
-    await tap(page.getByLabel('Удалить выбранных')); await page.waitForTimeout(600);
-    t = await text(); assert(!has(t, 'Мама') && has(t, 'Игорь Ветров') && has(t, '2 человека'), 'Мама не удалилась: ' + t.slice(0, 200));
-    assert(!(await stored()).friends.some((f) => f.id === 'c'));
-    await shot('friends-selection');
-  });
-  await step('Карточка друга: связь, предпочтения, даты, напоминания', async () => {
-    await tap(page.getByText('Аня Смирнова')); await page.waitForTimeout(900);
-    const t = await text();
-    for (const s of ['Аня Смирнова', '31 год', 'сегодня', 'Позвонить', 'Telegram', 'WhatsApp', 'Еда', 'Суши, тирамису', 'Цветы', 'Пионы', 'Подарки', 'Заметки', 'Важные даты', 'Познакомились', 'каждый год', 'Напоминания', 'Купить цветы — Аня']) assert(has(t, s), `нет «${s}»`);
-    assert(!has(t, 'Viber'), 'Viber не должен показываться без номера');
-    await shot('friend');
-  });
-  await step('Соцсети: чипы в карточке, добавление по ссылке и по нику, сайт, ошибка, дубликат, форма', async () => {
-    await go('/friend/a');
-    let t = await text(); assert(has(t, 'Соцсети') && has(t, 'TikTok') && has(t, 'anya.design'), t.slice(0, 300));
-    await tap(page.getByLabel('Добавить соцсеть')); await page.waitForTimeout(500);
-    const field = page.getByPlaceholder('instagram.com/… или @ник');
-    await field.fill('https://www.youtube.com/@anyasings'); await page.waitForTimeout(300);
-    t = await text(); assert(has(t, 'Похоже на YouTube') && has(t, '@anyasings'), t.slice(-300));
-    await page.getByText('Добавить YouTube', { exact: true }).click(); await page.waitForTimeout(600);
-    let socials = (await stored()).friends.find((f) => f.id === 'a').socials;
-    assert.equal(socials.length, 3); assert.equal(socials[2].network, 'youtube');
-    t = await text(); assert(has(t, 'YouTube'), 'чип не появился');
-    await tap(page.getByLabel('Добавить соцсеть')); await page.waitForTimeout(500);
-    await field.fill('@anya.ig'); await page.waitForTimeout(300);
-    t = await text(); assert(has(t, 'Хороший ник'), t.slice(-300));
-    // Полный список: поиск по сокращению, по-русски и в другой раскладке.
-    await page.getByText('Все сети', { exact: false }).click(); await page.waitForTimeout(700);
-    const find = page.getByPlaceholder('Найти сеть');
-    await find.fill('жж'); await page.waitForTimeout(300);
-    t = await text(); assert(has(t, 'LiveJournal') && !has(t, 'Хабр'), 'поиск по «жж»: ' + t.slice(-300));
-    await find.fill('ntktuhfv'); await page.waitForTimeout(300);
-    t = await text(); assert(has(t, 'Telegram'), 'поиск в другой раскладке: ' + t.slice(0, 200));
-    await find.fill('инста'); await page.waitForTimeout(300);
-    await page.getByText('Instagram', { exact: true }).last().click(); await page.waitForTimeout(500);
-    t = await text(); assert(has(t, 'Добавить Instagram') && has(t, '@anya.ig') && !has(t, 'Помогите'), t.slice(-300));
-    await page.getByText('Добавить Instagram', { exact: true }).click(); await page.waitForTimeout(600);
-    socials = (await stored()).friends.find((f) => f.id === 'a').socials;
-    assert.equal(socials[3].url, 'https://instagram.com/anya.ig');
-    await tap(page.getByLabel('Добавить соцсеть')); await page.waitForTimeout(500);
-    await field.fill('аня певица'); await page.waitForTimeout(300);
-    t = await text(); assert(has(t, 'Ник без пробелов или ссылка'), t.slice(-300));
-    await field.fill('kattysings.ru/about'); await page.waitForTimeout(300);
-    t = await text(); assert(has(t, 'Такую сеть не узнаём') && has(t, 'Да, это сайт'), t.slice(-300));
-    await field.fill('https://www.tiktok.com/@anya'); await page.waitForTimeout(300);
-    t = await text(); assert(has(t, 'уже есть'), 'дубликат не распознан: ' + t.slice(-200));
-    await page.getByLabel('Закрыть').last().click(); await page.waitForTimeout(400);
-    await tap(page.getByLabel('Изменить')); await page.waitForTimeout(900);
-    t = await text(); assert(has(t, 'Соцсети') && has(t, '@anyasings'), t.slice(0, 300));
-    await page.getByLabel('Убрать YouTube').click(); await page.waitForTimeout(300);
-    await page.getByText('Готово', { exact: true }).click(); await page.waitForTimeout(800);
-    socials = (await stored()).friends.find((f) => f.id === 'a').socials;
-    assert.deepEqual(socials.map((l) => l.network), ['tiktok', 'site', 'instagram']);
-    await shot('socials');
-  });
+// ===== Лента «Скоро» =====
+scenario('Лента: просроченное, сегодняшний праздник с возрастом, неделя — в таком порядке', async ({ ui }) => {
+  await ui.go('/');
+  for (const s of ['Просрочено', 'Написать Диме', 'Сегодня', 'Аня Смирнова', 'Позвонить', 'Поздравить', 'На этой неделе', 'Игорь Ветров', 'через 3 дня', 'В ближайший месяц']) await ui.see(s);
+  const t = await ui.text();
+  const order = ['Просрочено', 'Сегодня', 'На этой неделе', 'В ближайший месяц'].map((s) => t.indexOf(s));
+  assert.deepEqual([...order].sort((a, b) => a - b), order, `порядок секций: ${t.slice(0, 300)}`);
+  await ui.see('31');
+  await ui.notSee('Сдать отчёт'); // сделанные в ленту не попадают
+});
 
-  await step('Карточка друга: звезда в шапке — в избранное, в списке выше остальных', async () => {
-    await tap(page.getByLabel('В избранное')); await page.waitForTimeout(400);
-    assert.equal((await stored()).friends.find((x) => x.id === 'a').favorite, true);
-    assert(await page.getByLabel('Убрать из избранного').count(), 'звезда не переключилась');
-    await page.goBack(); await page.waitForTimeout(800);
-    await page.getByText('По имени', { exact: true }).click(); await page.waitForTimeout(400);
-    let t = await text();
-    assert(has(t, 'Избранные') && t.indexOf('Избранные') < t.indexOf('Аня Смирнова') && t.indexOf('Аня Смирнова') < t.indexOf('Игорь Ветров'), t.slice(0, 300));
-    await shot('friends-favorites');
-    await page.getByText('Скоро день рождения').click(); await page.waitForTimeout(400);
-    t = await text(); assert(has(t, 'Избранные') && has(t, 'Остальные'), t.slice(0, 300));
-    await tap(page.getByText('Аня Смирнова')); await page.waitForTimeout(900);
-  });
-  await step('Карточка друга → «Добавить» напоминание с выбранным другом', async () => {
-    await tap(page.getByText('Добавить', { exact: true })); await page.waitForTimeout(900);
-    assert(has(await text(), 'Новое напоминание'));
-    assert(await input('Например, написать Аня Смирнова').count(), 'друг не подставлен');
-    const chips = await text(); assert(chips.indexOf('Для себя') < chips.indexOf('Аня Смирнова') && chips.indexOf('Аня Смирнова') < chips.indexOf('Игорь Ветров'), 'избранная не первая среди чипов');
-    await page.goBack(); await page.waitForTimeout(600);
-  });
+scenario('Лента: больше пяти просроченных — строка «Ещё N» ведёт во вкладку «Напоминания»', async ({ ui }) => {
+  await ui.go('/');
+  await ui.see('Ещё 2 просроченных');
+  await ui.tap(/^Ещё 2 просроченных/);
+  await ui.see('Однократные');
+  await ui.see('Отправить документы');
+}, { data: seed({ reminders: [1, 2, 3, 4, 5, 6, 7].map((n) => R({ id: `o${n}`, title: ['Оплатить интернет', 'Записаться к врачу', 'Вернуть книгу', 'Позвонить в банк', 'Купить корм', 'Забрать химчистку', 'Отправить документы'][n - 1], date: d(-n) })) }) });
 
-  await step('Новый друг: имя, дата цифрами, год неизвестен, телефон, дата-событие', async () => {
-    await go('/friend/edit');
-    await input('Например, Аня').fill('Пётр Тестов');
-    // Три поля: курсор сам переходит дальше, год можно стереть — дата остаётся без года.
-    await input('ДД').first().click(); await page.keyboard.type('1503'); await page.waitForTimeout(200);
-    assert.equal(await input('ММ').first().inputValue(), '03', 'курсор не перешёл в месяц');
-    await page.keyboard.type('1990'); await page.waitForTimeout(200);
-    assert.equal(await input('Год').first().inputValue(), '1990', 'курсор не перешёл в год');
-    await input('Год').first().fill(''); await page.waitForTimeout(200);
-    await input('Год').first().fill('2001'); await page.waitForTimeout(200);
-    await input('+7…').fill('+375 29 111-00-11');
-    await input('Любит суши, не ест острое…').fill('Пицца');
-    await page.getByText('Свадьба').click(); await page.waitForTimeout(400);
-    assert(has(await text(), 'Повторять каждый год'));
-    await page.getByText('Сохранить', { exact: true }).click(); await page.waitForTimeout(900);
-    const f = (await stored()).friends.find((x) => x.name === 'Пётр Тестов');
-    assert(f && f.birthday === '2001-03-15' && f.phone === '+375 29 111-00-11' && f.food === 'Пицца' && f.dates.length === 1 && f.dates[0].title === 'Свадьба');
-  });
-  await step('Друг: редактирование и удаление', async () => {
-    await go('/friends');
-    await tap(page.getByText('Пётр Тестов')); await page.waitForTimeout(900);
-    await tap(page.getByLabel('Изменить')); await page.waitForTimeout(900);
-    await input('Например, Аня').fill('Пётр Тестов Второй');
-    await tap(page.getByText('Готово')); await page.waitForTimeout(900);
-    assert(has(await text(), 'Пётр Тестов Второй'));
-    await tap(page.getByLabel('Изменить')); await page.waitForTimeout(900);
-    await tap(page.getByText('Удалить друга')); await page.waitForTimeout(1200);
-    assert(!(await stored()).friends.some((x) => x.name.startsWith('Пётр')), 'друг не удалён');
-  });
+scenario('Лента: «сделано» у повторяющегося переносит его на следующий раз', async ({ ui }) => {
+  await ui.go('/');
+  await ui.check('Купить цветы — Аня');
+  const r = await ui.waitData((x) => x.reminders.find((r) => r.id === 'r1').date !== d(0), 'дата не перенесена');
+  assert.equal(r.reminders.find((r) => r.id === 'r1').date, '2026-08-10');
+  assert.equal(r.reminders.find((r) => r.id === 'r1').done, false);
+  await ui.notSee('Купить цветы — Аня'); // через два месяца — за горизонтом ленты
+});
 
-  await step('Напоминание: шаблон, друг, дата/время цифрами, повтор каждую неделю', async () => {
-    await go('/reminders');
-    await page.getByLabel('Новое напоминание').click(); await page.waitForTimeout(900);
-    await page.getByText('Оплатить счета').click();
-    await page.getByText('Игорь Ветров').click(); await page.waitForTimeout(300);
-    await page.getByText('Позвонить', { exact: true }).click(); await page.waitForTimeout(200);
-    const d = input('ДД.ММ.ГГГГ'); await d.click(); await d.fill(''); await d.pressSequentially('20112026');
-    const tm = input('ЧЧ:ММ'); await tm.click(); await tm.fill(''); await tm.pressSequentially('0930');
-    await page.getByText('Каждую неделю').click();
-    await page.getByText('Сохранить', { exact: true }).click(); await page.waitForTimeout(900);
-    const r = (await stored()).reminders.find((x) => x.title === 'Позвонить — Игорь Ветров');
-    assert(r, 'напоминание не сохранилось');
-    assert.equal(r.date, '2026-11-20'); assert.equal(r.time, '09:30'); assert.deepEqual(r.repeat, { every: 1, unit: 'week' }); assert.equal(r.friendId, 'b');
-    const t = await text(); assert(has(t, 'Повторяющиеся') && has(t, 'Позвонить — Игорь Ветров') && has(t, 'каждую неделю'), t.slice(0, 300));
-  });
-  await step('Напоминание: свой интервал и «напомнить заранее»', async () => {
-    await page.getByLabel('Новое напоминание').click(); await page.waitForTimeout(900);
-    await input('Например, сдать отчёт').fill('Сдать проект');
-    await page.getByText('За 3 дня').click();
-    await page.getByText('Сохранить', { exact: true }).click(); await page.waitForTimeout(900);
-    let r = (await stored()).reminders.find((x) => x.title === 'Сдать проект');
-    assert(r && r.advance === 4320 && r.repeat === null && r.friendId === null);
-    await page.getByText('Сдать проект').click(); await page.waitForTimeout(900);
-    await page.getByText('Свой…').click(); await page.waitForTimeout(300);
-    await page.getByText('недели', { exact: true }).click();
-    await page.getByText('Сохранить', { exact: true }).click(); await page.waitForTimeout(900);
-    r = (await stored()).reminders.find((x) => x.title === 'Сдать проект');
-    assert.deepEqual(r.repeat, { every: 3, unit: 'week' });
-    assert(has(await text(), 'каждые 3 недели'));
-  });
-  await step('Напоминания: фильтры, «Все», режим выбора — сделать несколько и удалить', async () => {
-    await page.getByText('Сделанные').click(); await page.waitForTimeout(400);
-    let t = await text(); assert(has(t, 'Написать Диме') && has(t, 'Сделано'), t.slice(0, 300));
-    await page.getByText('Для себя').click(); await page.waitForTimeout(400);
-    t = await text(); assert(has(t, 'Сдать проект') && !has(t, 'Игорь Ветров'));
-    await page.getByText('Друзья', { exact: true }).first().click(); await page.waitForTimeout(400);
-    t = await text(); assert(has(t, 'Игорь Ветров') && !has(t, 'Сдать проект'));
-    await page.getByText('Все', { exact: true }).click(); await page.waitForTimeout(400);
-    t = await text(); assert(has(t, 'Активные') && has(t, 'Сделанные') && has(t, 'Сдать проект') && has(t, 'Написать Диме'), '«Все»: ' + t.slice(0, 300));
-    await shot('reminders');
-    // Долгое нажатие — режим выбора. «Написать Диме» сделано: вернуть в активные, снова отметить сделанным, удалить.
-    const press = async (title) => {
-      const b = await page.getByText(title, { exact: true }).last().boundingBox();
-      await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2); await page.mouse.down(); await page.waitForTimeout(700); await page.mouse.up(); await page.waitForTimeout(400);
-      return b.y;
-    };
-    const before = await page.getByText('Написать Диме', { exact: true }).last().boundingBox();
-    await press('Написать Диме');
-    assert(await page.getByLabel('Выбрано: 1').count(), 'режим выбора не включился');
-    const after = await page.getByText('Написать Диме', { exact: true }).last().boundingBox();
-    assert(Math.abs(after.y - before.y) < 2, 'список прыгнул при входе в режим выбора');
-    await tap(page.getByLabel('Вернуть в активные')); await page.waitForTimeout(500);
-    let r3 = (await stored()).reminders.find((r) => r.id === 'r3');
-    assert(r3 && r3.done === false, 'напоминание не вернулось в активные');
-    assert.equal(await page.getByLabel('Удалить выбранные').count(), 0, 'выделение должно сняться');
-    await press('Написать Диме');
-    await tap(page.getByLabel('Отметить сделанными')); await page.waitForTimeout(500);
-    r3 = (await stored()).reminders.find((r) => r.id === 'r3');
-    assert(r3 && r3.done === true, 'однократное напоминание не отмечено сделанным');
-    // Повторяющееся «сделано» переносит на следующий раз, а не ставит галочку.
-    const r5before = (await stored()).reminders.find((r) => r.title === 'Сдать проект');
-    await press('Сдать проект');
-    await tap(page.getByLabel('Отметить сделанными')); await page.waitForTimeout(500);
-    const r5 = (await stored()).reminders.find((r) => r.title === 'Сдать проект');
-    assert(r5 && r5.done === false && r5.date > r5before.date, `повторяющееся должно перенестись: ${r5before.date} → ${r5 && r5.date}`);
-    // Удалить выбранные с подтверждением (диалог принимается автоматически).
-    await press('Написать Диме');
-    await tap(page.getByLabel('Удалить выбранные')); await page.waitForTimeout(600);
-    assert(!(await stored()).reminders.some((r) => r.id === 'r3'), 'напоминание не удалилось');
-    await page.getByText('Активные', { exact: true }).first().click(); await page.waitForTimeout(400);
-  });
+scenario('Лента: однократное просроченное уходит в «Сделанные» и возвращается оттуда', async ({ ui }) => {
+  await ui.go('/');
+  await ui.check('Написать Диме');
+  await ui.waitData((x) => x.reminders.find((r) => r.id === 'r3').done === true, 'не отмечено сделанным');
+  await ui.notSee('Просрочено');
+  await ui.tab('Напоминания');
+  await ui.tap('Сделанные');
+  await ui.see('Написать Диме');
+  await ui.check('Написать Диме');
+  await ui.waitData((x) => x.reminders.find((r) => r.id === 'r3').done === false, 'не вернулось в активные');
+});
 
-  await step('Импорт: пример контактов, фильтры, выбрать все, добавить, дубликаты', async () => {
-    await go('/import');
-    let t = await text();
-    for (const s of ['Это пример', 'Все · 8', 'С номером · 8', 'С днём рождения · 5', 'Алина Смирнова', 'Уже есть: Аня Смирнова']) assert(has(t, s), `нет «${s}»`);
-    await page.getByText('С днём рождения · 5').click(); await page.waitForTimeout(300);
-    t = await text(); assert(!has(t, 'Вика'), 'фильтр не сработал');
-    await page.getByText('Все · 8').click(); await page.waitForTimeout(300);
-    await page.getByText('Выбрать все').click(); await page.waitForTimeout(300);
-    t = await text(); assert(has(t, 'Выбрано 7 из 8'), 'ожидали 7 выбранных (одна — дубликат): ' + t.slice(0, 200));
-    await page.getByText(/^Добавить 7/).click(); await page.waitForTimeout(1200);
-    const d = await stored();
-    assert.equal(d.friends.length, 2 + 7); // двое остались после удаления Мамы в сценарии выбора
-    const dima = d.friends.find((f) => f.name === 'Дима Петров');
-    assert(dima && dima.birthday === '1993-12-30' && dima.dates.length === 1, 'даты из контактов не перенесены');
-    const boris = d.friends.find((f) => f.name === 'Борис Ким');
-    assert(boris && boris.birthday === '1904-09-03', 'день рождения без года');
-    const serg = d.friends.find((f) => f.name === 'Серёжа Волков');
-    assert(serg && serg.telegramId === 444 && serg.viber === '79253334455', 'мессенджеры не перенесены');
-    const katya = d.friends.find((f) => f.name === 'Катя Орлова');
-    assert(katya && katya.socials && katya.socials[0].network === 'instagram' && katya.socials[0].handle === 'katya.orlova', 'сайт из контактов не стал соцсетью');
-  });
+scenario('Лента: нажатие на карточку «Сегодня» открывает друга', async ({ ui }) => {
+  await ui.go('/');
+  await ui.tap('Аня Смирнова');
+  await ui.see('Суши, тирамису');
+  await ui.see('Познакомились');
+});
 
-  await step('Напоминание: выбор друга через окно с поиском (когда друзей много)', async () => {
-    await go('/reminders');
-    await page.getByLabel('Новое напоминание').click(); await page.waitForTimeout(900);
-    await input('Например, сдать отчёт').fill('Поздравить');
-    await page.getByText('Выбрать друга').click(); await page.waitForTimeout(600);
-    await input('Имя').fill('дим'); await page.waitForTimeout(300);
-    let t = await text(); assert(has(t, 'Дима Петров') && !has(t, 'Алина'), 'поиск в окне: ' + t.slice(0, 200));
-    await tap(page.getByText('Дима Петров')); await page.waitForTimeout(600);
-    t = await text(); assert(has(t, 'Дима Петров') && has(t, 'Другой друг'), 'выбранный друг не показан чипом');
-    await page.getByText('Сохранить', { exact: true }).click(); await page.waitForTimeout(900);
-    const d = await stored();
-    const r = d.reminders.find((x) => x.title === 'Поздравить');
-    const dima = d.friends.find((f) => f.name === 'Дима Петров');
-    assert(r && dima && r.friendId === dima.id, 'друг не привязан');
-  });
+// ===== Друзья =====
+scenario('Друзья: поиск по имени, латиницей, в другой раскладке и без совпадений', async ({ ui }) => {
+  await ui.go('/friends');
+  await ui.see('3 человека');
+  const search = async (q) => { await ui.fill('Поиск по имени', q); };
+  await search('мам'); await ui.see('Мама'); await ui.notSee('Игорь Ветров');
+  await search('smirnova'); await ui.see('Аня Смирнова'); await ui.notSee('Мама');
+  await search('bujhm'); await ui.see('Игорь Ветров'); await ui.notSee('Аня Смирнова');
+  await search('тюльп'); await ui.see('Никого не нашлось'); // по цветам и заметкам не ищем
+  await search(''); await ui.see('Мама');
+});
 
-  await step('Оформление: тёмная тема, цвета для тёмной и светлой, живой предпросмотр', async () => {
-    await go('/settings');
-    let t = await text(); assert(has(t, 'Тема и цвет') && has(t, 'Терракота'), 'строки «Тема и цвет» нет: ' + t.slice(0, 200));
-    await page.getByText('Тема и цвет').click(); await page.waitForTimeout(900);
-    t = await text(); assert(has(t, 'Цвет светлой темы') && has(t, 'Цвет тёмной темы'), 'экран оформления не открылся: ' + t.slice(0, 200));
-    const selected = (label) => page.getByLabel(label).getAttribute('aria-selected');
-    assert.equal(await selected('Предпросмотр светлой темы'), 'true', 'предпросмотр начинается с текущей темы');
-    await page.getByText('Тёмная', { exact: true }).last().click(); await page.waitForTimeout(500);
-    assert.equal((await stored()).settings.theme, 'dark');
-    assert.equal(await selected('Предпросмотр тёмной темы'), 'true', 'после выбора тёмной темы предпросмотр тёмный');
-    await page.getByLabel('Слива').last().click(); await page.waitForTimeout(400);
-    assert.equal((await stored()).settings.accentDark, 'plum');
-    await shot('appearance-dark');
-    await page.getByLabel('Индиго').first().click(); await page.waitForTimeout(400);
-    assert.equal((await stored()).settings.accentLight, 'indigo');
-    assert.equal(await selected('Предпросмотр светлой темы'), 'true', 'цвет светлой темы переключает предпросмотр на светлую');
-    await go('/reminders');
-    const fab = page.getByLabel('Новое напоминание');
-    const bg = await fab.evaluate((el) => getComputedStyle(el).backgroundColor);
-    assert.equal(bg, 'rgb(184, 138, 181)', `акцент не применился: ${bg}`);
-    await shot('upcoming-dark-plum');
-    await go('/appearance');
-    await page.getByText('Светлая', { exact: true }).last().click(); await page.waitForTimeout(400);
-    const s = (await stored()).settings; assert(s.theme === 'light' && s.accentLight === 'indigo' && s.accentDark === 'plum');
-    await go('/reminders');
-    const bg2 = await fab.evaluate((el) => getComputedStyle(el).backgroundColor);
-    assert.equal(bg2, 'rgb(62, 90, 138)', `светлый акцент не применился: ${bg2}`);
-    await shot('upcoming-light-indigo');
-  });
+scenario('Друзья: сортировка по ближайшему дню рождения', async ({ ui }) => {
+  await ui.go('/friends');
+  await ui.tap('Скоро день рождения');
+  const t = await ui.text();
+  const at = (s) => t.indexOf(s);
+  assert.ok(at('Аня Смирнова') < at('Игорь Ветров') && at('Игорь Ветров') < at('Мама'), t.slice(0, 300));
+});
 
-  await step('Настройки: время уведомлений цифрами и «за день»', async () => {
-    await go('/settings');
-    const t = input('ЧЧ:ММ'); await t.click(); await t.fill(''); await t.pressSequentially('0845'); await page.waitForTimeout(300);
-    assert.equal((await stored()).settings.eventTime, '08:45');
-    await page.getByRole('switch').first().click(); await page.waitForTimeout(300);
-    assert.equal((await stored()).settings.eventDayBefore, false);
-  });
+scenario('Друзья: выбор долгим нажатием и удаление вместе с напоминаниями этих друзей', async ({ ui }) => {
+  await ui.go('/friends');
+  const before = await ui.box('Аня Смирнова');
+  await ui.longPress('Аня Смирнова');
+  await ui.see('Выбрано: 1', { label: true });
+  const after = await ui.box('Аня Смирнова');
+  assert.ok(Math.abs(after.y - before.y) < 2, `список прыгнул при входе в выбор: ${before.y} → ${after.y}`);
+  await ui.tap('Игорь Ветров');
+  await ui.see('Выбрано: 2', { label: true });
+  await ui.tap('Удалить выбранных');
+  const data = await ui.waitData((x) => x.friends.length === 1, 'друзья не удалились');
+  assert.deepEqual(data.friends.map((f) => f.name), ['Мама']);
+  assert.deepEqual(data.reminders.map((r) => r.id).sort(), ['r3', 'r4'], 'напоминание удалённой Ани должно уйти, личные — остаться');
+  await ui.see('1 человек');
+});
 
-  await step('Настройки: «Что нового» — версия внизу, история по версиям', async () => {
-    await go('/settings'); let t = await text();
-    assert(has(t, 'Что нового') && has(t, `«Друзья» ${VERSION}`), t.slice(-300));
-    await tap(page.getByText('Что нового', { exact: true })); await page.waitForTimeout(700);
-    t = await text();
-    assert(has(t, `Установлена версия ${VERSION}`) && has(t, 'установлена') && has(t, '1.0.0') && has(t, 'Первая версия'), t.slice(0, 300));
-    await shot('whats-new');
-  });
+scenario('Друзья: колокольчик в режиме выбора выключает уведомления о событиях', async ({ ui }) => {
+  await ui.go('/friends');
+  await ui.longPress('Мама');
+  await ui.tap('Выключить уведомления');
+  await ui.waitData((x) => x.friends.find((f) => f.id === 'c').muted === true, 'уведомления не выключились');
+  await ui.notSee('Выбрано: 1', { label: true });
+});
 
-  await step('Шторка «Что нового» после обновления: показывает пропущенные версии, запоминает текущую', async () => {
-    const old = { ...seed, settings: { ...seed.settings, lastSeenVersion: '1.12.0' } };
-    const ctx2 = await browser.newContext({ ...devices['iPhone 13'], locale: 'ru-RU' });
-    await ctx2.addInitScript((d) => { if (!localStorage.getItem('friends-notes/data/v1')) localStorage.setItem('friends-notes/data/v1', d); }, JSON.stringify(old));
-    const p2 = await ctx2.newPage();
-    const t2 = async () => (await p2.evaluate(() => document.body.innerText)).replace(/\s+/g, ' ');
-    await p2.goto('http://localhost:8096/'); await p2.waitForTimeout(2200);
-    let t = await t2();
-    assert(has(t, 'Что нового') && has(t, `обновилось до версии ${VERSION}`), t.slice(0, 300));
-    assert(has(t, '1.13.0') && has(t, 'Тишина для отдельных людей') && !has(t, 'Свайп влево удаляет друга'), 'показываем только версии новее 1.12.0');
-    await p2.screenshot({ path: `${out}/e2e-whats-new-sheet.png` });
-    await p2.getByText('Понятно', { exact: true }).click(); await p2.waitForTimeout(700);
-    t = await t2(); assert(!has(t, 'обновилось до версии'), 'шторка закрылась');
-    assert.equal(JSON.parse(await p2.evaluate((k) => localStorage.getItem(k), KEY)).settings.lastSeenVersion, VERSION);
-    await p2.reload(); await p2.waitForTimeout(2200);
-    t = await t2(); assert(!has(t, 'обновилось до версии'), 'второй раз не показываем');
-    await ctx2.close();
-  });
+// ===== Карточка друга =====
+scenario('Карточка: связь только через то, что есть; предпочтения, даты, напоминания', async ({ ui }) => {
+  await ui.go('/friends');
+  await ui.tap('Аня Смирнова');
+  for (const s of ['31 год', 'сегодня', 'Позвонить', 'Telegram', 'WhatsApp', 'Суши, тирамису', 'Пионы', 'Керамика', 'Любит настолки', 'Познакомились', 'каждый год', 'Купить цветы — Аня', 'TikTok', 'anya.design']) await ui.see(s);
+  await ui.notSee('Viber');
+});
 
-  await step('Шторка «Что нового»: ссылка «Вся история» открывает экран истории', async () => {
-    const old = { ...seed, settings: { ...seed.settings, lastSeenVersion: undefined } };
-    const ctx2 = await browser.newContext({ ...devices['iPhone 13'], locale: 'ru-RU' });
-    await ctx2.addInitScript((d) => { if (!localStorage.getItem('friends-notes/data/v1')) localStorage.setItem('friends-notes/data/v1', d); }, JSON.stringify(old));
-    const p2 = await ctx2.newPage();
-    const t2 = async () => (await p2.evaluate(() => document.body.innerText)).replace(/\s+/g, ' ');
-    await p2.goto('http://localhost:8096/'); await p2.waitForTimeout(2200);
-    let t = await t2();
-    assert(has(t, `обновилось до версии ${VERSION}.`) && !has(t, '1.16.5'), 'прошлая версия неизвестна — только текущая: ' + t.slice(0, 300));
-    await p2.getByText('Вся история изменений', { exact: false }).click(); await p2.waitForTimeout(900);
-    t = await t2(); assert(has(t, `Установлена версия ${VERSION}`) && has(t, '1.0.0'), t.slice(0, 300));
-    await ctx2.close();
-  });
+scenario('Карточка: звезда поднимает друга в «Избранные»', async ({ ui, page }) => {
+  await ui.go('/friends');
+  await ui.tap('Мама');
+  await ui.tap('В избранное');
+  await ui.waitData((x) => x.friends.find((f) => f.id === 'c').favorite === true, 'звезда не сохранилась');
+  await ui.see('Убрать из избранного', { label: true });
+  await page.goBack();
+  await ui.see('Избранные');
+  const t = await ui.text();
+  assert.ok(t.indexOf('Избранные') < t.indexOf('Мама') && t.indexOf('Мама') < t.indexOf('Аня Смирнова'), t.slice(0, 300));
+});
 
-  await step('Импорт из Telegram: карточка в ленте «Скоро» и в списке друзей вместо плавающей плашки', async () => {
-    for (const [preview, expect] of [['loading', ['Импорт из Telegram', '154 из 248']], ['done', ['Telegram: 248 контактов', 'Выбери, кого добавить']], ['code', ['Вход в Telegram ждёт тебя', 'Код из приложения Telegram']]]) {
-      const ctx2 = await browser.newContext({ ...devices['iPhone 13'], locale: 'ru-RU' });
-      await ctx2.addInitScript(([d, p]) => { localStorage.setItem('friends-notes/data/v1', d); localStorage.setItem('friends-notes/tg-preview', p); }, [JSON.stringify(seed), preview]);
-      const p2 = await ctx2.newPage();
-      const t2 = async () => (await p2.evaluate(() => document.body.innerText)).replace(/\s+/g, ' ');
-      await p2.goto('http://localhost:8096/'); await p2.waitForTimeout(1500);
-      let t = await t2();
-      for (const x of expect) assert(has(t, x), `${preview}: нет «${x}»: ` + t.slice(0, 300));
-      assert(!has(t, 'загружены ('), 'старая плашка не должна показываться');
-      const box = await p2.getByText(expect[0], { exact: true }).first().boundingBox();
-      assert(box && box.y < 400, `${preview}: карточка должна быть в начале ленты, y=${box && box.y}`);
-      await p2.screenshot({ path: `${out}/e2e-tg-card-${preview}.png` });
-      await p2.getByText('Друзья', { exact: true }).last().click(); await p2.waitForTimeout(700);
-      t = await t2(); assert(has(t, expect[0]), `${preview}: карточки нет в списке друзей`);
-      if (preview === 'done') {
-        await p2.getByText(expect[0], { exact: true }).last().click(); await p2.waitForTimeout(900);
-        // В браузере результата импорта нет (он живёт в нативном модуле), поэтому проверяем только переход на экран импорта.
-        t = await t2(); assert(has(t, 'Импорт контактов'), 'нажатие на готовый импорт должно открыть экран импорта: ' + t.slice(0, 200));
-      }
-      await ctx2.close();
+scenario('Карточка: «Добавить» в напоминаниях создаёт напоминание для этого друга', async ({ ui }) => {
+  await ui.go('/friends');
+  await ui.tap('Игорь Ветров');
+  await ui.tap('Добавить');
+  await ui.see('Новое напоминание');
+  await ui.fill('Например, сдать отчёт', 'Вернуть книгу', { orPlaceholder: /^Например, / });
+  await ui.tap('Готово');
+  const data = await ui.waitData((x) => x.reminders.some((r) => r.title === 'Вернуть книгу'), 'не сохранилось');
+  assert.equal(data.reminders.find((r) => r.title === 'Вернуть книгу').friendId, 'b');
+});
+
+scenario('Друг не найден: удалённый друг по старой ссылке', async ({ ui }) => {
+  await ui.go('/friend/gone');
+  await ui.see('Друг не найден');
+});
+
+// ===== Форма друга =====
+scenario('Новый друг: дата тремя полями, телефон, важная дата — и он сразу в ленте', async ({ ui, page }) => {
+  await ui.go('/friends');
+  await ui.tap('Добавить друга');
+  await ui.fill('Например, Аня', 'Пётр Тестов');
+  await ui.typeInto('ДД', '1506');
+  assert.equal(await page.getByPlaceholder('ММ').first().inputValue(), '06', 'курсор не перешёл в месяц');
+  await page.keyboard.type('1990');
+  await ui.fill('+7…', '+375 29 111-00-11');
+  await ui.fill('Любит суши, не ест острое…', 'Пицца');
+  await ui.tap('Свадьба');
+  await ui.see('Повторять каждый год');
+  await ui.tap('Готово');
+  const data = await ui.waitData((x) => x.friends.some((f) => f.name === 'Пётр Тестов'), 'друг не сохранился');
+  const f = data.friends.find((x) => x.name === 'Пётр Тестов');
+  assert.equal(f.birthday, '1990-06-15');
+  assert.equal(f.phone, '+375 29 111-00-11');
+  assert.equal(f.food, 'Пицца');
+  assert.deepEqual(f.dates.map((x) => x.title), ['Свадьба']);
+  await ui.tab('Скоро');
+  await ui.see('Пётр Тестов');
+  await ui.see('через 5 дней');
+});
+
+scenario('Новый друг: год рождения можно не указывать', async ({ ui }) => {
+  await ui.go('/friends');
+  await ui.tap('Добавить друга');
+  await ui.fill('Например, Аня', 'Без Года');
+  await ui.typeInto('ДД', '0109');
+  await ui.tap('Готово');
+  const data = await ui.waitData((x) => x.friends.some((f) => f.name === 'Без Года'), 'друг не сохранился');
+  const f = data.friends.find((x) => x.name === 'Без Года');
+  assert.match(f.birthday, /^1904-09-01$/, 'без года хранится с годом-меткой 1904');
+});
+
+scenario('Новый друг: без имени не сохраняется', async ({ ui }) => {
+  await ui.go('/friends');
+  await ui.tap('Добавить друга');
+  await ui.tap('Готово');
+  await ui.see('Новый друг');
+  assert.equal((await ui.data()).friends.length, 3);
+});
+
+scenario('Новый друг: несуществующая дата рождения не сохраняется молча', async ({ ui }) => {
+  await ui.go('/friends');
+  await ui.tap('Добавить друга');
+  await ui.fill('Например, Аня', 'Тест Даты');
+  await ui.typeInto('ДД', '31021990');
+  await ui.see('Такой даты нет');
+  await ui.tap('Готово');
+  await ui.pause(800);
+  const saved = (await ui.data()).friends.find((f) => f.name === 'Тест Даты');
+  assert.ok(!saved, `друг сохранён без даты: ${JSON.stringify(saved && saved.birthday)}`);
+  await ui.see('Такой даты нет');
+}, { known: 'дата с ошибкой молча стирается при сохранении' });
+
+scenario('Друг: переименование, затем удаление вместе с его напоминаниями', async ({ ui }) => {
+  await ui.go('/friends');
+  await ui.tap('Аня Смирнова');
+  await ui.tap('Изменить');
+  await ui.fill('Например, Аня', 'Анна Смирнова');
+  await ui.tap('Готово');
+  await ui.see('Анна Смирнова');
+  await ui.tap('Изменить');
+  await ui.tap('Удалить друга');
+  const data = await ui.waitData((x) => !x.friends.some((f) => f.id === 'a'), 'друг не удалился');
+  assert.ok(!data.reminders.some((r) => r.friendId === 'a'), 'напоминания удалённого друга остались');
+  assert.match(ui.dialogs.join('\n'), /Удалить/);
+});
+
+// ===== Соцсети =====
+scenario('Соцсети: ссылка, ник с выбором сети, сайт, ошибка и дубликат', async ({ ui }) => {
+  await ui.go('/friends');
+  await ui.tap('Аня Смирнова');
+  const field = 'instagram.com/… или @ник';
+  await ui.tap('Добавить соцсеть');
+  await ui.fill(field, 'https://www.youtube.com/@anyasings');
+  await ui.see('Похоже на YouTube');
+  await ui.tap('Добавить YouTube');
+  await ui.waitData((x) => x.friends.find((f) => f.id === 'a').socials.some((s) => s.network === 'youtube'), 'YouTube не сохранился');
+  await ui.tap('Добавить соцсеть');
+  await ui.fill(field, '@anya.ig');
+  await ui.see('Хороший ник');
+  await ui.tap(/^Все сети/);
+  await ui.fill('Найти сеть', 'жж');
+  await ui.see('LiveJournal');
+  await ui.fill('Найти сеть', 'инста');
+  await ui.tap('Instagram');
+  await ui.notSee('Помогите');
+  await ui.tap('Добавить Instagram');
+  const data = await ui.waitData((x) => x.friends.find((f) => f.id === 'a').socials.some((s) => s.network === 'instagram'), 'Instagram не сохранился');
+  assert.equal(data.friends.find((f) => f.id === 'a').socials.find((s) => s.network === 'instagram').url, 'https://instagram.com/anya.ig');
+  await ui.tap('Добавить соцсеть');
+  await ui.fill(field, 'аня певица');
+  await ui.see('Ник без пробелов или ссылка');
+  await ui.fill(field, 'kattysings.ru/about');
+  await ui.see('Такую сеть не узнаём');
+  await ui.fill(field, 'https://www.tiktok.com/@anya');
+  await ui.see('уже есть');
+});
+
+scenario('Соцсети: убрать сеть в форме друга', async ({ ui }) => {
+  await ui.go('/friends');
+  await ui.tap('Аня Смирнова');
+  await ui.tap('Изменить');
+  await ui.tap('Убрать TikTok');
+  await ui.tap('Готово');
+  const data = await ui.waitData((x) => x.friends.find((f) => f.id === 'a').socials.length === 1, 'сеть не убралась');
+  assert.deepEqual(data.friends.find((f) => f.id === 'a').socials.map((s) => s.network), ['site']);
+});
+
+// ===== Напоминания =====
+scenario('Напоминание: шаблон, друг, дата и время цифрами, каждую неделю', async ({ ui }) => {
+  await ui.go('/reminders');
+  await ui.tap('Новое напоминание');
+  await ui.tap('Оплатить счета');
+  await ui.tap('Игорь Ветров');
+  await ui.tap('Позвонить');
+  await ui.typeInto('ДД.ММ.ГГГГ', '20062026', { clear: true });
+  await ui.typeInto('ЧЧ:ММ', '0930', { clear: true });
+  await ui.tap('Каждую неделю');
+  await ui.tap('Готово');
+  const data = await ui.waitData((x) => x.reminders.some((r) => r.title === 'Позвонить — Игорь Ветров'), 'не сохранилось');
+  const r = data.reminders.find((x) => x.title === 'Позвонить — Игорь Ветров');
+  assert.deepEqual([r.date, r.time, r.friendId], ['2026-06-20', '09:30', 'b']);
+  assert.deepEqual(r.repeat, { every: 1, unit: 'week' });
+  await ui.see('каждую неделю');
+});
+
+scenario('Напоминание: свой интервал и «за 3 дня»', async ({ ui }) => {
+  await ui.go('/reminders');
+  await ui.tap('Новое напоминание');
+  await ui.fill('Например, сдать отчёт', 'Сдать проект');
+  await ui.tap('За 3 дня');
+  await ui.tap('Свой…');
+  await ui.tap('недели');
+  await ui.tap('Готово');
+  const data = await ui.waitData((x) => x.reminders.some((r) => r.title === 'Сдать проект'), 'не сохранилось');
+  const r = data.reminders.find((x) => x.title === 'Сдать проект');
+  assert.equal(r.advance, 4320);
+  assert.deepEqual(r.repeat, { every: 3, unit: 'week' });
+  await ui.see('каждые 3 недели');
+});
+
+scenario('Напоминание: без текста не сохраняется', async ({ ui }) => {
+  await ui.go('/reminders');
+  await ui.tap('Новое напоминание');
+  await ui.tap('Готово');
+  await ui.see('Новое напоминание');
+  assert.equal((await ui.data()).reminders.length, 3);
+});
+
+scenario('Напоминание: неверное время не сохраняется молча', async ({ ui }) => {
+  await ui.go('/reminders');
+  await ui.tap('Новое напоминание');
+  await ui.fill('Например, сдать отчёт', 'Проверка времени');
+  await ui.typeInto('ЧЧ:ММ', '2599', { clear: true });
+  await ui.see('Нет такого времени');
+  await ui.tap('Готово');
+  await ui.pause(800);
+  const saved = (await ui.data()).reminders.find((r) => r.title === 'Проверка времени');
+  assert.ok(!saved, `сохранено с другим временем: ${saved && saved.date + ' ' + saved.time}`);
+}, { known: 'сохраняется прошлое верное время вместо ошибки' });
+
+scenario('Напоминание: неверная дата не сохраняется молча', async ({ ui }) => {
+  await ui.go('/reminders');
+  await ui.tap('Новое напоминание');
+  await ui.fill('Например, сдать отчёт', 'Проверка даты');
+  await ui.typeInto('ДД.ММ.ГГГГ', '31022027', { clear: true });
+  await ui.see('Нет такой даты');
+  await ui.tap('Готово');
+  await ui.pause(800);
+  const saved = (await ui.data()).reminders.find((r) => r.title === 'Проверка даты');
+  assert.ok(!saved, `сохранено на другую дату: ${saved && saved.date}`);
+}, { known: 'сохраняется прошлая верная дата вместо ошибки' });
+
+scenario('Напоминания: фильтры, выбор нескольких — сделать, вернуть и удалить', async ({ ui }) => {
+  await ui.go('/reminders');
+  await ui.tap('Сделанные'); await ui.see('Сдать отчёт'); await ui.notSee('Написать Диме');
+  await ui.tap('Для себя'); await ui.see('Написать Диме'); await ui.notSee('Купить цветы — Аня');
+  await ui.tap('Друзья', { nth: 'first' }); await ui.see('Купить цветы — Аня'); await ui.notSee('Написать Диме');
+  await ui.tap('Все'); await ui.see('Активные'); await ui.see('Сделанные'); await ui.see('Сдать отчёт');
+  const before = await ui.box('Написать Диме');
+  await ui.longPress('Написать Диме');
+  await ui.see('Выбрано: 1', { label: true });
+  assert.ok(Math.abs((await ui.box('Написать Диме')).y - before.y) < 2, 'список прыгнул при входе в выбор');
+  await ui.tap('Отметить сделанными');
+  await ui.waitData((x) => x.reminders.find((r) => r.id === 'r3').done, 'не отмечено');
+  await ui.longPress('Купить цветы — Аня');
+  await ui.tap('Отметить сделанными');
+  await ui.waitData((x) => x.reminders.find((r) => r.id === 'r1').date === '2026-08-10', 'повторяющееся должно перенестись');
+  await ui.longPress('Сдать отчёт');
+  await ui.tap('Вернуть в активные');
+  await ui.waitData((x) => !x.reminders.find((r) => r.id === 'r4').done, 'не вернулось');
+  await ui.longPress('Написать Диме');
+  await ui.tap('Удалить выбранные');
+  await ui.waitData((x) => !x.reminders.some((r) => r.id === 'r3'), 'не удалилось');
+});
+
+scenario('Напоминание: удаление из формы с подтверждением', async ({ ui }) => {
+  await ui.go('/reminders');
+  await ui.tap('Написать Диме');
+  await ui.see('Напоминание');
+  await ui.tap('Удалить');
+  await ui.waitData((x) => !x.reminders.some((r) => r.id === 'r3'), 'не удалилось');
+  assert.match(ui.dialogs.join('\n'), /Удалить напоминание/);
+});
+
+scenario('Напоминание по старой ссылке после удаления — «не найдено», а не пустая форма', async ({ ui }) => {
+  await ui.go('/reminders');
+  await ui.go('/reminder/edit?id=gone');
+  await ui.see('не найдено');
+  await ui.notSee('Новое напоминание');
+}, { known: 'открывается пустая форма «Новое напоминание»' });
+
+scenario('Напоминание: выбор друга через окно с поиском, когда друзей много', async ({ ui }) => {
+  await ui.go('/reminders');
+  await ui.tap('Новое напоминание');
+  await ui.fill('Например, сдать отчёт', 'Поздравить');
+  await ui.tap('Выбрать друга');
+  await ui.fill('Имя', 'дим');
+  await ui.see('Дима Петров');
+  await ui.notSee('Алина');
+  await ui.tap('Дима Петров');
+  await ui.see('Другой друг');
+  await ui.tap('Готово');
+  const data = await ui.waitData((x) => x.reminders.some((r) => r.title === 'Поздравить'), 'не сохранилось');
+  assert.equal(data.reminders.find((r) => r.title === 'Поздравить').friendId, 'm0');
+}, { data: seed({ friends: [ANYA, IGOR, MAMA, ...MORE_FRIENDS] }) });
+
+// ===== Импорт =====
+scenario('Импорт: дубликат не выбирается, добавляются 7, повторный импорт не плодит дублей', async ({ ui }) => {
+  await ui.go('/friends');
+  await ui.tap('Импорт друзей');
+  for (const s of ['Это пример', 'Все · 8', 'С днём рождения · 5', 'Уже есть: Аня Смирнова']) await ui.see(s);
+  await ui.tap('Выбрать все');
+  await ui.see('Выбрано 7 из 8');
+  await ui.tap(/^Добавить 7/);
+  const data = await ui.waitData((x) => x.friends.length === 10, 'друзья не добавились');
+  const dima = data.friends.find((f) => f.name === 'Дима Петров');
+  assert.ok(dima && dima.birthday === '1993-12-30' && dima.dates.length === 1, 'даты из контактов не перенесены');
+  const serg = data.friends.find((f) => f.name === 'Серёжа Волков');
+  assert.ok(serg && serg.telegramId === 444 && serg.viber === '79253334455', 'мессенджеры не перенесены');
+  const katya = data.friends.find((f) => f.name === 'Катя Орлова');
+  assert.equal(katya.socials[0].network, 'instagram', 'сайт из контактов должен стать соцсетью');
+  await ui.tap('Импорт друзей');
+  await ui.see('Уже есть: Дима Петров');
+  await ui.see('Отметь, кого добавить');
+  await ui.notSee('Выбрать все');
+  assert.equal((await ui.data()).friends.length, 10);
+});
+
+scenario('Импорт: «Добавить 2 друга» — число склоняется', async ({ ui }) => {
+  await ui.go('/friends');
+  await ui.tap('Импорт друзей');
+  await ui.tap('Выбрать все');
+  await ui.tap('Снять все');
+  await ui.tap('Алина Смирнова');
+  await ui.tap('Борис Ким');
+  await ui.see('Добавить 2 друга');
+}, { known: 'пишет «Добавить 2 друзей»' });
+
+// ===== Настройки =====
+scenario('Оформление: тёмная тема и свои цвета применяются ко всему приложению', async ({ ui, page }) => {
+  await ui.go('/settings');
+  await ui.see('Тема и цвет');
+  await ui.tap('Тема и цвет');
+  await ui.see('Цвет тёмной темы');
+  assert.equal(await page.getByLabel('Предпросмотр светлой темы').getAttribute('aria-selected'), 'true');
+  await ui.tap('Тёмная');
+  await ui.waitData((x) => x.settings.theme === 'dark', 'тема не сохранилась');
+  await page.getByLabel('Слива').last().click();
+  await ui.waitData((x) => x.settings.accentDark === 'plum', 'цвет не сохранился');
+  await page.getByLabel('Индиго').first().click();
+  await ui.waitData((x) => x.settings.accentLight === 'indigo', 'цвет светлой не сохранился');
+  assert.equal(await page.getByLabel('Предпросмотр светлой темы').getAttribute('aria-selected'), 'true', 'цвет светлой темы переключает предпросмотр');
+  await ui.go('/reminders');
+  const bg = await page.getByLabel('Новое напоминание').evaluate((el) => getComputedStyle(el).backgroundColor);
+  assert.equal(bg, 'rgb(184, 138, 181)', 'кнопка должна стать «сливой» тёмной темы');
+});
+
+scenario('Настройки: время уведомлений и «за день» сохраняются', async ({ ui, page }) => {
+  await ui.go('/settings');
+  await ui.typeInto('ЧЧ:ММ', '0845', { clear: true });
+  await ui.waitData((x) => x.settings.eventTime === '08:45', 'время не сохранилось');
+  await page.getByRole('switch').first().click();
+  await ui.waitData((x) => x.settings.eventDayBefore === false, '«за день» не выключилось');
+});
+
+scenario('Настройки: отчёты о сбоях включены по умолчанию и выключаются', async ({ ui, page }) => {
+  await ui.go('/settings');
+  await ui.see('Отправлять отчёты о сбоях');
+  await page.getByRole('switch').last().click();
+  await ui.waitData((x) => x.settings.crashReports === false, 'переключатель не сработал');
+});
+
+scenario('Экраны Telegram и «Сообщить о проблеме»', async ({ ui }) => {
+  await ui.go('/telegram');
+  await ui.see('Вход доступен только в Android-приложении');
+  await ui.go('/diagnostics');
+  await ui.see('Напиши мне в Telegram');
+  await ui.see(`Друзья ${VERSION}`);
+  await ui.see('Написать в Telegram');
+});
+
+// ===== «Что нового» и первый запуск =====
+scenario('«Что нового» после обновления: только пропущенные версии, второй раз не показывается', async ({ ui, page }) => {
+  await ui.go('/');
+  await ui.see(`обновилось до версии ${VERSION}`);
+  await ui.see('Тишина для отдельных людей'); // 1.13.0
+  await ui.notSee('Свайп влево удаляет друга'); // 1.12.0 уже видели
+  await ui.tap('Понятно');
+  await ui.waitData((x) => x.settings.lastSeenVersion === VERSION, 'версия не запомнилась');
+  await page.reload();
+  await ui.see('Скоро');
+  await ui.pause(800);
+  await ui.notSee(`обновилось до версии ${VERSION}`);
+}, { data: seed({ settings: { lastSeenVersion: '1.12.0' } }) });
+
+scenario('«Что нового»: «Вся история изменений» открывает экран истории', async ({ ui }) => {
+  await ui.go('/');
+  await ui.tap(/Вся история изменений/);
+  await ui.see(`Установлена версия ${VERSION}`);
+  await ui.see('1.19.0');
+}, { data: seed({ settings: { lastSeenVersion: '1.12.0' } }) });
+
+scenario('Первый запуск: пустые вкладки и без шторки «Что нового»', async ({ ui }) => {
+  await ui.go('/');
+  await ui.see('Пока никого');
+  await ui.notSee('обновилось до версии');
+  await ui.waitData((x) => x.settings.lastSeenVersion === VERSION, 'новой установке версия должна запомниться');
+  await ui.tab('Друзья'); await ui.see('Импорт из контактов');
+  await ui.tab('Напоминания'); await ui.see('Напоминаний нет');
+}, { data: null });
+
+// ===== Хранение данных =====
+scenario('Данные переживают перезапуск приложения', async ({ ui, page }) => {
+  await ui.go('/friends');
+  await ui.tap('Добавить друга');
+  await ui.fill('Например, Аня', 'Сохраняемый');
+  await ui.tap('Готово');
+  await ui.waitData((x) => x.friends.some((f) => f.name === 'Сохраняемый'), 'не сохранилось');
+  await page.reload();
+  await ui.see('Сохраняемый');
+});
+
+scenario('Данные старой версии без новых полей открываются без сбоев', async ({ ui, page }) => {
+  await ui.go('/');
+  await ui.see('Старый Друг');
+  await ui.tap('Старый Друг');
+  await ui.see('через 2 дня');
+  await ui.go('/settings');
+  assert.equal(await page.getByRole('switch').last().isChecked(), true, 'отчёты о сбоях по умолчанию включены');
+}, {
+  data: {
+    version: 1,
+    settings: { eventTime: '10:00', eventDayBefore: true, theme: 'light', accentLight: 'terracotta', accentDark: 'terracotta', lastSeenVersion: VERSION },
+    friends: [{ id: 'old', name: 'Старый Друг', emoji: '🙂', birthday: bday(2, 1980), phone: '', food: '', flowers: '', gifts: '', notes: '', dates: [], createdAt: 1 }],
+    reminders: [],
+  },
+});
+
+scenario('Повреждённые сохранённые данные не затираются пустыми', async ({ ui, page }) => {
+  await ui.go('/');
+  await ui.pause(1500);
+  const raw = await page.evaluate((k) => localStorage.getItem(k), KEY);
+  assert.equal(raw, '{"friends":[{"id":"a","name":"Аня"', 'исходные данные перезаписаны');
+}, { raw: '{"friends":[{"id":"a","name":"Аня"', known: 'при ошибке чтения приложение сохраняет пустые данные поверх старых' });
+
+// ===== Импорт из Telegram: карточка в ленте =====
+for (const [state, expect] of [['loading', ['Импорт из Telegram', '154 из 248']], ['done', ['Telegram: 248 контактов', 'Выбери, кого добавить']], ['code', ['Вход в Telegram ждёт тебя', 'Код из приложения Telegram']]]) {
+  scenario(`Импорт из Telegram: карточка «${expect[0]}» в ленте и в списке друзей`, async ({ ui }) => {
+    await ui.go('/');
+    for (const s of expect) await ui.see(s);
+    const box = await ui.box(expect[0]);
+    assert.ok(box.y < 400, `карточка должна быть в начале ленты, y=${box.y}`);
+    await ui.tab('Друзья');
+    await ui.see(expect[0]);
+  }, { storage: { 'friends-notes/tg-preview': state } });
+}
+
+// ===== Вёрстка и навигация =====
+scenario('Узкий экран 360: имя в карточке «Сегодня» видно целиком', async ({ ui, page }) => {
+  await ui.go('/');
+  await ui.see('Аня Смирнова');
+  const cut = await page.evaluate(() => [...document.querySelectorAll('div[dir="auto"]')]
+    .filter((e) => e.textContent === 'Аня Смирнова' && !e.closest('[aria-hidden="true"]'))
+    .some((e) => e.scrollWidth > e.clientWidth + 1));
+  assert.ok(!cut, 'имя обрезано многоточием');
+}, { viewport: { width: 360, height: 780 }, known: 'имя обрезается: «Аня Смирно…»' });
+
+scenario('Неизвестный адрес — свой экран на русском', async ({ ui }) => {
+  await ui.go('/nope');
+  await ui.notSee('Unmatched Route');
+  await ui.see('Скоро');
+}, { known: 'показывается английский служебный экран Expo' });
+
+// ---------- Исполнитель ----------
+function helpers(page, dialogs) {
+  const visibleText = () => page.evaluate(() => {
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    const parts = [];
+    let node;
+    while ((node = walker.nextNode())) {
+      const el = node.parentElement;
+      if (!el || el.closest('[aria-hidden="true"]')) continue;
+      const r = el.getBoundingClientRect();
+      if (!r.width && !r.height) continue;
+      const cs = getComputedStyle(el);
+      if (cs.visibility === 'hidden' || cs.display === 'none' || cs.opacity === '0') continue;
+      parts.push(node.textContent);
     }
+    return parts.join(' ').replace(/\s+/g, ' ');
   });
+  const labels = () => page.evaluate(() => [...document.querySelectorAll('[aria-label]')].filter((e) => !e.closest('[aria-hidden="true"]') && e.getBoundingClientRect().width > 0).map((e) => e.getAttribute('aria-label')).join(' | '));
+  const until = async (check, ms, onFail) => {
+    const end = Date.now() + ms;
+    for (;;) {
+      if (await check()) return;
+      if (Date.now() > end) throw new Error(await onFail());
+      await page.waitForTimeout(100);
+    }
+  };
+  const visible = async (locator) => {
+    const handles = await locator.elementHandles();
+    for (let i = handles.length - 1; i >= 0; i--) {
+      if (await handles[i].evaluate((e) => !e.closest('[aria-hidden="true"]') && e.getBoundingClientRect().width > 0)) return handles[i];
+    }
+    return null;
+  };
+  /** Элемент по подписи для экранного диктора или по тексту — последний видимый (скрытые вкладки остаются в DOM). */
+  const find = async (target, { nth } = {}) => {
+    let found = null;
+    await until(async () => {
+      const locs = typeof target === 'string' ? [page.getByLabel(target, { exact: true }), page.getByText(target, { exact: true })] : [page.getByText(target)];
+      for (const loc of locs) {
+        if (nth === 'first') {
+          const hs = await loc.elementHandles();
+          for (const h of hs) if (await h.evaluate((e) => !e.closest('[aria-hidden="true"]') && e.getBoundingClientRect().width > 0)) { found = h; return true; }
+        } else if ((found = await visible(loc))) return true;
+      }
+      return false;
+    }, 5000, async () => `Не нашёл «${target}». На экране: ${(await visibleText()).slice(0, 400)}`);
+    return found;
+  };
+  const ui = {
+    dialogs,
+    async go(url) {
+      await page.goto(`http://localhost:${PORT}${url}`);
+      await page.waitForFunction(() => document.body.innerText.trim().length > 0, null, { timeout: 15000 });
+      await page.waitForTimeout(400);
+    },
+    text: visibleText,
+    pause: (ms) => page.waitForTimeout(ms),
+    async see(text, { label = false, exact = true } = {}) {
+      const want = text.toLowerCase();
+      await until(async () => (label ? (await labels()).toLowerCase() : (await visibleText()).toLowerCase()).includes(want), 5000,
+        async () => `Нет на экране: «${text}». Видно: ${(label ? await labels() : await visibleText()).slice(0, 400)}`);
+      void exact;
+    },
+    async notSee(text, { label = false } = {}) {
+      const want = text.toLowerCase();
+      await until(async () => !(label ? (await labels()).toLowerCase() : (await visibleText()).toLowerCase()).includes(want), 3000,
+        async () => `Не должно быть на экране: «${text}»`);
+    },
+    async tap(target, opts) {
+      // Нажимаем на первый кандидат, который действительно получает нажатие: под шторкой и окном остаются невидимые для пальца копии.
+      await until(async () => {
+        const locs = typeof target === 'string' ? [page.getByLabel(target, { exact: true }), page.getByText(target, { exact: true })] : [page.getByText(target)];
+        for (const loc of locs) {
+          const hs = await loc.elementHandles();
+          const order = opts && opts.nth === 'first' ? hs : [...hs].reverse();
+          for (const h of order) {
+            if (!(await h.evaluate((e) => !e.closest('[aria-hidden="true"]') && e.getBoundingClientRect().width > 0))) continue;
+            try { await h.click({ trial: true, timeout: 600 }); } catch { continue; }
+            await h.click({ timeout: 2000 });
+            return true;
+          }
+        }
+        return false;
+      }, 5000, async () => `Не нашёл, куда нажать: «${target}». На экране: ${(await visibleText()).slice(0, 400)}`);
+      await page.waitForTimeout(250);
+    },
+    async longPress(target) {
+      const h = await find(target);
+      const b = await h.boundingBox();
+      await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+      await page.mouse.down(); await page.waitForTimeout(700); await page.mouse.up(); await page.waitForTimeout(300);
+    },
+    async box(target) { return (await find(target)).boundingBox(); },
+    /** Отметить кружок «сделано» в строке с этим текстом. */
+    async check(title) {
+      const h = await find(title);
+      const box = await h.evaluateHandle((el) => {
+        for (let p = el.parentElement; p; p = p.parentElement) { const c = p.querySelector('[role="checkbox"]'); if (c) return c; }
+        return null;
+      });
+      if (!box.asElement()) throw new Error(`В строке «${title}» нет кружка`);
+      await box.asElement().click(); await page.waitForTimeout(300);
+    },
+    async field(placeholder, orPlaceholder) {
+      let h = null;
+      await until(async () => {
+        h = (await visible(page.getByPlaceholder(placeholder, { exact: true }))) || (orPlaceholder ? await visible(page.getByPlaceholder(orPlaceholder)) : null);
+        return !!h;
+      }, 5000, async () => `Нет поля «${placeholder}». На экране: ${(await visibleText()).slice(0, 300)}`);
+      return h;
+    },
+    async fill(placeholder, value, { orPlaceholder } = {}) {
+      const h = await ui.field(placeholder, orPlaceholder);
+      await h.fill(value); await page.waitForTimeout(250);
+    },
+    async typeInto(placeholder, digits, { clear = false } = {}) {
+      const h = await ui.field(placeholder);
+      await h.click();
+      if (clear) await h.fill('');
+      await page.keyboard.type(digits, { delay: 20 }); await page.waitForTimeout(250);
+    },
+    async tab(name) { await page.getByText(name, { exact: true }).last().click(); await page.waitForTimeout(500); },
+    async data() { return JSON.parse((await page.evaluate((k) => localStorage.getItem(k), KEY)) || 'null'); },
+    async waitData(pred, message) {
+      let last = null;
+      await until(async () => { last = await ui.data(); try { return !!(last && pred(last)); } catch { return false; } }, 5000, async () => `${message}. В данных: ${JSON.stringify(last).slice(0, 300)}`);
+      return last;
+    },
+  };
+  return ui;
+}
 
-  await step('Экраны Telegram и «Сообщить о проблеме», переключатель отчётов о сбоях', async () => {
-    await go('/telegram'); let t = await text(); assert(has(t, 'Импорт из Telegram') && has(t, 'Вход доступен только в Android-приложении'), t.slice(0, 200));
-    await go('/diagnostics'); t = await text();
-    assert(has(t, 'Напиши мне в Telegram') && has(t, `Друзья ${VERSION}`) && has(t, 'Написать в Telegram'), 'экран «Сообщить о проблеме»: ' + t.slice(0, 300));
-    await go('/settings'); t = await text();
-    assert(has(t, 'Сообщить о проблеме') && has(t, 'Отправлять отчёты о сбоях'), t.slice(-400));
-    assert.equal((await stored()).settings.crashReports, true, 'по умолчанию отчёты о сбоях включены');
-    await page.getByRole('switch').last().click(); await page.waitForTimeout(300);
-    assert.equal((await stored()).settings.crashReports, false, 'переключатель отчётов о сбоях');
-  });
+const PORT = 8096;
+const types = { '.js': 'application/javascript', '.html': 'text/html', '.ico': 'image/x-icon', '.png': 'image/png', '.ttf': 'font/ttf', '.json': 'application/json' };
+const server = http.createServer((req, res) => {
+  let p = path.join(root, decodeURIComponent(req.url.split('?')[0]));
+  if (!p.startsWith(path.resolve(root)) || !fs.existsSync(p) || fs.statSync(p).isDirectory()) p = path.join(root, 'index.html');
+  res.writeHead(200, { 'content-type': types[path.extname(p)] || 'application/octet-stream' });
+  fs.createReadStream(p).pipe(res);
+});
 
-  await step('Пустое состояние для нового пользователя', async () => {
-    const ctx2 = await browser.newContext({ ...devices['iPhone 13'], locale: 'ru-RU' });
-    const p2 = await ctx2.newPage();
-    const t2 = async () => (await p2.evaluate(() => document.body.innerText)).replace(/\s+/g, ' ');
-    await p2.goto('http://localhost:8096/'); await p2.waitForTimeout(1500);
-    let t = await t2(); assert(has(t, 'Пока никого'), t.slice(0, 200));
-    assert(!has(t, 'обновилось до версии'), 'новой установке «Что нового» не показываем');
-    assert.equal(JSON.parse(await p2.evaluate((k) => localStorage.getItem(k), KEY)).settings.lastSeenVersion, VERSION);
-    await p2.getByText('Друзья', { exact: true }).last().click(); await p2.waitForTimeout(700);
-    t = await t2(); assert(has(t, 'Импорт из контактов'));
-    await p2.getByText('Напоминания', { exact: true }).last().click(); await p2.waitForTimeout(700);
-    t = await t2(); assert(has(t, 'Напоминаний нет'));
-    await p2.screenshot({ path: `${out}/e2e-empty.png` });
-    await ctx2.close();
-  });
+async function run(browser, s, index) {
+  const ctx = await browser.newContext({ ...devices['iPhone 13'], deviceScaleFactor: 1, locale: 'ru-RU', timezoneId: TZ, ...(s.viewport ? { viewport: s.viewport } : {}) });
+  await ctx.clock.setFixedTime(NOW);
+  const data = s.data === undefined ? seed() : s.data;
+  const raw = s.raw ?? (data ? JSON.stringify(data) : null);
+  await ctx.addInitScript(([key, value, extra]) => {
+    if (value !== null && localStorage.getItem(key) === null) localStorage.setItem(key, value);
+    for (const [k, v] of Object.entries(extra || {})) localStorage.setItem(k, v);
+  }, [KEY, raw, s.storage || null]);
+  const page = await ctx.newPage();
+  const errors = [];
+  const dialogs = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  page.on('dialog', (dlg) => { dialogs.push(dlg.message()); dlg.accept(); });
+  const started = Date.now();
+  let error = null;
+  try {
+    await Promise.race([
+      s.fn({ page, ui: helpers(page, dialogs) }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('сценарий дольше 60 с')), 60000)),
+    ]);
+    if (errors.length) throw new Error(`ошибка в приложении: ${errors[0]}`);
+  } catch (e) {
+    error = e;
+    await page.screenshot({ path: path.join(out, `fail-${String(index + 1).padStart(2, '0')}.png`) }).catch(() => {});
+  }
+  await ctx.close();
+  const ms = Date.now() - started;
+  if (s.known) return error ? { status: 'known', s, ms, note: String(error.message).split('\n')[0] } : { status: 'fixed', s, ms };
+  return error ? { status: 'fail', s, ms, note: String(error.message).split('\n')[0] } : { status: 'pass', s, ms };
+}
 
-  await browser.close(); srv.close();
-  fs.writeFileSync(`${out}/e2e-results.txt`, results.concat(['', 'console errors:', ...errors.slice(0, 10)]).join('\n'));
-  console.log(results.join('\n'));
-  console.log('console errors:', errors.length, errors.slice(0, 3));
+(async () => {
+  await new Promise((r) => server.listen(PORT, r));
+  const browser = await chromium.launch();
+  const list = scenarios.map((s, i) => ({ s, i })).filter(({ s }) => !grep || s.name.toLowerCase().includes(grep));
+  const results = new Array(list.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(WORKERS, list.length) }, async () => {
+    while (next < list.length) {
+      const k = next++;
+      results[k] = await run(browser, list[k].s, list[k].i);
+      const r = results[k];
+      const mark = { pass: 'ok   ', fail: 'FAIL ', known: 'KNOWN', fixed: 'FIXED' }[r.status];
+      console.log(`${mark} ${r.s.name} (${(r.ms / 1000).toFixed(1)} с)${r.note ? `\n      ${r.note}` : ''}${r.status === 'fixed' ? '\n      Сценарий с известной ошибкой прошёл: сними пометку known.' : ''}`);
+    }
+  }));
+  await browser.close();
+  server.close();
+  const count = (st) => results.filter((r) => r.status === st).length;
+  const summary = `\nИтого: ${results.length} · прошли ${count('pass')} · упали ${count('fail')} · известные ошибки ${count('known')} · исправленные, но с пометкой ${count('fixed')}`;
+  console.log(summary);
+  fs.writeFileSync(path.join(out, 'e2e-results.txt'), results.map((r) => `${r.status}\t${r.s.name}${r.note ? `\t${r.note}` : ''}`).join('\n') + summary + '\n');
+  process.exit(count('fail') + count('fixed') ? 1 : 0);
 })();

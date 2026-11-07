@@ -42,6 +42,7 @@
     "eslint": "^9.0.0",
     "eslint-config-expo": "~58.0.4",
     "jsqr": "^1.4.0",
+    "playwright": "1.63.0",
     "tsx": "^4.23.15",
     "typescript": "~6.0.3"
   },
@@ -53,7 +54,8 @@
     "typecheck": "tsc --noEmit",
     "test": "tsx --test src/lib/__tests__/*.test.ts",
     "lint": "expo lint",
-    "e2e:web": "node scripts/e2e-web.js"
+    "e2e:web": "node scripts/e2e-web.js",
+    "e2e": "EXPO_OFFLINE=1 expo export --platform web --output-dir dist-web && node scripts/e2e-web.js dist-web e2e-results"
   },
   "private": true
 }

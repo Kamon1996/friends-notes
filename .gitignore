@@ -39,3 +39,7 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Сквозные тесты: веб-сборка и снимки сбоев
+dist-web/
+e2e-results/

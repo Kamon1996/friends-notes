@@ -10,6 +10,7 @@ import {
   parseISODate,
   plural,
   sameDayInYear,
+  toISODate,
   todayISO,
 } from './dates';
 import { phoneUrl, telegramUrl, viberUrl, whatsappUrl } from './messengers';
@@ -116,7 +117,8 @@ export const MAX_SCHEDULED = 60;
  */
 export function planNotifications(data: AppData, now = new Date()): PlannedNotification[] {
   const out: PlannedNotification[] = [];
-  const today = todayISO();
+  // «Сегодня» — от переданного времени, а не от часов устройства: так расписание детерминировано и проверяемо.
+  const today = toISODate(now);
   const { eventTime, eventDayBefore } = data.settings;
   const friendById = new Map(data.friends.map((f) => [f.id, f]));
 

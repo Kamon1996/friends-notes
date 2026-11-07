@@ -5,6 +5,7 @@ import { test } from 'node:test';
 import {
   addInterval,
   ageOn,
+  formatDayShort,
   formatRepeat,
   nextAnniversary,
   nextOccurrenceAfter,
@@ -132,4 +133,8 @@ test('у друга с выключенными уведомлениями со�
   assert.ok(loud.some((n) => n.title.includes('день рождения')));
   assert.ok(!quiet.some((n) => n.title.includes('день рождения')));
   assert.ok(quiet.some((n) => n.title === 'Купить цветы'), 'напоминание должно остаться');
+});
+
+test('короткая дата не текущего года показывает год', { todo: 'известная ошибка: «ср, 1 янв» без 2020' }, () => {
+  assert.match(formatDayShort('2020-01-01'), /2020/);
 });

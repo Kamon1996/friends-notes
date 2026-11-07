@@ -1,0 +1,49 @@
+name: Tests
+
+# Типы, линтер, юнит-тесты и сквозные сценарии на веб-сборке. Отдельно от сборки APK:
+# быстрый ответ «ничего не сломалось» на каждый пуш, без подписи и секретов.
+on:
+  push:
+    branches: [main, claude/mobile-project-creation-pgqs46]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Проверки и сквозные тесты
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - name: Web build
+        env:
+          EXPO_OFFLINE: '1'
+          CI: '1'
+        run: npx expo export --platform web --output-dir dist-web
+      - name: Chromium for Playwright
+        run: npx playwright install --with-deps chromium
+      - name: End-to-end scenarios
+        run: node scripts/e2e-web.js dist-web e2e-results
+      - name: Screenshots of failed scenarios
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-results
+          path: e2e-results
+          if-no-files-found: ignore
+          retention-days: 7
