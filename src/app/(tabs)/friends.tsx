@@ -89,7 +89,7 @@ export default function FriendsScreen() {
             )}
             {n > 0 && (
               <View style={{ padding: 20, paddingTop: 14, paddingBottom: 16, gap: 10 }}>
-                <SearchField value={query} onChangeText={setQuery} placeholder="Поиск по имени, еде, цветам…" />
+                <SearchField value={query} onChangeText={setQuery} placeholder="Поиск по имени" />
                 <View style={s.chips}>
                   <Chip label="По имени" selected={sort === 'name'} onPress={() => setSort('name')} />
                   <Chip label="Скоро день рождения" icon="cake" selected={sort === 'date'} onPress={() => setSort('date')} />
