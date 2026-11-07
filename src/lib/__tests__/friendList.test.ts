@@ -41,8 +41,8 @@ test('без избранных подписи «Остальные» нет, с
   assert.deepEqual(shape(items), ['Аня<', 'Вика', 'Борис', '+375 29 1', 'Мама>']);
 });
 
-test('поиск только по имени и сохраняет группы', () => {
-  assert.deepEqual(buildFriendList(friends, 'тюльп', 'name', today), [], 'цветы и еда не ищутся');
+test('поиск по имени и предпочтениям сохраняет группы', () => {
+  assert.deepEqual(shape(buildFriendList(friends, 'тюльп', 'name', today)), ['[Избранные★]', 'Мама<>'], 'цветы тоже ищутся');
   assert.deepEqual(shape(buildFriendList(friends, 'мам', 'name', today)), ['[Избранные★]', 'Мама<>']);
   assert.deepEqual(shape(buildFriendList(friends, 'вик', 'name', today)), ['[В]', 'Вика<>']);
   assert.deepEqual(buildFriendList(friends, 'нет такого', 'name', today), []);
