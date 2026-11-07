@@ -32,9 +32,8 @@ export default function ImportScreen() {
   const { s: styles, colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { source } = useLocalSearchParams<{ source?: string }>();
-  // telegram — загружено через вход в Telegram; tgbook — контакты Telegram из телефонной книги, без входа.
+  // telegram — контакты, загруженные через вход в Telegram; иначе — телефонная книга.
   const fromTelegram = source === 'telegram';
-  const fromTgBook = source === 'tgbook';
   const tg = useTelegramSession();
   const [state, setState] = useState<State>({ kind: 'loading' });
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -50,12 +49,11 @@ export default function ImportScreen() {
   /** Список кандидатов из снимка книги; при фоновом обновлении отмеченные остаются отмеченными. */
   const applySnapshot = useCallback(
     (snap: ContactsSnapshot, keepSelection: boolean) => {
-      const list = fromTgBook ? snap.contacts.filter((c) => c.links?.telegramId) : snap.contacts;
-      const candidates = toCandidates(list, friendsRef.current);
+      const candidates = toCandidates(snap.contacts, friendsRef.current);
       setState({ kind: 'ready', candidates, limited: snap.limited, sample: snap.sample });
       if (!keepSelection) setSelected(new Set(candidates.filter((c) => !c.duplicateOf && c.birthday).map((c) => c.key)));
     },
-    [fromTgBook],
+    [],
   );
 
   const load = useCallback(async (opts?: { refresh?: boolean }) => {
@@ -215,7 +213,7 @@ export default function ImportScreen() {
           <View style={{ gap: 12, marginBottom: 10 }}>
             <Stack.Screen
               options={{
-                title: fromTelegram || fromTgBook ? 'Контакты Telegram' : 'Импорт контактов',
+                title: fromTelegram ? 'Контакты Telegram' : 'Импорт контактов',
                 headerRight: fromTelegram
                   ? undefined
                   : () =>
@@ -226,12 +224,12 @@ export default function ImportScreen() {
                       ),
               }}
             />
-            {(fromTelegram || fromTgBook) && (
+            {fromTelegram && (
               <View style={{ paddingTop: 2, paddingBottom: 4 }}>
-                <Stepper steps={TG_STEPS} active={4} />
+                <Stepper steps={TG_STEPS} active={3} />
               </View>
             )}
-            {!fromTelegram && !fromTgBook && telegramAvailable && (
+            {!fromTelegram && telegramAvailable && (
               <Pressable
                 onPress={() => router.push('/telegram')}
                 style={({ pressed }) => [styles.card, styles.row, pressed && { opacity: 0.7 }]}
@@ -239,7 +237,7 @@ export default function ImportScreen() {
                 <IconCircle icon="send" tone="info" size={40} />
                 <View style={{ flex: 1, gap: 2 }}>
                   <Text style={styles.title}>Импорт из Telegram</Text>
-                  <Text style={styles.muted}>Без входа — или с днями рождения через вход</Text>
+                  <Text style={styles.muted}>С днями рождения, фото и @username — через вход</Text>
                 </View>
                 <Icon name="chevronRight" size={18} color={colors.checkbox} strokeWidth={2} />
               </Pressable>

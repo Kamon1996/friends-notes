@@ -23,8 +23,6 @@ const UNSUPPORTED: Record<string, string> = {
   waitPremiumPurchase: 'Telegram требует Premium для входа с этого номера.',
 };
 
-type Mode = 'book' | 'login';
-
 /** Строка с иконкой слева: пункт «что читает / не читает», шаг инструкции, счётчик. */
 function Line({ icon, tone = 'neutral', num, children }: { icon?: IconName; tone?: 'neutral' | 'success' | 'danger' | 'warn' | 'info'; num?: number; children: string }) {
   const { s, colors, fonts } = useTheme();
@@ -64,58 +62,6 @@ function Pill({ label, ok = true }: { label: string; ok?: boolean }) {
       <Icon name={ok ? 'check' : 'minus'} size={13} color={ok ? colors.accentText : colors.text3} strokeWidth={2.4} />
       <Text style={{ fontFamily: fonts.medium, fontSize: 12, color: ok ? colors.accentText : colors.text3 }}>{label}</Text>
     </View>
-  );
-}
-
-/** Карточка-вариант на первом шаге: иконка, название, подпись, метки и кружок выбора. */
-function ChoiceCard({
-  icon,
-  title,
-  sub,
-  pills,
-  selected,
-  disabled,
-  onPress,
-  note,
-}: {
-  icon: IconName;
-  title: string;
-  sub: string;
-  pills: ReactNode;
-  selected: boolean;
-  disabled?: boolean;
-  onPress: () => void;
-  note?: ReactNode;
-}) {
-  const { s, colors } = useTheme();
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={disabled}
-      accessibilityRole="radio"
-      accessibilityState={{ selected, disabled }}
-      style={({ pressed }) => [
-        s.card,
-        { gap: 10, borderWidth: 1.5, borderColor: selected ? colors.accent : colors.hairline, opacity: disabled ? 0.6 : pressed ? 0.85 : 1 },
-      ]}
-    >
-      <View style={s.row}>
-        <IconCircle icon={icon} tone={selected ? 'accent' : 'neutral'} size={40} />
-        <View style={{ flex: 1, gap: 2 }}>
-          <Text style={s.name}>{title}</Text>
-          <Text style={s.muted}>{sub}</Text>
-        </View>
-        {selected ? (
-          <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' }}>
-            <Icon name="check" size={13} color={colors.onAccent} strokeWidth={3} />
-          </View>
-        ) : (
-          <View style={{ width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, borderColor: colors.checkbox }} />
-        )}
-      </View>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>{pills}</View>
-      {note}
-    </Pressable>
   );
 }
 
@@ -198,7 +144,6 @@ export default function TelegramImportScreen() {
   const { s, colors, fonts } = useTheme();
   const insets = useSafeAreaInsets();
   const loginPossible = telegramAvailable && telegramConfigured;
-  const [mode, setMode] = useState<Mode>(loginPossible ? 'login' : 'book');
   const [phone, setPhone] = useState('+');
   const [code, setCode] = useState('');
   const [password, setPassword] = useState('');
@@ -221,60 +166,38 @@ export default function TelegramImportScreen() {
   const { auth, imp } = tg;
   const finished = imp.phase === 'done' || imp.phase === 'cancelled' || imp.phase === 'error';
   const unsupported = UNSUPPORTED[auth.state];
-  const step = tg.working || finished ? 3 : tg.signingIn || unsupported ? 2 : 1;
+  const step = tg.working || finished ? 2 : 1;
+  const started = tg.signingIn || !!unsupported;
   const done = imp.done ?? 0;
   const total = imp.total ?? 0;
 
-  // ---------- Шаг 1: способ ----------
-  const chooseStep = (
+  // ---------- Шаг 1, до входа: что получишь и на каких условиях ----------
+  const introStep = (
     <>
-      <Text style={[s.h1, { fontSize: 26, paddingHorizontal: 4 }]}>Что забрать из Telegram?</Text>
-      <ChoiceCard
-        icon="book"
-        title="Только имена и телефоны"
-        sub="Из телефонной книги, без входа"
-        pills={
-          <>
-            <Pill label="Имя и телефон" />
-            <Pill label="Кнопка «Написать»" />
-            <Pill label="Дни рождения" ok={false} />
-          </>
-        }
-        selected={mode === 'book'}
-        onPress={() => setMode('book')}
-      />
-      <ChoiceCard
-        icon="cake"
-        title="С днями рождения и фото"
-        sub="Нужен вход в Telegram"
-        pills={
-          <>
-            <Pill label="Дни рождения" />
-            <Pill label="Фото" />
-            <Pill label="@username" />
-          </>
-        }
-        selected={mode === 'login'}
-        disabled={!loginPossible}
-        onPress={() => setMode('login')}
-        note={
-          loginPossible ? (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Icon name="lock" size={16} color={colors.text2} strokeWidth={2} />
-              <Text style={[s.muted, { flex: 1 }]}>
-                Войдём на минуту-две и сразу выйдем.{' '}
-                <Text onPress={() => setAccess(true)} style={{ color: colors.accentText, fontFamily: fonts.medium }}>
-                  Подробнее
-                </Text>
-              </Text>
-            </View>
-          ) : (
-            <Text style={s.muted}>{telegramAvailable ? 'В этой сборке не заданы ключи Telegram API (TG_API_ID и TG_API_HASH).' : 'Вход доступен только в Android-приложении.'}</Text>
-          )
-        }
-      />
-      <Text style={[s.caption, { paddingHorizontal: 4 }]}>{`Вход виден в Telegram → Устройства как «${SESSION_NAME}» и пропадает после выхода.`}</Text>
-      {error && <Text style={[s.muted, { color: colors.danger }]}>{error}</Text>}
+      <Text style={[s.h1, { fontSize: 26, paddingHorizontal: 4 }]}>Импорт из Telegram</Text>
+      <Text style={[s.muted, { paddingHorizontal: 4, lineHeight: 20 }]}>
+        Войди в свой аккаунт, и приложение заберёт контакты вместе с днями рождения, фото и @username. Имена и номера из
+        телефонной книги уже попадают через обычный импорт контактов.
+      </Text>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: 4 }}>
+        <Pill label="Дни рождения" />
+        <Pill label="Фото" />
+        <Pill label="@username" />
+        <Pill label="Кнопка «Написать»" />
+      </View>
+      <View style={{ backgroundColor: colors.soft, borderRadius: 16, padding: 12, paddingHorizontal: 14, gap: 8 }}>
+        <Line icon="check" tone="success">Прочитаем контакты, дни рождения и фото</Line>
+        <Line icon="close" tone="danger">Сообщения и чаты не читаем, такого кода в приложении нет</Line>
+        <Line icon="lock">Выйдем из аккаунта сразу после загрузки</Line>
+        <Pressable onPress={() => setAccess(true)} hitSlop={6} style={{ paddingLeft: 34 }}>
+          <Text style={[s.muted, { color: colors.accentText, fontFamily: fonts.medium }]}>Подробнее о доступе →</Text>
+        </Pressable>
+      </View>
+      <Text style={[s.caption, { paddingHorizontal: 4 }]}>{`Вход по номеру и коду или по QR со второго устройства. В Telegram → Устройства он виден как «${SESSION_NAME}» и пропадает после выхода.`}</Text>
+      {!loginPossible && (
+        <Text style={[s.muted, { paddingHorizontal: 4 }]}>{telegramAvailable ? 'В этой сборке не заданы ключи Telegram API (TG_API_ID и TG_API_HASH).' : 'Вход доступен только в Android-приложении.'}</Text>
+      )}
+      {error && <Text style={[s.muted, { color: colors.danger, paddingHorizontal: 4 }]}>{error}</Text>}
     </>
   );
 
@@ -447,16 +370,9 @@ export default function TelegramImportScreen() {
 
   // ---------- Нижняя кнопка под каждый шаг ----------
   let bottom: ReactNode;
-  if (step === 1) {
-    bottom = (
-      <Button
-        title={mode === 'login' ? (busy ? 'Подключаюсь…' : 'Дальше') : 'Дальше'}
-        icon={mode === 'login' ? 'send' : undefined}
-        disabled={busy}
-        onPress={() => (mode === 'book' ? router.push({ pathname: '/import', params: { source: 'tgbook' } }) : run(tg.begin))}
-      />
-    );
-  } else if (step === 2) {
+  if (step === 1 && !started) {
+    bottom = <Button title={busy ? 'Подключаюсь…' : 'Войти в Telegram'} icon="send" disabled={busy || !loginPossible} onPress={() => run(tg.begin)} />;
+  } else if (step === 1) {
     bottom = <Button title="Отменить вход" variant="ghost" onPress={tg.cancel} />;
   } else if (!finished) {
     bottom = imp.phase === 'loading' ? <Button title="Остановить" variant="secondary" onPress={tg.cancel} /> : <Button title="Выхожу из аккаунта…" variant="secondary" disabled onPress={() => {}} />;
@@ -477,7 +393,7 @@ export default function TelegramImportScreen() {
           <Stepper steps={TG_STEPS} active={step} />
         </View>
         <ScrollView contentContainerStyle={[s.content, { paddingTop: 8 }]} keyboardShouldPersistTaps="handled">
-          {step === 1 ? chooseStep : step === 2 ? loginStep : loadStep}
+          {step === 2 ? loadStep : started ? loginStep : introStep}
         </ScrollView>
         <View style={{ padding: 16, paddingBottom: 16 + insets.bottom, borderTopWidth: 1, borderTopColor: colors.hairline, backgroundColor: colors.bg }}>{bottom}</View>
       </View>

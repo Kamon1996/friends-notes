@@ -5,7 +5,7 @@ import { Icon } from './Icon';
 import { useTheme } from './ui';
 
 /** Шаги импорта из Telegram: мастер показывает, где ты сейчас. */
-export const TG_STEPS = ['Способ', 'Вход', 'Загрузка', 'Выбор'];
+export const TG_STEPS = ['Вход', 'Загрузка', 'Выбор'];
 
 /** Индикатор шагов: пройденные с галочкой, текущий подсвечен, остальные серые. */
 export function Stepper({ steps, active }: { steps: string[]; active: number }) {

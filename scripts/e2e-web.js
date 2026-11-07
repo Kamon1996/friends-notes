@@ -294,7 +294,7 @@ const has = (t, s) => t.toLowerCase().includes(s.toLowerCase());
   });
 
   await step('Экраны Telegram и отчёта об ошибке открываются', async () => {
-    await go('/telegram'); let t = await text(); assert(has(t, 'Без входа') && has(t, 'Вход доступен только в Android-приложении'), t.slice(0, 200));
+    await go('/telegram'); let t = await text(); assert(has(t, 'Импорт из Telegram') && has(t, 'Вход доступен только в Android-приложении'), t.slice(0, 200));
     await go('/diagnostics'); t = await text(); assert(has(t, 'Отчёт доступен только в Android-приложении'));
   });
 
