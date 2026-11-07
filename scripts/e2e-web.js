@@ -351,21 +351,29 @@ const has = (t, s) => t.toLowerCase().includes(s.toLowerCase());
     assert(r && dima && r.friendId === dima.id, 'друг не привязан');
   });
 
-  await step('Настройки: тёмная тема, акцент для тёмной и светлой', async () => {
+  await step('Оформление: тёмная тема, цвета для тёмной и светлой, живой предпросмотр', async () => {
     await go('/settings');
-    await page.getByText('Тёмная').click(); await page.waitForTimeout(500);
+    let t = await text(); assert(has(t, 'Тема и цвет') && has(t, 'Терракота'), 'строки «Тема и цвет» нет: ' + t.slice(0, 200));
+    await page.getByText('Тема и цвет').click(); await page.waitForTimeout(900);
+    t = await text(); assert(has(t, 'Цвет светлой темы') && has(t, 'Цвет тёмной темы'), 'экран оформления не открылся: ' + t.slice(0, 200));
+    const selected = (label) => page.getByLabel(label).getAttribute('aria-selected');
+    assert.equal(await selected('Предпросмотр светлой темы'), 'true', 'предпросмотр начинается с текущей темы');
+    await page.getByText('Тёмная', { exact: true }).last().click(); await page.waitForTimeout(500);
     assert.equal((await stored()).settings.theme, 'dark');
+    assert.equal(await selected('Предпросмотр тёмной темы'), 'true', 'после выбора тёмной темы предпросмотр тёмный');
     await page.getByLabel('Слива').last().click(); await page.waitForTimeout(400);
     assert.equal((await stored()).settings.accentDark, 'plum');
-    await shot('settings-dark');
+    await shot('appearance-dark');
+    await page.getByLabel('Индиго').first().click(); await page.waitForTimeout(400);
+    assert.equal((await stored()).settings.accentLight, 'indigo');
+    assert.equal(await selected('Предпросмотр светлой темы'), 'true', 'цвет светлой темы переключает предпросмотр на светлую');
     await go('/reminders');
     const fab = page.getByLabel('Новое напоминание');
     const bg = await fab.evaluate((el) => getComputedStyle(el).backgroundColor);
     assert.equal(bg, 'rgb(184, 138, 181)', `акцент не применился: ${bg}`);
     await shot('upcoming-dark-plum');
-    await go('/settings');
-    await page.getByText('Светлая').click(); await page.waitForTimeout(400);
-    await page.getByLabel('Индиго').first().click(); await page.waitForTimeout(400);
+    await go('/appearance');
+    await page.getByText('Светлая', { exact: true }).last().click(); await page.waitForTimeout(400);
     const s = (await stored()).settings; assert(s.theme === 'light' && s.accentLight === 'indigo' && s.accentDark === 'plum');
     await go('/reminders');
     const bg2 = await fab.evaluate((el) => getComputedStyle(el).backgroundColor);

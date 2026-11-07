@@ -167,6 +167,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   return <ThemeContext.Provider value={theme}>{children}</ThemeContext.Provider>;
 }
 
+/** Поддерево в другой теме: предпросмотр оформления рисует настоящие компоненты в выбранных цветах. */
+export function ThemeScope({ scheme, accentId, children }: { scheme: Scheme; accentId: AccentId; children: ReactNode }) {
+  const theme = useMemo(() => getTheme(scheme, accentId), [scheme, accentId]);
+  return <ThemeContext.Provider value={theme}>{children}</ThemeContext.Provider>;
+}
+
 export function useTheme(): Theme {
   const t = useContext(ThemeContext);
   if (!t) throw new Error('useTheme вне ThemeProvider');

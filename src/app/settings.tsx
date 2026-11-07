@@ -2,56 +2,25 @@ import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Linking, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 
+import { AccentDots } from '@/components/AccentPicker';
 import { DateField } from '@/components/DateField';
-import { Icon } from '@/components/Icon';
-import { Button, Card, Chip, Group, IconCircle, ListRow, SectionTitle, SwitchRow, useTheme } from '@/components/ui';
+import { Button, Card, Group, IconCircle, ListRow, SectionTitle, SwitchRow, useTheme } from '@/components/ui';
 import { APP_VERSION } from '@/lib/changelog';
 import { sendTestReport } from '@/lib/crashReports';
 import { loadEnrichment } from '@/lib/contacts';
 import { applyEnrichment } from '@/lib/enrich';
 import { notificationsAllowed, setupNotifications } from '@/lib/notifications';
 import { useStore } from '@/lib/store';
-import { ACCENTS, type AccentId, type Scheme } from '@/lib/theme';
+import { accentById } from '@/lib/theme';
 import type { ThemeMode } from '@/lib/types';
 
-const THEME_MODES: { key: ThemeMode; label: string }[] = [
-  { key: 'system', label: 'Как в системе' },
-  { key: 'light', label: 'Светлая' },
-  { key: 'dark', label: 'Тёмная' },
-];
+const MODE_LABEL: Record<ThemeMode, string> = { system: 'Как в системе', light: 'Светлая', dark: 'Тёмная' };
 
-/** Шесть кружков акцента для одной темы; выбранный — с кольцом и галочкой. */
-function AccentPicker({ scheme, value, onChange }: { scheme: Scheme; value: AccentId; onChange: (id: AccentId) => void }) {
-  const { colors, fonts } = useTheme();
-  return (
-    <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 }}>
-      {ACCENTS.map((a) => {
-        const c = a[scheme];
-        const selected = a.id === value;
-        return (
-          <Pressable key={a.id} onPress={() => onChange(a.id)} accessibilityLabel={a.name} style={{ alignItems: 'center', gap: 6, flex: 1 }}>
-            <View
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 22,
-                borderWidth: 2,
-                borderColor: selected ? colors.text : 'transparent',
-                padding: 3,
-              }}
-            >
-              <View style={{ flex: 1, borderRadius: 17, backgroundColor: c.accent, alignItems: 'center', justifyContent: 'center' }}>
-                {selected && <Icon name="check" size={16} color={c.onAccent} strokeWidth={3} />}
-              </View>
-            </View>
-            <Text style={{ fontFamily: selected ? fonts.semibold : fonts.body, fontSize: 10, lineHeight: 12, color: selected ? colors.text : colors.text3 }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
-              {a.name}
-            </Text>
-          </Pressable>
-        );
-      })}
-    </View>
-  );
+/** «Терракота и Мёд», а при одинаковом цвете — просто «Терракота». */
+function accentNames(light: string, dark: string): string {
+  const l = accentById(light).name;
+  const d = accentById(dark).name;
+  return l === d ? l : `${l} и ${d}`;
 }
 
 export default function SettingsScreen() {
@@ -127,25 +96,16 @@ export default function SettingsScreen() {
 
       <View style={{ gap: 8 }}>
         <SectionTitle style={{ marginBottom: 0 }}>Оформление</SectionTitle>
-        <Card style={{ gap: 14 }}>
-          <View style={{ gap: 8 }}>
-            <Text style={s.label}>Тема</Text>
-            <View style={s.chips}>
-              {THEME_MODES.map((m) => (
-                <Chip key={m.key} label={m.label} selected={settings.theme === m.key} onPress={() => updateSettings({ theme: m.key })} />
-              ))}
-            </View>
-          </View>
-          <View style={{ gap: 4 }}>
-            <Text style={s.label}>Цвет светлой темы</Text>
-            <AccentPicker scheme="light" value={settings.accentLight} onChange={(id) => updateSettings({ accentLight: id })} />
-          </View>
-          <View style={{ gap: 4 }}>
-            <Text style={s.label}>Цвет тёмной темы</Text>
-            <AccentPicker scheme="dark" value={settings.accentDark} onChange={(id) => updateSettings({ accentDark: id })} />
-          </View>
-          <Text style={s.caption}>Цвет кнопок, активной вкладки и карточки «Сегодня». У светлой и тёмной темы он свой.</Text>
-        </Card>
+        <Group inset={62}>
+          <ListRow
+            leading={<IconCircle icon="palette" tone="accent" />}
+            title="Тема и цвет"
+            subtitle={`${MODE_LABEL[settings.theme]} · ${accentNames(settings.accentLight, settings.accentDark)}`}
+            trailing={<AccentDots light={settings.accentLight} dark={settings.accentDark} />}
+            chevron
+            onPress={() => router.push('/appearance')}
+          />
+        </Group>
       </View>
 
       {Platform.OS === 'android' && (
