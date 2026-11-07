@@ -1,5 +1,7 @@
 import { Text, View } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 
+import { BRAND_GLYPHS, EVENODD_GLYPHS } from '@/lib/brandGlyphs';
 import { networkById } from '@/lib/socials';
 import { Icon } from './Icon';
 import { useTheme } from './ui';
@@ -15,10 +17,18 @@ export function networkMonogram(name: string): string {
   return (parts.length > 1 ? parts[0][0] + parts[1][0] : parts[0].slice(0, 2)).toUpperCase();
 }
 
-/** Значок сети без подложки: свой контур или монограмма — для чипов и строк. */
+/** Значок сети без подложки: эмблема сети, глобус для сайта или монограмма — для чипов и строк. */
 export function NetworkGlyph({ network, size = 16, color }: { network: string; size?: number; color: string }) {
   const { fonts } = useTheme();
   const n = networkById(network);
+  const d = BRAND_GLYPHS[n.id];
+  if (d) {
+    return (
+      <Svg width={size} height={size} viewBox="0 0 24 24">
+        <Path d={d} fill={color} fillRule={EVENODD_GLYPHS.has(n.id) ? 'evenodd' : 'nonzero'} />
+      </Svg>
+    );
+  }
   if (n.icon) return <Icon name={n.icon} size={size} color={color} strokeWidth={2} />;
   return (
     <Text style={{ fontFamily: fonts.semibold, fontSize: Math.round(size * 0.68), lineHeight: size, color, letterSpacing: 0.3 }} maxFontSizeMultiplier={1.2}>

@@ -61,7 +61,7 @@ test('«О себе» из Telegram: ссылки в соцсети, остат�
   assert.deepEqual(links.map((l) => `${l.network}:${l.handle ?? l.label}`), ['bandlink:9OzXo', 'tiktok:shameless66613', 'youtube:ShameleSs66613', 'behance:47935d51']);
   assert.equal(rest, '', 'одни эмодзи в заметки не пишем');
   const r2 = extractLinks('певица, Москва. канал @kattysings и inst instagram.com/katty.sh', ids());
-  assert.deepEqual(r2.links.map((l) => `${l.network}:${l.handle}`), ['instagram:katty.sh', 'telegram:kattysings']);
+  assert.deepEqual(r2.links.map((l) => `${l.network}:${l.handle}`), ['telegram:kattysings', 'instagram:katty.sh'], 'в порядке появления в тексте');
   assert.equal(r2.rest, 'певица, Москва. канал и inst');
   const r3 = extractLinks('пишите на mail@example.com, т.е. не сюда', ids());
   assert.deepEqual(r3.links, [], 'почта и «т.е.» — не ссылки');

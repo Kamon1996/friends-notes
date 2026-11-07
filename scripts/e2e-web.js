@@ -160,8 +160,16 @@ const has = (t, s) => t.toLowerCase().includes(s.toLowerCase());
     await tap(page.getByLabel('Добавить соцсеть')); await page.waitForTimeout(500);
     await field.fill('@anya.ig'); await page.waitForTimeout(300);
     t = await text(); assert(has(t, 'Хороший ник'), t.slice(-300));
-    await page.getByLabel('Instagram', { exact: true }).click(); await page.waitForTimeout(300);
-    t = await text(); assert(has(t, 'Добавить Instagram') && has(t, '@anya.ig'), t.slice(-300));
+    // Полный список: поиск по сокращению, по-русски и в другой раскладке.
+    await page.getByText('Все сети', { exact: false }).click(); await page.waitForTimeout(700);
+    const find = page.getByPlaceholder('Найти сеть');
+    await find.fill('жж'); await page.waitForTimeout(300);
+    t = await text(); assert(has(t, 'LiveJournal') && !has(t, 'Хабр'), 'поиск по «жж»: ' + t.slice(-300));
+    await find.fill('ntktuhfv'); await page.waitForTimeout(300);
+    t = await text(); assert(has(t, 'Telegram'), 'поиск в другой раскладке: ' + t.slice(0, 200));
+    await find.fill('инста'); await page.waitForTimeout(300);
+    await page.getByText('Instagram', { exact: true }).last().click(); await page.waitForTimeout(500);
+    t = await text(); assert(has(t, 'Добавить Instagram') && has(t, '@anya.ig') && !has(t, 'Помогите'), t.slice(-300));
     await page.getByText('Добавить Instagram', { exact: true }).click(); await page.waitForTimeout(600);
     socials = (await stored()).friends.find((f) => f.id === 'a').socials;
     assert.equal(socials[3].url, 'https://instagram.com/anya.ig');
