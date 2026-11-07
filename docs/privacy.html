@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Политика конфиденциальности — Друзья</title>
+<style>
+  :root { color-scheme: light dark; --bg: #F7F3EE; --fg: #221C18; --muted: #6B5E55; --accent: #C4502F; --line: #EAE2D9; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #17130F; --fg: #F3ECE4; --muted: #A89C90; --accent: #E0714D; --line: #332C26; } }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 720px; margin: 0 auto; padding: 40px 20px 64px; }
+  h1 { font-family: Georgia, "Times New Roman", serif; font-size: 32px; line-height: 1.15; margin: 0 0 6px; }
+  h2 { font-family: Georgia, "Times New Roman", serif; font-size: 22px; margin: 32px 0 8px; }
+  p, li { margin: 0 0 10px; }
+  .muted { color: var(--muted); }
+  .lang { display: flex; gap: 8px; margin: 18px 0 28px; }
+  .lang a { color: var(--accent); text-decoration: none; border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; font-size: 14px; }
+  hr { border: 0; border-top: 1px solid var(--line); margin: 40px 0; }
+  code { background: rgba(127,127,127,0.12); padding: 1px 5px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Политика конфиденциальности</h1>
+  <p class="muted">Приложение «Друзья» (Android). Обновлено 7 ноября 2026.</p>
+  <div class="lang"><a href="#ru">Русский</a><a href="#en">English</a></div>
+
+  <section id="ru">
+    <h2>Коротко</h2>
+    <p>«Друзья» — записная книжка о близких: дни рождения, важные даты, вкусы, напоминания. У приложения нет своего сервера и аккаунтов. Всё, что ты вводишь или импортируешь, хранится только на твоём телефоне. Мы не собираем аналитику, не показываем рекламу и не передаём данные третьим лицам.</p>
+
+    <h2>Какие данные обрабатываются</h2>
+    <ul>
+      <li><b>Записи о друзьях</b>: имя, телефон, день рождения, важные даты, еда, цветы, идеи подарков, заметки, фото, отметки «избранный» и «без уведомлений». Хранятся в памяти приложения на устройстве.</li>
+      <li><b>Напоминания</b>: тексты, даты, время и повтор. Хранятся на устройстве; уведомления создаются локально, без push-серверов.</li>
+      <li><b>Настройки</b>: тема, цвет, время уведомлений.</li>
+    </ul>
+
+    <h2>Контакты телефона</h2>
+    <p>Для импорта друзей приложение просит разрешение <code>READ_CONTACTS</code> и читает телефонную книгу только на устройстве: имена, номера, даты (день рождения, годовщины), заметки, фото и признаки мессенджеров (Telegram, WhatsApp, Viber), которые сами мессенджеры записали в контакты. Ты выбираешь, кого добавить; в приложение попадают только выбранные люди. Телефонная книга никуда не отправляется и не изменяется: разрешение на запись в контакты в приложении заблокировано.</p>
+
+    <h2>Импорт из Telegram (по желанию)</h2>
+    <p>Есть два способа. <b>Без входа</b> приложение берёт из телефонной книги контакты, которые туда добавил Telegram. <b>Со входом</b> ты входишь в собственный аккаунт Telegram по номеру и коду (или по QR-коду), и приложение через официальную библиотеку TDLib запрашивает у серверов Telegram список твоих контактов: имена, телефоны, @username, дни рождения, «о себе», аватарки. Для этого твой номер телефона и код подтверждения передаются серверам Telegram; к ним применяется <a href="https://telegram.org/privacy">политика конфиденциальности Telegram</a>.</p>
+    <p>Приложение не читает сообщения, чаты, группы и файлы: таких функций в нём нет. Сразу после загрузки контактов приложение выходит из аккаунта и стирает данные входа. Сессия видна в Telegram → Настройки → Устройства как «Друзья · импорт контактов» и исчезает после выхода. Загруженные данные остаются только на устройстве.</p>
+
+    <h2>Фото</h2>
+    <p>Фото друга можно взять из контактов, выбрать из галереи или снять камерой. Приложение сохраняет уменьшенные копии в своей папке на устройстве и удаляет их вместе с записью о друге.</p>
+
+    <h2>Разрешения</h2>
+    <ul>
+      <li><code>READ_CONTACTS</code> — импорт друзей из телефонной книги (по запросу, можно отказать).</li>
+      <li>Уведомления — напоминания о днях рождения, датах и делах (локальные).</li>
+      <li>Интернет — только для импорта из Telegram и открытия ссылок «Написать» в мессенджерах.</li>
+      <li>Камера и галерея — только когда ты сам выбираешь фото.</li>
+    </ul>
+
+    <h2>Передача и хранение</h2>
+    <p>Данные не отправляются разработчику и не хранятся на серверах разработчика: их просто нет. Единственная передача данных вовне — твой вход в Telegram при импорте, который ты запускаешь сам.</p>
+
+    <h2>Удаление данных</h2>
+    <p>Удали друга или напоминание в приложении, и запись исчезнет вместе с фото. Удаление приложения стирает все его данные с устройства.</p>
+
+    <h2>Дети</h2>
+    <p>Приложение не предназначено для детей младше 13 лет и не собирает сведения о них.</p>
+
+    <h2>Изменения и контакты</h2>
+    <p>Если политика изменится, новая версия появится на этой странице с новой датой. Вопросы: <a href="https://github.com/Kamon1996/friends-notes/issues">github.com/Kamon1996/friends-notes/issues</a> или [EMAIL РАЗРАБОТЧИКА].</p>
+  </section>
+
+  <hr>
+
+  <section id="en">
+    <h1>Privacy Policy</h1>
+    <p class="muted">«Друзья» (Friends) for Android. Updated 7 November 2026.</p>
+
+    <h2>In short</h2>
+    <p>Friends is a notebook about the people close to you: birthdays, important dates, preferences, reminders. The app has no server and no accounts. Everything you enter or import stays on your phone. We do not collect analytics, show ads, or share data with third parties.</p>
+
+    <h2>Data the app processes</h2>
+    <ul>
+      <li><b>Friend records</b>: name, phone, birthday, important dates, food, flowers, gift ideas, notes, photo, favourite and muted flags. Stored in the app's storage on the device.</li>
+      <li><b>Reminders</b>: text, date, time, repetition. Stored on the device; notifications are scheduled locally, no push servers.</li>
+      <li><b>Settings</b>: theme, accent colour, notification time.</li>
+    </ul>
+
+    <h2>Phone contacts</h2>
+    <p>To import friends the app asks for the <code>READ_CONTACTS</code> permission and reads the address book on the device only: names, numbers, dates (birthdays, anniversaries), notes, photos and the messenger markers (Telegram, WhatsApp, Viber) that those messengers wrote into your contacts. You choose whom to add; only the selected people are stored. The address book is never uploaded or modified: the write-contacts permission is blocked in the app.</p>
+
+    <h2>Telegram import (optional)</h2>
+    <p>There are two ways. <b>Without signing in</b> the app takes the contacts that Telegram added to your phone book. <b>With sign-in</b> you log into your own Telegram account with your phone number and a code (or a QR code), and the app uses the official TDLib library to request your contact list from Telegram's servers: names, phones, usernames, birthdays, bios and profile photos. Your phone number and the confirmation code are sent to Telegram's servers for that purpose and are covered by <a href="https://telegram.org/privacy">Telegram's privacy policy</a>.</p>
+    <p>The app does not read messages, chats, groups or files; it has no such functions. Right after the contacts are loaded the app logs out and wipes the login data. The session appears in Telegram → Settings → Devices as «Друзья · импорт контактов» and disappears after logout. The imported data stays on the device only.</p>
+
+    <h2>Photos</h2>
+    <p>A friend's photo can be taken from contacts, picked from the gallery or shot with the camera. The app stores downsized copies in its own folder on the device and deletes them together with the friend record.</p>
+
+    <h2>Permissions</h2>
+    <ul>
+      <li><code>READ_CONTACTS</code> — importing friends from the address book (on request, can be declined).</li>
+      <li>Notifications — local reminders about birthdays, dates and tasks.</li>
+      <li>Internet — only for the Telegram import and for opening "Write" links in messengers.</li>
+      <li>Camera and gallery — only when you pick a photo yourself.</li>
+    </ul>
+
+    <h2>Transfer and storage</h2>
+    <p>No data is sent to or stored by the developer: there are no developer servers. The only outbound transfer is your own Telegram sign-in during the import, which you start yourself.</p>
+
+    <h2>Deleting data</h2>
+    <p>Delete a friend or a reminder in the app and the record disappears together with its photo. Uninstalling the app removes all of its data from the device.</p>
+
+    <h2>Children</h2>
+    <p>The app is not directed at children under 13 and does not knowingly collect information about them.</p>
+
+    <h2>Changes and contact</h2>
+    <p>If this policy changes, the new version will appear on this page with a new date. Questions: <a href="https://github.com/Kamon1996/friends-notes/issues">github.com/Kamon1996/friends-notes/issues</a> or [DEVELOPER EMAIL].</p>
+  </section>
+</main>
+</body>
+</html>
