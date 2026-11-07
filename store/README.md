@@ -5,7 +5,7 @@
 
 ## Сборка для магазинов
 
-- **Google Play** принимает только Android App Bundle: коммит со словом `[aab]` (или Run workflow → режим `aab`) кладёт
+- **Google Play** принимает только Android App Bundle: коммит со словом `[aab]` в первой строке сообщения (или Run workflow → режим `aab`) кладёт
   `friends-notes-<версия>.aab` в Releases. Подпись — ключ из EAS; при первой загрузке Play сам включит Play App Signing и
   примет его как ключ загрузки.
 - **RuStore, Samsung Galaxy Store, Huawei AppGallery** принимают APK: тот же файл, что в Releases после `[apk]`.

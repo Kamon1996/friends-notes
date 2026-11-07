@@ -1,7 +1,7 @@
 name: Android APK
 
 # Запуск:
-#  - коммитом со словом «[apk]» — сборка прямо на машине GitHub (квота EAS не тратится),
+#  - коммитом со словом «[apk]» в первой строке сообщения — сборка прямо на машине GitHub (квота EAS не тратится),
 #    готовый APK прикрепляется к релизу на GitHub, ссылка в итогах запуска;
 #  - коммитом со словом «[aab]» — то же, но Android App Bundle для Google Play (профиль production);
 #  - коммитом со словом «[apk-cloud]» — облачная сборка в EAS, как раньше;
@@ -38,9 +38,22 @@ jobs:
     timeout-minutes: 90
     env:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-      # aab — Android App Bundle для Google Play (профиль production), иначе APK для прямой установки.
-      BUNDLE: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'aab') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[aab]')) }}
     steps:
+      # aab — Android App Bundle для Google Play (профиль production), иначе APK для прямой установки.
+      # Тег берём только из первой строки сообщения коммита: в теле слова вроде «[aab]» могут встречаться в описании.
+      - name: Pick build mode
+        env:
+          MESSAGE: ${{ github.event.head_commit.message }}
+          INPUT_MODE: ${{ github.event.inputs.mode }}
+        run: |
+          SUBJECT=$(printf '%s' "$MESSAGE" | head -n 1)
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            [ "$INPUT_MODE" = "aab" ] && BUNDLE=true || BUNDLE=false
+          else
+            case "$SUBJECT" in *"[aab]"*) BUNDLE=true ;; *) BUNDLE=false ;; esac
+          fi
+          echo "BUNDLE=$BUNDLE" >> "$GITHUB_ENV"
+          echo "Режим: $([ "$BUNDLE" = true ] && echo AAB || echo APK) · «$SUBJECT»"
       - name: Check EXPO_TOKEN
         run: |
           if [ -z "$EXPO_TOKEN" ]; then
