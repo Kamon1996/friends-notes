@@ -84,7 +84,12 @@ export default function FriendsScreen() {
               <ScreenHeader
                 title="Друзья"
                 subtitle={n ? `${n} ${plural(n, 'человек', 'человека', 'человек')}${inMonth ? ` · ${inMonth} ${plural(inMonth, 'день рождения', 'дня рождения', 'дней рождения')} в ближайший месяц` : ''}` : undefined}
-                right={<IconButton icon="import" label="Импорт друзей" onPress={() => router.push('/import')} />}
+                right={
+                  <>
+                    <IconButton icon="import" label="Импорт друзей" onPress={() => router.push('/import')} />
+                    <IconButton icon="sliders" label="Настройки" onPress={() => router.push('/settings')} />
+                  </>
+                }
               />
             )}
             {n > 0 && (
