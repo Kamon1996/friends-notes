@@ -3,18 +3,18 @@ import type { Friend } from './types';
 import { wheelAt, wheelEnd } from './wheel';
 
 /**
- * Ход «пола друзей» прямо по списку: список чуть изгибается сверху и снизу (середина с рамкой ровная), его оттягивают
- * вниз и выдёргивают — полный круг через рамку (медленно → очень быстро → медленно; ответа нет — крутится на полной
- * скорости, пока не придёт), потом список выпрямляется и стоит, как стоял.
+ * Ход «пола друзей» прямо по списку: список оттягивают вниз и выдёргивают — полный круг через рамку (медленно → очень
+ * быстро → медленно; ответа нет — крутится на полной скорости, пока не придёт), у проехавших рамку проявляется пол,
+ * потом список встаёт, как стоял. Без изгиба и перспективы: только сдвиг — одинаково на любом телефоне.
  *
  * Время — секунды от старта; расстояния — px вдоль списка (список такой же, как в «Друзьях»: с подзаголовками групп).
  * Чистые функции с пометкой 'worklet': на телефоне считаются на UI-потоке каждый кадр, в тестах — как обычные.
  */
-export const BEND = {
-  /** Пока поиск становится плашкой. */
+export const RUN = {
+  /** Пока выезжает плашка. */
   lead: 0.35,
-  /** Список изгибается. */
-  bendIn: 0.45,
+  /** Рамка и затемнение вокруг неё проявляются. */
+  focusIn: 0.3,
   /** Оттянули вниз. */
   pull: 0.22,
   /** На сколько оттягиваем, в долях строки. */
@@ -23,31 +23,27 @@ export const BEND = {
   release: 0.35,
   /** Полный круг, если ответ готов сразу. */
   spin: 3.5,
-  /** Список выпрямляется. */
-  bendOut: 0.5,
-  /** Наклон крайних строк видимого списка, градусы: радиус изгиба подбирается под высоту списка на этом телефоне. */
-  edgeAngle: 28,
-  /** Меньше этого радиус не делаем даже на маленьком экране, px. */
-  minRadius: 360,
-  /** Рамка — на друге, который ближе всех к этой доле высоты видимого списка: сверху и снизу гнётся поровну. */
+  /** Рамка и затемнение гаснут. */
+  focusOut: 0.35,
+  /** Рамка — на друге, который ближе всех к этой доле высоты видимого списка. */
   bandAt: 0.5,
   /** Выше верха списка — не дальше стольких строк (дальше строка уже за краем). */
   above: 3,
   maxCruise: 20,
 };
 
-export const SPIN_START = BEND.lead + BEND.bendIn + BEND.pull;
+export const SPIN_START = RUN.lead + RUN.focusIn + RUN.pull;
 
 function easeInOut(u: number): number {
   'worklet';
   return u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2;
 }
 
-/** Когда список снова ровный (конец анимации), с. `lap` — длина круга (в чём угодно: строках, px). */
+/** Когда список снова стоит (конец анимации), с. `lap` — длина круга (в чём угодно: строках, px). */
 export function flowEnd(doneAt: number, lap: number): number {
   'worklet';
   const da = Number.isFinite(doneAt) ? doneAt - SPIN_START : Infinity;
-  return SPIN_START + wheelEnd(da, lap, BEND.spin, 0, BEND.maxCruise) + BEND.bendOut;
+  return SPIN_START + wheelEnd(da, lap, RUN.spin, 0, RUN.maxCruise) + RUN.focusOut;
 }
 
 /**
@@ -56,24 +52,24 @@ export function flowEnd(doneAt: number, lap: number): number {
  */
 export function flowShift(t: number, doneAt: number, lap: number, pull: number): number {
   'worklet';
-  const p0 = BEND.lead + BEND.bendIn;
+  const p0 = RUN.lead + RUN.focusIn;
   if (t <= p0) return 0;
-  if (t <= SPIN_START) return -pull * Math.sin(((t - p0) / BEND.pull) * (Math.PI / 2));
+  if (t <= SPIN_START) return -pull * Math.sin(((t - p0) / RUN.pull) * (Math.PI / 2));
   const tt = t - SPIN_START;
   const da = Number.isFinite(doneAt) ? doneAt - SPIN_START : Infinity;
-  const s = wheelAt(tt, da, lap, BEND.spin, 0, BEND.maxCruise);
-  const r = Math.min(1, tt / BEND.release);
+  const s = wheelAt(tt, da, lap, RUN.spin, 0, RUN.maxCruise);
+  const r = Math.min(1, tt / RUN.release);
   return s - pull * (1 - easeInOut(r));
 }
 
-/** Насколько список изогнут в момент t: 0 — ровный, 1 — изогнут. */
-export function flowBend(t: number, doneAt: number, lap: number): number {
+/** Насколько видны рамка и затемнение вокруг неё в момент t: 0 — обычный список, 1 — ход. */
+export function flowFocus(t: number, doneAt: number, lap: number): number {
   'worklet';
-  if (t <= BEND.lead) return 0;
-  if (t < BEND.lead + BEND.bendIn) return easeInOut((t - BEND.lead) / BEND.bendIn);
-  const out0 = flowEnd(doneAt, lap) - BEND.bendOut;
+  if (t <= RUN.lead) return 0;
+  if (t < RUN.lead + RUN.focusIn) return easeInOut((t - RUN.lead) / RUN.focusIn);
+  const out0 = flowEnd(doneAt, lap) - RUN.focusOut;
   if (t <= out0) return 1;
-  return 1 - easeInOut(Math.min(1, (t - out0) / BEND.bendOut));
+  return 1 - easeInOut(Math.min(1, (t - out0) / RUN.focusOut));
 }
 
 /**
@@ -84,21 +80,6 @@ export function wrapPlace(y: number, shift: number, lap: number, above: number):
   'worklet';
   if (lap <= 0) return y - shift;
   return ((((y - shift + above) % lap) + lap) % lap) - above;
-}
-
-/**
- * Элемент на изгибе: середина (рамка) ровная, края уходят назад. `d` — от середины рамки до середины элемента, px.
- * Возвращает, где середина элемента окажется (от середины рамки, с учётом перспективы), масштаб и наклон.
- * При bend = 0 — обычный ровный список.
- */
-export function bendPlace(d: number, bend: number, radius: number, perspective: number): { y: number; scale: number; angle: number } {
-  'worklet';
-  if (bend < 1e-4) return { y: d, scale: 1, angle: 0 };
-  const r = radius / bend;
-  const a = d / r;
-  const z = -r * (1 - Math.cos(a));
-  const scale = perspective / (perspective - z);
-  return { y: r * Math.sin(a) * scale, scale, angle: (-a * 180) / Math.PI };
 }
 
 /** Элемент списка на ходу: подзаголовок группы или друг (`slot` — номер друга по порядку). */
@@ -152,14 +133,12 @@ export interface RunGeo {
   bandH: number;
   /** Высота строки друга — шаг для оттяжки, изгиба и проявления. */
   row: number;
-  /** Радиус изгиба, px: крайняя строка видимого списка наклонена на BEND.edgeAngle. */
-  radius: number;
 }
 
 /**
  * Геометрия списка из двух замеров: высота подзаголовка и строки друга в середине группы. Строки в группе-карточке:
  * у первой — рамка сверху, у остальных — разделитель той же толщины, у последней ещё рамка снизу (+1).
- * Рамка хода — на друге, чья середина ближе всех к BEND.bandAt высоты видимого списка (список короче — на последнем),
+ * Рамка хода — на друге, чья середина ближе всех к RUN.bandAt высоты видимого списка (список короче — на последнем),
  * чтобы изгиб был и сверху, и снизу. Радиус — от высоты списка: на любом экране крайние строки наклонены одинаково.
  */
 export function runGeometry(items: readonly ({ kind: 'label' } | { kind: 'row'; last: boolean })[], labelH: number, rowH: number, viewH: number): RunGeo {
@@ -168,7 +147,7 @@ export function runGeometry(items: readonly ({ kind: 'label' } | { kind: 'row'; 
   let at = 0;
   let band = -1;
   let best = Infinity;
-  const target = viewH * BEND.bandAt;
+  const target = viewH * RUN.bandAt;
   for (let i = 0; i < items.length; i++) {
     const it = items[i];
     const size = it.kind === 'label' ? labelH : rowH + (it.last ? 1 : 0);
@@ -192,6 +171,5 @@ export function runGeometry(items: readonly ({ kind: 'label' } | { kind: 'row'; 
     bandTop: y[b] ?? 0,
     bandH: h[b] ?? rowH,
     row: rowH,
-    radius: Math.max(BEND.minRadius, viewH / 2 / ((BEND.edgeAngle * Math.PI) / 180)),
   };
 }

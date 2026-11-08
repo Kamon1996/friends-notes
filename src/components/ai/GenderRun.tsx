@@ -20,7 +20,7 @@ import { RiddleCards } from '@/components/ai/RiddleCards';
 import { HIDDEN, RunList, RunProbe } from '@/components/ai/RunList';
 import { Sheet, SheetHandle } from '@/components/Sheet';
 import { Fab, useTheme } from '@/components/ui';
-import { BEND, SPIN_START, flowBend, flowEnd, flowShift, runGeometry, runItems, type RunGeo } from '@/lib/bendFlow';
+import { RUN, SPIN_START, flowEnd, flowFocus, flowShift, runGeometry, runItems, type RunGeo } from '@/lib/runFlow';
 import { plural, todayISO } from '@/lib/dates';
 import { buildFriendList } from '@/lib/friendList';
 import type { Gender } from '@/lib/gender';
@@ -39,11 +39,11 @@ const SLIDE = { in: 460, out: 360 };
  * «Пол друзей» прямо на экране «Друзья»: слой поверх списка, шапка экрана остаётся настоящей.
  *
  * Слой рисует список точь-в-точь (подзаголовки, карточки групп, строки) и появляется, только когда всё измерено, —
- * подмены не видно. Сверху выезжает плашка с фразой; список чуть изгибается сверху и снизу (середина с рамкой ровная),
- * его оттягивают и выдёргивают — полный круг через рамку (медленно → очень быстро → медленно; ответа нет — крутится,
- * пока не придёт, не дольше 20 с), у проехавших проявляется пол; список выпрямляется. Всё определилось — «Готово»;
- * остались загадки — шторка «Помочь · Оставить так», «Помочь» — карточки «Кто это?». В конце пол гаснет, плашка
- * уезжает наверх, слой исчезает — под ним тот же список.
+ * подмены не видно. Сверху выезжает плашка с фразой; вокруг рамки в середине списка всё чуть темнеет; список оттягивают
+ * и выдёргивают — полный круг через рамку (медленно → очень быстро → медленно; ответа нет — крутится, пока не придёт,
+ * не дольше 20 с), у проехавших проявляется пол; список встаёт, как стоял. Всё определилось — «Готово»; остались
+ * загадки — шторка «Помочь · Оставить так», «Помочь» — карточки «Кто это?». В конце пол гаснет, плашка уезжает наверх,
+ * слой исчезает — под ним тот же список.
  *
  * `listTop` — где на экране начинается список (высота шапки списка); список должен быть прокручен к началу и
  * отсортирован по имени (это делает экран «Друзья» перед запуском).
@@ -76,7 +76,7 @@ export function GenderRun({ listTop, onClose }: { listTop: number; onClose: () =
 
   // Ход списка (px вдоль списка) и когда у кого проявляется пол — в px «что сейчас в середине рамки».
   const shift = useSharedValue(0);
-  const bend = useSharedValue(0);
+  const focus = useSharedValue(0);
   const outro = useSharedValue(0);
   const slide = useSharedValue(0);
   const reveal = useSharedValue<number[]>([]);
@@ -129,7 +129,7 @@ export function GenderRun({ listTop, onClose }: { listTop: number; onClose: () =
       setTimeout(() => setPhrase((p) => voice.say('gender.spin') ?? p), (SPIN_START + 1.1) * 1000),
       setTimeout(
         () => setPhrase((p) => (workDoneRef.current ? voice.say('gender.end') : voice.say('gender.slow')) ?? p),
-        (SPIN_START + BEND.spin * 0.72) * 1000,
+        (SPIN_START + RUN.spin * 0.72) * 1000,
       ),
     ];
     // ответ задерживается — изредка напоминаем, что работаем
@@ -160,8 +160,8 @@ export function GenderRun({ listTop, onClose }: { listTop: number; onClose: () =
     const t = (f.timestamp - start.get()) / 1000;
     if (doneFlag.get() && doneAt.get() >= HIDDEN) doneAt.set(t);
     const da = doneAt.get() >= HIDDEN ? Infinity : doneAt.get();
-    shift.set(flowShift(t, da, g.lap, BEND.pullRows * g.row));
-    bend.set(flowBend(t, da, g.lap));
+    shift.set(flowShift(t, da, g.lap, RUN.pullRows * g.row));
+    focus.set(flowFocus(t, da, g.lap));
     if (!ended.get() && t >= flowEnd(da, g.lap)) {
       ended.set(1);
       scheduleOnRN(onEnd);
@@ -345,7 +345,7 @@ export function GenderRun({ listTop, onClose }: { listTop: number; onClose: () =
             geo={geoJs}
             viewH={viewH}
             shift={shift}
-            bend={bend}
+            focus={focus}
             reveal={reveal}
             outro={outro}
             today={today}
