@@ -1,0 +1,37 @@
+name: Permissions check
+
+# Что токен робота Actions (GITHUB_TOKEN) реально может записать в репозиторий: тег через API, ветку через git push,
+# черновик релиза. Всё созданное сразу удаляется. Нужен, когда релизы не создаются с ошибкой 403.
+# Запуск: коммитом со словом «[perm-check]» в первой строке или вручную.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, claude/mobile-project-creation-pgqs46]
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[perm-check]')
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Try writes
+        run: |
+          N="perm-check-${GITHUB_RUN_ID}"
+          try() { local name="$1"; shift; if out=$("$@" 2>&1); then echo "✅ $name"; echo "| $name | ✅ |" >> "$GITHUB_STEP_SUMMARY"; else echo "❌ $name: $out"; echo "| $name | ❌ $(echo "$out" | tr '\n' ' ' | cut -c1-160) |" >> "$GITHUB_STEP_SUMMARY"; fi; }
+          { echo "### Что может записать робот Actions"; echo ""; echo "| Действие | Результат |"; echo "|---|---|"; } >> "$GITHUB_STEP_SUMMARY"
+          try "Создать тег через API" gh api -X POST "repos/$GH_REPO/git/refs" -f ref="refs/tags/$N" -f sha="$GITHUB_SHA"
+          try "Удалить тег через API" gh api -X DELETE "repos/$GH_REPO/git/refs/tags/$N"
+          git config user.name "github-actions[bot]"; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          try "Отправить ветку (git push)" git push origin "HEAD:refs/heads/$N"
+          try "Удалить ветку (git push)" git push origin --delete "$N"
+          try "Отправить тег (git push)" sh -c "git tag $N && git push origin refs/tags/$N"
+          try "Удалить тег (git push)" git push origin --delete "refs/tags/$N"
+          try "Черновик релиза" sh -c "gh api -X POST repos/$GH_REPO/releases -f tag_name=$N -f target_commitish=$GITHUB_SHA -F draft=true --jq .id > release.id"
+          if [ -s release.id ]; then try "Удалить черновик" gh api -X DELETE "repos/$GH_REPO/releases/$(cat release.id)"; fi
+          try "Релиз на существующий тег v1.24.0 (только чтение)" gh release view v1.24.0
