@@ -230,6 +230,15 @@
    "coffee": false
   },
   {
+   "id": "menu.title.n3",
+   "sit": "menu.title",
+   "bucket": "",
+   "text": "Немного магии",
+   "ref": null,
+   "new": true,
+   "coffee": false
+  },
+  {
    "id": "menu.sub.g0.p1",
    "sit": "menu.sub",
    "bucket": "",

@@ -148,5 +148,6 @@ export const PHRASES: Record<string, Phrase[]> = {
     { text: "Ну что, начнём?" },
     { text: "Привет! Чем помочь?" },
     { text: "Снова ты! Рада видеть" },
+    { text: "Немного магии" },
   ],
 };

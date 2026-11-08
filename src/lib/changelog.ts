@@ -14,6 +14,11 @@ export interface Release {
  */
 export const CHANGELOG: Release[] = [
   {
+    version: '1.29.1',
+    date: '2026-11-08',
+    items: ['Меню ИИ стало проще и короче.'],
+  },
+  {
     version: '1.29.0',
     date: '2026-11-08',
     items: [
