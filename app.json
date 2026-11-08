@@ -4,7 +4,7 @@
     "slug": "friends-notes",
     "owner": "kamon1996",
     "scheme": "friendsnotes",
-    "version": "1.21.0",
+    "version": "1.22.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -73,6 +73,13 @@
         {
           "organization": "testorg-oz",
           "project": "friends-notes"
+        }
+      ],
+      "expo-sharing",
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "Чтобы показывать дни рождения друзей в календаре телефона."
         }
       ]
     ],

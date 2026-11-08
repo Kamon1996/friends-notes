@@ -5,10 +5,14 @@ import { Alert, Linking, Platform, Pressable, ScrollView, Text, View } from 'rea
 import { AccentDots } from '@/components/AccentPicker';
 import { DateField } from '@/components/DateField';
 import { Button, Card, Group, IconCircle, ListRow, SectionTitle, SwitchRow, useTheme } from '@/components/ui';
+import { calendarItems } from '@/lib/calendarPlan';
 import { APP_VERSION } from '@/lib/changelog';
+import { notify } from '@/lib/confirm';
 import { sendTestReport } from '@/lib/crashReports';
 import { loadEnrichment } from '@/lib/contacts';
+import { deviceCalendarAvailable, requestCalendarPermission } from '@/lib/deviceCalendar';
 import { applyEnrichment } from '@/lib/enrich';
+import { exportDates } from '@/lib/exportDates';
 import { notificationsAllowed, setupNotifications } from '@/lib/notifications';
 import { useStore } from '@/lib/store';
 import { accentById } from '@/lib/theme';
@@ -58,6 +62,33 @@ export default function SettingsScreen() {
 
   const { settings } = data;
 
+  const toggleCalendar = async (on: boolean) => {
+    if (!on) {
+      updateSettings({ calendarSync: false });
+      return;
+    }
+    if (await requestCalendarPermission()) {
+      updateSettings({ calendarSync: true });
+      return;
+    }
+    Alert.alert('Нет доступа к календарю', 'Разреши его в настройках телефона, и даты появятся в календаре.', [
+      { text: 'Отмена', style: 'cancel' },
+      { text: 'Открыть настройки', onPress: () => Linking.openSettings() },
+    ]);
+  };
+
+  const exportFile = async () => {
+    if (!calendarItems(data).length) {
+      notify('Пока нечего выгружать', 'Добавь друзьям дни рождения или важные даты.');
+      return;
+    }
+    try {
+      await exportDates(data);
+    } catch (e) {
+      notify('Не получилось выгрузить', e instanceof Error ? e.message : String(e));
+    }
+  };
+
   // Пять быстрых нажатий на версию внизу — тестовое событие в Sentry, чтобы проверить, что отчёты доходят.
   const taps = useRef({ n: 0, at: 0 });
   const tapVersion = () => {
@@ -105,6 +136,24 @@ export default function SettingsScreen() {
             chevron
             onPress={() => router.push('/appearance')}
           />
+        </Group>
+      </View>
+
+      <View style={{ gap: 8 }}>
+        <SectionTitle style={{ marginBottom: 0 }}>Календарь</SectionTitle>
+        {deviceCalendarAvailable && (
+          <Card style={{ paddingVertical: 4 }}>
+            <SwitchRow
+              icon="calendar"
+              label="Дни рождения в календаре телефона"
+              sub="Отдельный календарь «Друзья» в Samsung и Google Календаре на этом телефоне. Без напоминаний: о датах напомнит приложение."
+              value={!!settings.calendarSync}
+              onChange={toggleCalendar}
+            />
+          </Card>
+        )}
+        <Group inset={62}>
+          <ListRow leading={<IconCircle icon="share" />} title="Выгрузить даты в файл" subtitle="Файл .ics для Google Календаря на сайте и других устройств" chevron onPress={exportFile} />
         </Group>
       </View>
 

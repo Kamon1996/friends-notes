@@ -578,6 +578,26 @@ scenario('Настройки: отчёты о сбоях включены по �
   await ui.waitData((x) => x.settings.crashReports === false, 'переключатель не сработал');
 });
 
+scenario('Календарь: выгрузка всех дат в файл .ics', async ({ ui, page }) => {
+  await ui.go('/settings');
+  await ui.see('Календарь');
+  // Свой календарь телефона есть только в Android-приложении: в браузере переключателя нет.
+  await ui.notSee('Дни рождения в календаре телефона');
+  const download = page.waitForEvent('download', { timeout: 5000 });
+  await ui.tap('Выгрузить даты в файл');
+  const file = await download;
+  assert.equal(file.suggestedFilename(), 'druzya-dni-rozhdeniya.ics');
+  const text = require('fs').readFileSync(await file.path(), 'utf8');
+  for (const s of ['BEGIN:VCALENDAR', 'SUMMARY:🎂 Аня Смирнова', 'SUMMARY:♥ Познакомились · Аня Смирнова', 'RRULE:FREQ=YEARLY', 'SUMMARY:🎂 Мама']) assert.ok(text.includes(s), `в файле нет «${s}»`);
+});
+
+scenario('Календарь: без дат выгружать нечего', async ({ ui }) => {
+  await ui.go('/settings');
+  await ui.tap('Выгрузить даты в файл');
+  await ui.pause(400);
+  assert.match(ui.dialogs.join('\n'), /Пока нечего выгружать/);
+}, { data: seed({ friends: [F({ id: 'x', name: 'Маша' })], reminders: [] }) });
+
 scenario('Экраны Telegram и «Сообщить о проблеме»', async ({ ui }) => {
   await ui.go('/telegram');
   await ui.see('Вход доступен только в Android-приложении');

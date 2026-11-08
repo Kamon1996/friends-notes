@@ -103,6 +103,8 @@ export interface Settings {
   lastSeenVersion?: string;
   /** Отправлять автоматические отчёты о сбоях (Sentry): только техническое, без данных людей. */
   crashReports: boolean;
+  /** Показывать дни рождения и важные даты в календаре телефона (свой локальный календарь «Друзья»). */
+  calendarSync?: boolean;
 }
 
 export interface AppData {

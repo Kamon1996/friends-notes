@@ -4,6 +4,7 @@ import { AppState } from 'react-native';
 
 import { cleanupAvatars, deleteOwnedFiles } from './avatars';
 import { completeReminder } from './events';
+import { markCalendarStale, syncDeviceCalendar } from './deviceCalendar';
 import { syncNotifications } from './notifications';
 import { parseStored } from './storage';
 import { EMPTY_DATA, type AppData, type Friend, type Reminder, type Settings } from './types';
@@ -67,13 +68,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (!ready || !canPersist) return;
     AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(data)).catch((e) => console.warn('Не удалось сохранить', e));
     const t = setTimeout(() => syncNotifications(data), 400);
-    return () => clearTimeout(t);
+    // Календарь телефона обновляется реже: пересоздание событий тяжелее, чем расписание уведомлений.
+    const c = setTimeout(() => syncDeviceCalendar(data), 1500);
+    return () => {
+      clearTimeout(t);
+      clearTimeout(c);
+    };
   }, [data, ready, canPersist]);
 
   // При возврате в приложение — пересчитываем окно уведомлений (их число ограничено).
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') syncNotifications(dataRef.current);
+      if (state === 'active') {
+        syncNotifications(dataRef.current);
+        // Пока приложение было свёрнуто, события могли удалить прямо в календаре — проверим и вернём.
+        markCalendarStale();
+        syncDeviceCalendar(dataRef.current);
+      }
     });
     return () => sub.remove();
   }, []);
