@@ -54,6 +54,8 @@ const CASES: Case[] = [
     rest: ['В прошлом году дарили книгу Мураками — понравилась. Не любит сладкое.'],
     facts: { food: 'сладк', gifts: 'книг' },
   },
+  { text: 'инст: dianka_v', links: ['instagram:dianka_v'], rest: [''] },
+  { text: 'Рисую 🎨 мой инст — @dianka.art', links: ['instagram:dianka.art'], rest: ['Рисую', 'Рисую 🎨'] },
   { text: 'Пишите в tg: katty. Всегда отвечаю', links: ['telegram:katty'], rest: ['Всегда отвечаю', 'Всегда отвечаю.'] },
 ];
 

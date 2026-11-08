@@ -129,31 +129,82 @@ function grounded(fact: string, text: string): boolean {
   return words(fact).some((w) => w.length >= 3 && stems.has(w.slice(0, 4)));
 }
 
+/** Названия сетей и их сокращения («инст», «тг», «вк», «Instagram») — так подписывают ссылки. */
+const NETWORK_LABELS = new Set(
+  NETWORKS.flatMap((n) => [n.name, n.id, ...(n.aliases ?? [])])
+    .map((x) => x.toLowerCase().replace(/ё/g, 'е'))
+    .filter((x) => x.length >= 2 && !x.includes('.')),
+);
+const POSSESSIVE = new Set(['мой', 'моя', 'мое', 'мои', 'наш', 'наша', 'наши', 'my']);
+
+/**
+ * Подпись сети в конце строки без самой ссылки («О себе: инст:», «Фотограф. мой тг —») ни о чём — убираем. Только
+ * название сети из каталога, и только если после него стоит двоеточие или тире либо в исходном тексте за ним шла
+ * найденная ссылка: «Смотрит youtube» без ссылки остаётся.
+ */
+function dropTrailingLabels(line: string, anchored: (label: string) => boolean): string {
+  let s = line;
+  for (let guard = 0; guard < 4; guard++) {
+    const body = s.replace(/[\s:：\-–—·•|,;]+$/u, '');
+    const sep = /[:：\-–—]/.test(s.slice(body.length));
+    const words = [...body.matchAll(/\S+/gu)];
+    let cut = 0;
+    for (let k = Math.min(3, words.length); k >= 1 && !cut; k--) {
+      const label = words
+        .slice(-k)
+        .map((w) => w[0])
+        .join(' ')
+        .replace(/^[(«"']+/u, '')
+        .toLowerCase()
+        .replace(/ё/g, 'е');
+      if (NETWORK_LABELS.has(label) && (sep || anchored(label))) cut = k;
+    }
+    if (!cut) break;
+    if (words.length > cut && POSSESSIVE.has(words[words.length - cut - 1][0].toLowerCase().replace(/ё/g, 'е'))) cut++;
+    s = body.slice(0, words[words.length - cut].index).replace(/[\s,;·•|:：\-–—]+$/u, '');
+  }
+  return s;
+}
+
 /**
  * Доочистка ответа, привязанная к найденным ссылкам: подпись, которая в исходном тексте стояла прямо перед ссылкой
- * («Донаты: boosty.to/…»), а теперь висит одна («Донаты:»), уходит; разделитель в конце строки — тоже. Наша же подпись
- * «О себе:», после которой ничего не осталось, — мусор. Пустые строки — только там, где они были в исходном тексте.
+ * («Донаты: boosty.to/…»), а теперь висит одна («Донаты:»), уходит; подпись сети в конце строки («инст:») и
+ * разделитель в конце строки — тоже. Наша же подпись «О себе:», после которой ничего не осталось, — мусор. Пустые
+ * строки — только там, где они были в исходном тексте.
  */
 export function tidyRest(rest: string, source = '', links: RawNotesLink[] = []): string {
-  const low = source.toLowerCase();
+  const low = source.toLowerCase().replace(/ё/g, 'е');
   const marks = links.flatMap((l) => [l.url, l.handle && `@${l.handle}`, l.handle].filter((x): x is string => !!x)).map((x) => x.toLowerCase());
   const beforeLink = (label: string) => {
-    const at = low.indexOf(label.toLowerCase());
+    const at = low.indexOf(label.toLowerCase().replace(/ё/g, 'е'));
     if (at < 0) return false;
-    const after = low.slice(at + label.length, at + label.length + 80).trimStart();
-    return marks.some((m) => after.startsWith(m));
+    const after = low
+      .slice(at + label.length, at + label.length + 80)
+      .replace(/^[\s:：\-–—]+/u, '')
+      .replace(/^@/, '');
+    return marks.some((m) => after.startsWith(m.replace(/^@/, '')));
   };
   const out = rest
     .split('\n')
-    .map((l) => l.replace(/[ \t]+$/g, '').replace(/\s*[—–·•|]+$/u, ''))
-    .filter((l) => !/^\s*О себе:\s*$/i.test(l))
+    .map((l) => dropTrailingLabels(l.replace(/[ \t]+$/g, '').replace(/\s*[—–·•|]+$/u, ''), beforeLink))
+    .filter((l) => !/^\s*О себе:?\s*$/i.test(l))
     .filter((l) => {
-      const m = /^\s*([^:]{1,30}:)\s*$/u.exec(l);
+      const m = /^\s*(?:О себе:\s*)?([^:]{1,30}:)\s*$/iu.exec(l);
       return !(m && beforeLink(m[1].trim()));
     })
     .join('\n')
     .replace(/\n{3,}/g, '\n\n');
   return (source.includes('\n\n') ? out : out.replace(/\n{2,}/g, '\n')).trim();
+}
+
+/**
+ * Заметки, разобранные прошлой версией, — доочистить по новым правилам без ИИ (ссылок в них уже нет, поэтому —
+ * только подписи сетей с двоеточием или тире в конце строки). Разобранной заметка остаётся.
+ */
+export function retidySeen<T extends NotesSubject>(f: T): T {
+  if (!f.notesSeen || f.notesSeen !== notesHash(f.notes)) return f;
+  const notes = tidyRest(f.notes, f.notes);
+  return notes === f.notes ? f : { ...f, notes, notesSeen: notesHash(notes) };
 }
 
 /** Ответ ИИ → проверенные ответы по номерам текстов. null — ответ не разобрать (модуль ИИ спросит другую модель). */

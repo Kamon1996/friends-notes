@@ -19,6 +19,7 @@ import {
   notesSummary,
   parseNotesAnswer,
   restIsSafe,
+  retidySeen,
   tidyRest,
   toSocialLink,
   type NotesSubject,
@@ -108,6 +109,26 @@ describe('ответ', () => {
     assert.equal(tidyRest('Важно:\nне опаздывать', 'Важно:\nне опаздывать', []), 'Важно:\nне опаздывать', 'обычный заголовок в заметке не трогаем');
     assert.equal(tidyRest('Пою и рисую\n\nМосква', 'Пою и рисую\n📸 inst: a\nМосква', []), 'Пою и рисую\nМосква');
     assert.equal(tidyRest('Абзац\n\nЕщё', 'Абзац\n\nЕщё inst: a', []), 'Абзац\n\nЕщё');
+  });
+  test('подпись сети без ссылки в конце строки («О себе: инст:», «мой тг —») уходит — баг с телефона', () => {
+    const links = [{ network: 'instagram', handle: 'dianka' }];
+    assert.equal(tidyRest('О себе: инст:', 'О себе: инст: dianka', links), '');
+    assert.equal(tidyRest('Фотограф. инст:', 'Фотограф. инст: dianka', links), 'Фотограф.');
+    assert.equal(tidyRest('Фотограф, мой тг —', 'Фотограф, мой тг — @dianka', [{ network: 'telegram', handle: 'dianka' }]), 'Фотограф');
+    assert.equal(tidyRest('Пою · inst', 'Пою · inst @dianka', links), 'Пою', 'без двоеточия — если за подписью шла ссылка');
+    assert.equal(tidyRest('Смотрит youtube', 'Смотрит youtube', []), 'Смотрит youtube', 'название сети в тексте без ссылки — живой текст');
+    assert.equal(tidyRest('Люблю фото', 'Люблю фото instagram.com/dianka', [{ network: 'instagram', url: 'instagram.com/dianka' }]), 'Люблю фото', 'слово перед ссылкой — не подпись');
+    assert.equal(tidyRest('О себе: Донаты:', 'О себе: Донаты: boosty.to/kat', [{ network: 'boosty', url: 'boosty.to/kat' }]), '');
+  });
+  test('заметки, разобранные прошлой версией, доочищаются без ИИ и остаются разобранными', () => {
+    const old = friend({ notes: 'О себе: инст:', notesSeen: notesHash('О себе: инст:') });
+    const fixed = retidySeen(old);
+    assert.equal(fixed.notes, '');
+    assert.equal(fixed.notesSeen, notesHash(''));
+    const fine = friend({ notes: 'О себе: Фотограф', notesSeen: notesHash('О себе: Фотограф') });
+    assert.equal(retidySeen(fine), fine);
+    const own = friend({ notes: 'Мой тг:', notesSeen: undefined });
+    assert.equal(retidySeen(own), own, 'неразобранные заметки не трогаем');
   });
   test('наша подпись «О себе:» без текста после неё уходит вместе со ссылками', () => {
     assert.equal(tidyRest('О себе: \nДругое'), 'Другое');

@@ -12,7 +12,7 @@ import { genderOnSave } from './gender';
 import { applyGenderUpdate, genderPending } from './genderDetect';
 import { genderSync } from './genderRun';
 import { ai } from './ai';
-import { applyNotesUpdate, notesPass, notesPending, notesSummary, type NotesSummary } from './notesAi';
+import { applyNotesUpdate, notesPass, notesPending, notesSummary, retidySeen, type NotesSummary } from './notesAi';
 
 const STORAGE_KEY = 'friends-notes/data/v1';
 
@@ -84,7 +84,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         // Разобрать нельзя — откладываем как есть в резервную копию, а не теряем.
         await AsyncStorage.setItem(`${STORAGE_KEY}.broken-${Date.now()}`, raw).catch(() => setCanPersist(false));
       }
-      if (loaded) setData(loaded);
+      // Заметки, разобранные прошлой версией, доочищаем по новым правилам («О себе: инст:» → пусто) — без ИИ.
+      if (loaded) setData({ ...loaded, friends: loaded.friends.map(retidySeen) });
     })().finally(() => setReady(true));
   }, []);
 
