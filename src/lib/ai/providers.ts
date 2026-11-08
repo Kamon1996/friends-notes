@@ -41,7 +41,8 @@ const gemini: ProviderDef = {
           contents: [{ role: 'user', parts: [{ text: req.prompt }] }],
           generationConfig: {
             temperature: req.temperature ?? 0,
-            ...(req.json && { responseMimeType: 'application/json' }),
+            // У Gemma через Gemini API нет режима JSON — формат задан в самой просьбе.
+            ...(req.json && !/gemma/i.test(model) && { responseMimeType: 'application/json' }),
           },
         }),
       },
@@ -99,8 +100,13 @@ const groq = openAiCompatible({
 /** Бесплатные модели OpenRouter меняются часто — список берём у самого сервиса, эти — порядок предпочтения. */
 const OPENROUTER_PREFERRED = [/llama-3\.3-70b/, /gemma-3-27b/, /deepseek-(chat|v3)/, /qwen3/, /mistral-small/, /llama-4/, /gpt-oss/];
 
-/** Из списка моделей OpenRouter — бесплатные текстовые, сначала предпочтительные. */
+/** Из списка моделей OpenRouter — бесплатные текстовые, сначала предпочтительные (для приложения — первые 8). */
 export function pickOpenRouterFree(body: unknown): string[] {
+  return listOpenRouterFree(body).slice(0, 8);
+}
+
+/** Все бесплатные текстовые модели OpenRouter, сначала предпочтительные. */
+export function listOpenRouterFree(body: unknown): string[] {
   const data = asObj(body)?.data;
   if (!Array.isArray(data)) return [];
   const free = (data as Json[]).filter((m) => {
@@ -122,7 +128,6 @@ export function pickOpenRouterFree(body: unknown): string[] {
   return free
     .map((m, i) => ({ id: m.id as string, i }))
     .sort((a, b) => rank(a.id) - rank(b.id) || a.i - b.i)
-    .slice(0, 8)
     .map((m) => m.id);
 }
 
