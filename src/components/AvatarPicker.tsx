@@ -1,6 +1,6 @@
 import * as ImagePicker from 'expo-image-picker';
 import { useState } from 'react';
-import { Alert, Linking, Modal, Platform, Pressable, Text, View } from 'react-native';
+import { Alert, Linking, Platform, Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { saveAvatar, type AvatarUris } from '@/lib/avatars';
@@ -9,6 +9,7 @@ import { phoneKey } from '@/lib/messengers';
 import type { Friend } from '@/lib/types';
 import { Avatar } from './Avatar';
 import { Icon, type IconName } from './Icon';
+import { Sheet } from './Sheet';
 import { useTheme } from './ui';
 
 type Props = {
@@ -111,27 +112,24 @@ export function AvatarPicker({ friend, size = 72, onChange }: Props) {
         </View>
       </Pressable>
 
-      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-        <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)' }} onPress={() => setOpen(false)} />
-        <View style={{ backgroundColor: colors.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 12, paddingBottom: insets.bottom + 12 }}>
-          <Text style={{ fontFamily: fonts.display, fontSize: 18, color: colors.text, textAlign: 'center', paddingVertical: 10 }}>Фото</Text>
-          {options.map((o) => (
-            <Pressable
-              key={o.key}
-              onPress={o.onPress}
-              style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 14, minHeight: 52, paddingHorizontal: 12, borderRadius: 14, backgroundColor: pressed ? colors.chip : 'transparent' })}
-            >
-              <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: o.danger ? colors.dangerSoft : colors.chip, alignItems: 'center', justifyContent: 'center' }}>
-                <Icon name={o.icon} size={18} color={o.danger ? colors.danger : colors.text2} />
-              </View>
-              <Text style={{ fontFamily: fonts.medium, fontSize: 16, color: o.danger ? colors.danger : colors.text }}>{o.label}</Text>
-            </Pressable>
-          ))}
-          <Pressable onPress={() => setOpen(false)} style={({ pressed }) => ({ minHeight: 48, alignItems: 'center', justifyContent: 'center', marginTop: 4, opacity: pressed ? 0.6 : 1 })}>
-            <Text style={{ fontFamily: fonts.semibold, fontSize: 15, color: colors.text2 }}>Отмена</Text>
+      <Sheet visible={open} onClose={() => setOpen(false)} dim={0.35} style={{ padding: 12, paddingBottom: insets.bottom + 12 }}>
+        <Text style={{ fontFamily: fonts.display, fontSize: 18, color: colors.text, textAlign: 'center', paddingVertical: 10 }}>Фото</Text>
+        {options.map((o) => (
+          <Pressable
+            key={o.key}
+            onPress={o.onPress}
+            style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 14, minHeight: 52, paddingHorizontal: 12, borderRadius: 14, backgroundColor: pressed ? colors.chip : 'transparent' })}
+          >
+            <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: o.danger ? colors.dangerSoft : colors.chip, alignItems: 'center', justifyContent: 'center' }}>
+              <Icon name={o.icon} size={18} color={o.danger ? colors.danger : colors.text2} />
+            </View>
+            <Text style={{ fontFamily: fonts.medium, fontSize: 16, color: o.danger ? colors.danger : colors.text }}>{o.label}</Text>
           </Pressable>
-        </View>
-      </Modal>
+        ))}
+        <Pressable onPress={() => setOpen(false)} style={({ pressed }) => ({ minHeight: 48, alignItems: 'center', justifyContent: 'center', marginTop: 4, opacity: pressed ? 0.6 : 1 })}>
+          <Text style={{ fontFamily: fonts.semibold, fontSize: 15, color: colors.text2 }}>Отмена</Text>
+        </Pressable>
+      </Sheet>
     </>
   );
 }

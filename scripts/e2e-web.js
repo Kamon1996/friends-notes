@@ -210,6 +210,55 @@ scenario('Карточка: «Добавить» в напоминаниях с�
   assert.equal(data.reminders.find((r) => r.title === 'Вернуть книгу').friendId, 'b');
 });
 
+scenario('Карточка: нажал на «Подарки» — шторка с текстом, курсор в конце; дописал и сохранил', async ({ ui, page }) => {
+  await ui.go('/friend/a');
+  await ui.see('Подарки: Керамика. Изменить', { label: true });
+  await ui.tap('Керамика');
+  await ui.see('Каждая идея с новой строки — в карточке будет список.');
+  const caret = await page.evaluate(() => { const el = document.activeElement; return el && 'selectionStart' in el ? [el.value, el.selectionStart] : null; });
+  assert.deepEqual(caret, ['Керамика', 'Керамика'.length], 'поле в фокусе, курсор в конце');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('Настолки  ', { delay: 10 });
+  await ui.tap('Сохранить');
+  await ui.notSee('Каждая идея с новой строки');
+  await ui.see('Настолки');
+  await ui.waitData((x) => x.friends.find((f) => f.id === 'a').gifts === 'Керамика\nНастолки', 'подарки не сохранились (или с хвостом пробелов)');
+  assert.equal(ui.dialogs.length, 0, 'при сохранении ничего не спрашиваем');
+});
+
+scenario('Карточка: закрыл шторку с правками — спросим; «Не сохранять» ничего не меняет, без правок — без вопроса', async ({ ui }) => {
+  await ui.go('/friend/a');
+  await ui.tap('Пионы');
+  await ui.fill('Пионы, белые розы…', 'Тюльпаны');
+  ui.dismissNextDialog();
+  await ui.tap('Закрыть');
+  assert.match(ui.dialogs.join('\n'), /Сохранить изменения\?/);
+  await ui.notSee('Пионы, белые розы…');
+  await ui.see('Пионы');
+  assert.equal((await ui.data()).friends.find((f) => f.id === 'a').flowers, 'Пионы');
+
+  await ui.tap('Пионы');
+  await ui.tap('Закрыть');
+  assert.equal(ui.dialogs.length, 1, 'без правок закрываем молча');
+
+  await ui.tap('Пионы');
+  await ui.fill('Пионы, белые розы…', 'Тюльпаны');
+  await ui.tap('Закрыть'); // вопрос подтверждён — сохраняем
+  await ui.waitData((x) => x.friends.find((f) => f.id === 'a').flowers === 'Тюльпаны', 'по «Сохранить» в вопросе правка не сохранилась');
+  await ui.see('Тюльпаны');
+});
+
+scenario('Карточка: стёр текст блока — блок пропал, а без предпочтений — подсказка «Дополнить»', async ({ ui }) => {
+  await ui.go('/friend/c');
+  await ui.tap('Тюльпаны');
+  await ui.see('Цветы');
+  await ui.fill('Пионы, белые розы…', '   ');
+  await ui.tap('Сохранить');
+  await ui.see('Еда, цветы, подарки');
+  await ui.see('Дополнить');
+  await ui.waitData((x) => x.friends.find((f) => f.id === 'c').flowers === '', 'пустой блок не очистился');
+});
+
 scenario('Друг не найден: удалённый друг по старой ссылке', async ({ ui }) => {
   await ui.go('/friend/gone');
   await ui.see('Друг не найден');
@@ -754,6 +803,8 @@ function helpers(page, dialogs) {
   };
   const ui = {
     dialogs,
+    /** Следующий вопрос (confirm) отклонить, а не принять. */
+    dismissNextDialog() { dialogs.dismissNext = true; },
     async go(url) {
       await page.goto(`http://localhost:${PORT}${url}`);
       await page.waitForFunction(() => document.body.innerText.trim().length > 0, null, { timeout: 15000 });
@@ -849,7 +900,8 @@ const server = http.createServer((req, res) => {
 
 async function run(browser, s, index) {
   const ctx = await browser.newContext({ ...devices['iPhone 13'], deviceScaleFactor: 1, locale: 'ru-RU', timezoneId: TZ, ...(s.viewport ? { viewport: s.viewport } : {}) });
-  await ctx.clock.setFixedTime(NOW);
+  // Часы стоят на NOW и дальше идут сами: дата в сценариях та же, а анимации (они меряют время по Date.now) доигрывают.
+  await ctx.clock.install({ time: NOW });
   const data = s.data === undefined ? seed() : s.data;
   const raw = s.raw ?? (data ? JSON.stringify(data) : null);
   await ctx.addInitScript(([key, value, extra]) => {
@@ -860,7 +912,13 @@ async function run(browser, s, index) {
   const errors = [];
   const dialogs = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  page.on('dialog', (dlg) => { dialogs.push(dlg.message()); dlg.accept(); });
+  page.on('dialog', (dlg) => {
+    dialogs.push(dlg.message());
+    if (dialogs.dismissNext) {
+      dialogs.dismissNext = false;
+      dlg.dismiss();
+    } else dlg.accept();
+  });
   const started = Date.now();
   let error = null;
   try {

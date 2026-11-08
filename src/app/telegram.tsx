@@ -1,12 +1,13 @@
 import { Stack, router } from 'expo-router';
 import { useState, type ReactNode } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
 
 import { QrCode } from '@/components/QrCode';
 import { Icon, type IconName } from '@/components/Icon';
 import { Stepper, TG_STEPS } from '@/components/Stepper';
+import { Sheet, SheetHandle } from '@/components/Sheet';
 import { Button, Card, Field, IconCircle, useTheme } from '@/components/ui';
 import { telegramAvailable, telegramConfigured } from '@/lib/telegramClient';
 import { tgErrorText } from '@/lib/telegramImport';
@@ -116,26 +117,23 @@ function AccessSheet({ visible, onClose }: { visible: boolean; onClose: () => vo
   const { s, colors, fonts } = useTheme();
   const insets = useSafeAreaInsets();
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' }} onPress={onClose} accessibilityLabel="Закрыть" />
-      <View style={{ backgroundColor: colors.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 20 + insets.bottom, gap: 14 }}>
-        <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: colors.hairline, alignSelf: 'center' }} />
-        <Text style={[s.h2, { fontFamily: fonts.display }]}>Что получает приложение</Text>
-        <Text style={[s.muted, { lineHeight: 20 }]}>
-          Telegram не умеет давать ограниченный доступ: любой вход по коду равен входу с нового телефона. Поэтому «Друзья» устроены так:
-        </Text>
-        <View style={{ gap: 10 }}>
-          <Line icon="check" tone="success">Читает контакты: имена, телефоны, @username, дни рождения, «о себе», аватарки.</Line>
-          <Line icon="close" tone="danger">Не читает сообщения, чаты, группы, файлы. Таких функций в приложении нет — даже по ошибке их не вызвать.</Line>
-          <Line icon="lock">Выходит из аккаунта сразу после загрузки. Своего сервера нет, всё остаётся на телефоне.</Line>
-          <Line icon="info">{`Вход виден в Telegram → Настройки → Устройства как «${SESSION_NAME}» и пропадает после выхода.`}</Line>
-        </View>
-        <Pressable onPress={() => Linking.openURL(SOURCE_URL).catch(() => {})} hitSlop={6}>
-          <Text style={[s.muted, { color: colors.accentText, fontFamily: fonts.medium }]}>Исходный код модуля Telegram →</Text>
-        </Pressable>
-        <Button title="Понятно" onPress={onClose} />
+    <Sheet visible={visible} onClose={onClose} style={{ padding: 20, paddingBottom: 20 + insets.bottom, gap: 14 }}>
+      <SheetHandle />
+      <Text style={[s.h2, { fontFamily: fonts.display }]}>Что получает приложение</Text>
+      <Text style={[s.muted, { lineHeight: 20 }]}>
+        Telegram не умеет давать ограниченный доступ: любой вход по коду равен входу с нового телефона. Поэтому «Друзья» устроены так:
+      </Text>
+      <View style={{ gap: 10 }}>
+        <Line icon="check" tone="success">Читает контакты: имена, телефоны, @username, дни рождения, «о себе», аватарки.</Line>
+        <Line icon="close" tone="danger">Не читает сообщения, чаты, группы, файлы. Таких функций в приложении нет — даже по ошибке их не вызвать.</Line>
+        <Line icon="lock">Выходит из аккаунта сразу после загрузки. Своего сервера нет, всё остаётся на телефоне.</Line>
+        <Line icon="info">{`Вход виден в Telegram → Настройки → Устройства как «${SESSION_NAME}» и пропадает после выхода.`}</Line>
       </View>
-    </Modal>
+      <Pressable onPress={() => Linking.openURL(SOURCE_URL).catch(() => {})} hitSlop={6}>
+        <Text style={[s.muted, { color: colors.accentText, fontFamily: fonts.medium }]}>Исходный код модуля Telegram →</Text>
+      </Pressable>
+      <Button title="Понятно" onPress={onClose} />
+    </Sheet>
   );
 }
 

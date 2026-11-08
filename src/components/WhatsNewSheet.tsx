@@ -1,11 +1,12 @@
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Modal, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
+import { Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { APP_VERSION, unseenReleases, type Release } from '@/lib/changelog';
 import { useStore } from '@/lib/store';
 import { ReleaseNotes } from './ReleaseNotes';
+import { Sheet } from './Sheet';
 import { Button, useTheme } from './ui';
 
 /**
@@ -16,6 +17,9 @@ export function WhatsNewSheet() {
   const { ready, data, updateSettings } = useStore();
   const [releases, setReleases] = useState<Release[] | null>(null);
   const decided = useRef(false);
+  // Пока шторка уезжает, показываем то же, что было.
+  const [shown, setShown] = useState<Release[] | null>(null);
+  if (releases && releases !== shown) setShown(releases);
 
   useEffect(() => {
     if (!ready || decided.current) return;
@@ -41,10 +45,9 @@ export function WhatsNewSheet() {
   };
 
   return (
-    <Modal visible={releases !== null} transparent animationType="slide" onRequestClose={close}>
-      <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' }} onPress={close} accessibilityLabel="Закрыть" />
-      {releases && <SheetBody releases={releases} onClose={close} onHistory={openHistory} />}
-    </Modal>
+    <Sheet visible={releases !== null} onClose={close}>
+      {shown && <SheetBody releases={shown} onClose={close} onHistory={openHistory} />}
+    </Sheet>
   );
 }
 

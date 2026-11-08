@@ -7,7 +7,8 @@ import { ContactButtons } from '@/components/ContactButtons';
 import { SocialChips } from '@/components/SocialChips';
 import { SocialLinkSheet } from '@/components/SocialLinkSheet';
 import { ReminderRow } from '@/components/ReminderRow';
-import { Icon, type IconName } from '@/components/Icon';
+import { Icon } from '@/components/Icon';
+import { PREF_FIELDS, PrefSheet, type PrefField } from '@/components/PrefSheet';
 import { Button, Empty, Group, IconButton, IconCircle, ListRow, SectionTitle, Tag, useTheme } from '@/components/ui';
 import { ageOn, daysBetween, formatDate, hasYear, nextAnniversary, plural, relativeDay, todayISO } from '@/lib/dates';
 import { mergeLinks } from '@/lib/socials';
@@ -19,6 +20,7 @@ export default function FriendScreen() {
   const { data, ready, saveFriend } = useStore();
   const { s, colors, fonts } = useTheme();
   const [addSocial, setAddSocial] = useState(false);
+  const [editing, setEditing] = useState<PrefField | null>(null);
 
   if (!ready) return null;
   if (!friend)
@@ -32,14 +34,7 @@ export default function FriendScreen() {
     .filter((r) => r.friendId === friend.id)
     .sort((a, b) => Number(a.done) - Number(b.done) || a.date.localeCompare(b.date));
 
-  const prefs = (
-    [
-      { icon: 'food', label: 'Еда', value: friend.food },
-      { icon: 'flower', label: 'Цветы', value: friend.flowers },
-      { icon: 'gift', label: 'Подарки', value: friend.gifts },
-      { icon: 'note', label: 'Заметки', value: friend.notes },
-    ] satisfies { icon: IconName; label: string; value: string }[]
-  ).filter((p) => p.value.trim());
+  const prefs = PREF_FIELDS.map((p) => ({ ...p, value: friend[p.field] })).filter((p) => p.value.trim());
 
   const today = todayISO();
   const nextBirthday = friend.birthday ? nextAnniversary(friend.birthday, today) : null;
@@ -120,6 +115,7 @@ export default function FriendScreen() {
         <SectionTitle style={{ marginBottom: 0 }}>Соцсети</SectionTitle>
         <SocialChips links={friend.socials ?? []} onAdd={() => setAddSocial(true)} />
       </View>
+      <PrefSheet friend={friend} field={editing} onClose={() => setEditing(null)} onSave={(field, value) => saveFriend({ ...friend, [field]: value })} />
       <SocialLinkSheet
         visible={addSocial}
         existing={friend.socials}
@@ -144,10 +140,13 @@ export default function FriendScreen() {
         <Group inset={62}>
           {prefs.map((p) => (
             <ListRow
-              key={p.label}
+              key={p.field}
               leading={<IconCircle icon={p.icon} />}
               title={<Text style={s.sectionLabel}>{p.label}</Text>}
               subtitle={<Text style={[s.body, { fontSize: 15, lineHeight: 21 }]}>{p.value}</Text>}
+              trailing={<Icon name="pencil" size={16} color={colors.text3} />}
+              onPress={() => setEditing(p.field)}
+              accessibilityLabel={`${p.label}: ${p.value}. Изменить`}
               style={{ paddingVertical: 11, alignItems: 'center' }}
             />
           ))}

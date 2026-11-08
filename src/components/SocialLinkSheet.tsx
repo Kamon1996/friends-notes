@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, Pressable, Text, TextInput, View } from 'react-native';
+import { Pressable, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { NETWORKS, TOP_NETWORKS, linkFromInput, linkSubtitle, mergeLinks, networkById, parseSocialInput, type Network, type ParsedInput } from '@/lib/socials';
@@ -8,6 +8,7 @@ import type { SocialLink } from '@/lib/types';
 import { Icon } from './Icon';
 import { NetworkBadge, NetworkGlyph } from './NetworkBadge';
 import { NetworkPicker } from './NetworkPicker';
+import { Sheet, SheetHandle } from './Sheet';
 import { Button, IconButton, Label, useTheme } from './ui';
 
 /** Подписи шторки — согласованы отдельно, менять вместе с макетами. */
@@ -77,11 +78,17 @@ export function SocialLinkSheet({
     setText(v);
     setChosen(null);
   };
-  const close = () => {
-    setText('');
-    setChosen(null);
-    onClose();
-  };
+  // Каждый раз шторка открывается пустой. Сбрасываем при открытии, а не при закрытии: пока она уезжает, текст ещё виден.
+  const [wasOpen, setWasOpen] = useState(visible);
+  if (visible !== wasOpen) {
+    setWasOpen(visible);
+    if (visible) {
+      setText('');
+      setChosen(null);
+      setPicker(false);
+    }
+  }
+  const close = () => onClose();
   const submit = () => {
     if (!link || duplicate) return;
     onAdd({ ...link, id: newId(), source: 'manual' });
@@ -89,105 +96,100 @@ export function SocialLinkSheet({
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={close}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' }} onPress={close} accessibilityLabel="Закрыть" />
-        <View style={{ backgroundColor: colors.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 20 + insets.bottom, gap: 14 }}>
-          <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: colors.hairline, alignSelf: 'center' }} />
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <Text style={[s.h2, { fontFamily: fonts.display }]}>Добавить соцсеть</Text>
-            <IconButton icon="close" label="Закрыть" onPress={close} />
-          </View>
+    <Sheet visible={visible} onClose={close} style={{ padding: 20, paddingBottom: 20 + insets.bottom, gap: 14 }}>
+      <SheetHandle />
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Text style={[s.h2, { fontFamily: fonts.display }]}>Добавить соцсеть</Text>
+        <IconButton icon="close" label="Закрыть" onPress={close} />
+      </View>
 
-          <View>
-            <Label>Ссылка или ник</Label>
-            <View>
-              <TextInput
-                value={text}
-                onChangeText={change}
-                placeholder={SOCIAL_COPY.placeholder}
-                placeholderTextColor={colors.placeholder}
-                autoFocus
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="email-address"
-                returnKeyType="done"
-                onSubmitEditing={submit}
-                accessibilityLabel="Ссылка или ник"
-                style={[s.input, { paddingRight: 44 }, parsed.kind === 'invalid' && { borderColor: colors.danger, borderWidth: 1.5 }]}
-              />
-              {text.length > 0 && (
-                <Pressable
-                  onPress={() => change('')}
-                  accessibilityLabel="Очистить"
-                  hitSlop={8}
-                  style={({ pressed }) => ({ position: 'absolute', right: 4, top: 0, bottom: 0, width: 40, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.5 : 1 })}
-                >
-                  <Icon name="close" size={16} color={colors.text3} strokeWidth={2} />
-                </Pressable>
-              )}
-            </View>
-          </View>
-
-          {caption && <Text style={[s.muted, { lineHeight: 18, paddingHorizontal: 2 }, parsed.kind === 'invalid' && { color: colors.danger }]}>{caption}</Text>}
-
-          {link && network && (
+      <View>
+        <Label>Ссылка или ник</Label>
+        <View>
+          <TextInput
+            value={text}
+            onChangeText={change}
+            placeholder={SOCIAL_COPY.placeholder}
+            placeholderTextColor={colors.placeholder}
+            autoFocus
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="email-address"
+            returnKeyType="done"
+            onSubmitEditing={submit}
+            accessibilityLabel="Ссылка или ник"
+            style={[s.input, { paddingRight: 44 }, parsed.kind === 'invalid' && { borderColor: colors.danger, borderWidth: 1.5 }]}
+          />
+          {text.length > 0 && (
             <Pressable
-              onPress={() => setPicker(true)}
-              accessibilityRole="button"
-              accessibilityLabel={`Сеть: ${network.name}. Поменять`}
-              style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 10, borderRadius: 14, backgroundColor: colors.chip, opacity: pressed ? 0.7 : 1 })}
+              onPress={() => change('')}
+              accessibilityLabel="Очистить"
+              hitSlop={8}
+              style={({ pressed }) => ({ position: 'absolute', right: 4, top: 0, bottom: 0, width: 40, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.5 : 1 })}
             >
-              <NetworkBadge network={link.network} tone="accent" />
-              <View style={{ flex: 1, minWidth: 0, gap: 1 }}>
-                <Text style={s.title}>{network.name}</Text>
-                <Text style={s.muted} numberOfLines={1}>
-                  {linkSubtitle(link)}
-                </Text>
-              </View>
-              <Icon name="chevronRight" size={18} color={colors.checkbox} strokeWidth={2} />
+              <Icon name="close" size={16} color={colors.text3} strokeWidth={2} />
             </Pressable>
           )}
-
-          {parsed.kind === 'handle' && !chosen && (
-            <View style={{ gap: 10 }}>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                {TOP_NETWORKS.map((n) => (
-                  <Pressable
-                    key={n.id}
-                    onPress={() => setChosen(n)}
-                    accessibilityRole="button"
-                    accessibilityLabel={n.name}
-                    style={({ pressed }) => ({
-                      flexBasis: '22%',
-                      flexGrow: 1,
-                      height: 62,
-                      borderRadius: 14,
-                      backgroundColor: colors.chip,
-                      borderWidth: 1,
-                      borderColor: colors.hairline,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 5,
-                      opacity: pressed ? 0.7 : 1,
-                    })}
-                  >
-                    <NetworkGlyph network={n.id} size={20} color={colors.text} />
-                    <Text style={[s.caption, { color: colors.text, fontFamily: fonts.medium }]} numberOfLines={1}>
-                      {n.name.replace(/ \(.*\)$/, '')}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-              <Pressable onPress={() => setPicker(true)} accessibilityRole="button" style={({ pressed }) => ({ alignSelf: 'center', minHeight: 44, paddingHorizontal: 16, justifyContent: 'center', opacity: pressed ? 0.6 : 1 })}>
-                <Text style={[s.muted, { color: colors.accentText, fontFamily: fonts.medium }]}>{`Все сети · ${NETWORKS.length} →`}</Text>
-              </Pressable>
-            </View>
-          )}
-
-          <Button title={buttonTitle} onPress={submit} disabled={!canAdd} />
         </View>
-      </KeyboardAvoidingView>
+      </View>
+
+      {caption && <Text style={[s.muted, { lineHeight: 18, paddingHorizontal: 2 }, parsed.kind === 'invalid' && { color: colors.danger }]}>{caption}</Text>}
+
+      {link && network && (
+        <Pressable
+          onPress={() => setPicker(true)}
+          accessibilityRole="button"
+          accessibilityLabel={`Сеть: ${network.name}. Поменять`}
+          style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 10, borderRadius: 14, backgroundColor: colors.chip, opacity: pressed ? 0.7 : 1 })}
+        >
+          <NetworkBadge network={link.network} tone="accent" />
+          <View style={{ flex: 1, minWidth: 0, gap: 1 }}>
+            <Text style={s.title}>{network.name}</Text>
+            <Text style={s.muted} numberOfLines={1}>
+              {linkSubtitle(link)}
+            </Text>
+          </View>
+          <Icon name="chevronRight" size={18} color={colors.checkbox} strokeWidth={2} />
+        </Pressable>
+      )}
+
+      {parsed.kind === 'handle' && !chosen && (
+        <View style={{ gap: 10 }}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {TOP_NETWORKS.map((n) => (
+              <Pressable
+                key={n.id}
+                onPress={() => setChosen(n)}
+                accessibilityRole="button"
+                accessibilityLabel={n.name}
+                style={({ pressed }) => ({
+                  flexBasis: '22%',
+                  flexGrow: 1,
+                  height: 62,
+                  borderRadius: 14,
+                  backgroundColor: colors.chip,
+                  borderWidth: 1,
+                  borderColor: colors.hairline,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 5,
+                  opacity: pressed ? 0.7 : 1,
+                })}
+              >
+                <NetworkGlyph network={n.id} size={20} color={colors.text} />
+                <Text style={[s.caption, { color: colors.text, fontFamily: fonts.medium }]} numberOfLines={1}>
+                  {n.name.replace(/ \(.*\)$/, '')}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+          <Pressable onPress={() => setPicker(true)} accessibilityRole="button" style={({ pressed }) => ({ alignSelf: 'center', minHeight: 44, paddingHorizontal: 16, justifyContent: 'center', opacity: pressed ? 0.6 : 1 })}>
+            <Text style={[s.muted, { color: colors.accentText, fontFamily: fonts.medium }]}>{`Все сети · ${NETWORKS.length} →`}</Text>
+          </Pressable>
+        </View>
+      )}
+
+      <Button title={buttonTitle} onPress={submit} disabled={!canAdd} />
       <NetworkPicker
         visible={picker}
         onClose={() => setPicker(false)}
@@ -196,6 +198,6 @@ export function SocialLinkSheet({
           setPicker(false);
         }}
       />
-    </Modal>
+    </Sheet>
   );
 }

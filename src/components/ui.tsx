@@ -331,6 +331,7 @@ export function ListRow({
   titleStyle,
   subtitleStyle,
   style,
+  accessibilityLabel,
 }: {
   leading?: ReactNode;
   title: ReactNode;
@@ -342,6 +343,7 @@ export function ListRow({
   titleStyle?: StyleProp<TextStyle>;
   subtitleStyle?: StyleProp<TextStyle>;
   style?: StyleProp<ViewStyle>;
+  accessibilityLabel?: string;
 }) {
   const { s, colors } = useTheme();
   const body = (
@@ -357,7 +359,7 @@ export function ListRow({
   );
   if (!onPress && !onLongPress) return <View style={[s.row, s.rowPad, style]}>{body}</View>;
   return (
-    <Pressable onPress={onPress} onLongPress={onLongPress} delayLongPress={350} style={({ pressed }) => [s.row, s.rowPad, pressed && { opacity: 0.6 }, style]}>
+    <Pressable onPress={onPress} onLongPress={onLongPress} delayLongPress={350} accessibilityRole="button" accessibilityLabel={accessibilityLabel} style={({ pressed }) => [s.row, s.rowPad, pressed && { opacity: 0.6 }, style]}>
       {body}
     </Pressable>
   );

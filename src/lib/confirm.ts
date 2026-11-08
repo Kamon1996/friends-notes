@@ -21,3 +21,16 @@ export function notify(title: string, message: string): void {
   }
   Alert.alert(title, message);
 }
+
+/** Закрывают форму с несохранёнными правками: сохранить, выбросить или вернуться к правке. */
+export function confirmUnsaved(): Promise<'save' | 'discard' | 'stay'> {
+  if (Platform.OS === 'web') {
+    return Promise.resolve(globalThis.confirm?.('Сохранить изменения?') === false ? 'discard' : 'save');
+  }
+  return new Promise((resolve) =>
+    Alert.alert('Сохранить изменения?', 'Ты поправил текст, но ещё не сохранил его.', [
+      { text: 'Не сохранять', style: 'destructive', onPress: () => resolve('discard') },
+      { text: 'Сохранить', onPress: () => resolve('save') },
+    ], { cancelable: true, onDismiss: () => resolve('stay') }),
+  );
+}

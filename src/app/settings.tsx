@@ -187,23 +187,42 @@ export default function SettingsScreen() {
               onChange={toggleCalendar}
             />
             {calendarLine && (
-              <View style={{ borderTopWidth: 1, borderTopColor: colors.separator, marginLeft: 48, paddingTop: 10, paddingBottom: 10, gap: 10 }}>
-                <View style={{ flexDirection: 'row', gap: 8, alignItems: 'flex-start' }} accessibilityLiveRegion="polite">
-                  <View style={{ marginTop: 1 }}>
-                    <Icon
-                      name={calendarLine.icon}
-                      size={16}
-                      color={calendarLine.tone === 'danger' ? colors.danger : calendarLine.tone === 'warn' ? colors.warn : calendarLine.icon === 'check' ? colors.success : colors.text3}
-                    />
-                  </View>
-                  <Text style={[s.muted, { flex: 1, lineHeight: 18 }, calendarLine.tone !== 'muted' && { color: calendarLine.tone === 'danger' ? colors.danger : colors.warn }]}>
-                    {calendarLine.text}
-                  </Text>
+              <View
+                style={{ flexDirection: 'row', gap: 8, alignItems: 'flex-start', borderTopWidth: 1, borderTopColor: colors.separator, marginLeft: 48, paddingVertical: 10 }}
+                accessibilityLiveRegion="polite"
+              >
+                <View style={{ marginTop: 1 }}>
+                  <Icon
+                    name={calendarLine.icon}
+                    size={16}
+                    color={calendarLine.tone === 'danger' ? colors.danger : calendarLine.tone === 'warn' ? colors.warn : calendarLine.icon === 'check' ? colors.success : colors.text3}
+                  />
                 </View>
-                {calendarLine.needsAccess && (
-                  <Button title="Разрешить доступ" variant="secondary" onPress={fixCalendarAccess} style={{ alignSelf: 'flex-start', minHeight: 40, paddingVertical: 8 }} />
-                )}
+                <Text style={[s.muted, { flex: 1, lineHeight: 18 }, calendarLine.tone !== 'muted' && { color: calendarLine.tone === 'danger' ? colors.danger : colors.warn }]}>
+                  {calendarLine.text}
+                </Text>
               </View>
+            )}
+            {calendarLine?.needsAccess && (
+              // Действие карточки — её футер: на всю ширину, с линией сверху, как кнопка внизу диалога.
+              <Pressable
+                onPress={fixCalendarAccess}
+                accessibilityRole="button"
+                style={({ pressed }) => ({
+                  marginHorizontal: -14,
+                  marginBottom: -4,
+                  minHeight: 50,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderTopWidth: 1,
+                  borderTopColor: colors.hairline,
+                  borderBottomLeftRadius: 19,
+                  borderBottomRightRadius: 19,
+                  backgroundColor: pressed ? colors.chip : 'transparent',
+                })}
+              >
+                <Text style={[s.title, { color: colors.accent }]}>Разрешить доступ</Text>
+              </Pressable>
             )}
           </Card>
         )}
