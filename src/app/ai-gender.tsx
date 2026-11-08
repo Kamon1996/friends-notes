@@ -21,7 +21,7 @@ import { RiddleCards } from '@/components/ai/RiddleCards';
 import { HIDDEN, RunList, type RunGeo } from '@/components/ai/RunList';
 import { FriendsHeader } from '@/components/FriendsHeader';
 import { Sheet, SheetHandle } from '@/components/Sheet';
-import { Fab, SearchField, useTheme } from '@/components/ui';
+import { Fab, useTheme } from '@/components/ui';
 import { BEND, SPIN_START, flowBend, flowEnd, flowShift, runItems } from '@/lib/bendFlow';
 import { plural, todayISO } from '@/lib/dates';
 import { buildFriendList } from '@/lib/friendList';
@@ -34,16 +34,15 @@ import { zodiacShown } from '@/lib/zodiac';
 
 type Stage = 'run' | 'done' | 'ask' | 'between' | 'cards' | 'bye';
 
-const EASE = Easing.inOut(Easing.cubic);
-/** Поиск становится плашкой и обратно, мс. */
-const MORPH = 420;
+/** Плашка выезжает сверху и уезжает обратно, мс. */
+const SLIDE = { in: 460, out: 360 };
 
 /**
  * «Пол друзей» прямо в списке. Экран рисует «Друзей» точь-в-точь — шапку, поиск, подзаголовки групп, строки — и
- * подменяет их мгновенно, без проявления: глазу нечего заметить. Поле поиска вырастает в плашку с фразой ИИ; список
- * с группами как есть чуть изгибается сверху и снизу, его оттягивают и выдёргивают — полный круг через рамку, у
- * проехавших проявляется пол; список выпрямляется. В конце — всё обратно: пол гаснет, плашка сворачивается в поиск,
- * и экран уходит так же незаметно. Всё определилось — «Готово»; остались загадки — шторка «Помочь · Оставить так»,
+ * подменяет их мгновенно, без проявления: глазу нечего заметить. Сверху выезжает плашка с фразой ИИ (поиск остаётся
+ * на месте); список с группами как есть чуть изгибается сверху и снизу, его оттягивают и выдёргивают — полный круг
+ * через рамку, у проехавших проявляется пол; список выпрямляется. В конце — всё обратно: пол гаснет, плашка уезжает
+ * наверх, и экран уходит так же незаметно. Всё определилось — «Готово»; остались загадки — шторка «Помочь · Оставить так»,
  * «Помочь» — карточки «Кто это?».
  */
 export default function AiGenderScreen() {
@@ -66,7 +65,7 @@ export default function AiGenderScreen() {
   const shift = useSharedValue(0);
   const bend = useSharedValue(0);
   const outro = useSharedValue(0);
-  const morph = useSharedValue(0);
+  const slide = useSharedValue(0);
   const geo = useSharedValue<RunGeo | null>(null);
   const [geoJs, setGeoJs] = useState<RunGeo | null>(null);
   const reveal = useSharedValue<number[]>([]);
@@ -103,11 +102,10 @@ export default function AiGenderScreen() {
     firstReveal.set(first);
   }, [geoJs, items, workDone, onList, shift, reveal, firstReveal]);
 
-  // Где что: шапка, поле поиска и плашка — меряем на себе, а пока не измерили, экран прозрачен (видно «Друзей»).
+  // Где что: шапка и плашка — меряем на себе, а пока не измерили, экран прозрачен (видно «Друзей»).
   const [headH, setHeadH] = useState(0);
-  const [search, setSearch] = useState({ y: 0, height: 0 });
   const bannerH = useSharedValue(0);
-  const ready = !!geoJs && headH > 0 && search.height > 0;
+  const ready = !!geoJs && headH > 0;
   useEffect(() => {
     if (!base.length) router.back();
   }, [base]);
@@ -165,9 +163,9 @@ export default function AiGenderScreen() {
   }, false);
   useEffect(() => {
     if (!ready) return;
-    morph.set(reduce ? 1 : withDelay(40, withTiming(1, { duration: MORPH, easing: EASE })));
+    slide.set(reduce ? 1 : withDelay(40, withTiming(1, { duration: SLIDE.in, easing: Easing.out(Easing.cubic) })));
     if (!reduce) frame.setActive(true);
-  }, [ready, reduce, frame, morph]);
+  }, [ready, reduce, frame, slide]);
   useEffect(() => {
     if (stopped) frame.setActive(false);
   }, [stopped, frame]);
@@ -197,16 +195,16 @@ export default function AiGenderScreen() {
     closing.current = true;
     if (reduce) return leaveNow();
     outro.set(withTiming(1, { duration: 260 }));
-    morph.set(
+    slide.set(
       withDelay(
         140,
-        withTiming(0, { duration: MORPH, easing: EASE }, (fin) => {
+        withTiming(0, { duration: SLIDE.out, easing: Easing.in(Easing.cubic) }, (fin) => {
           if (fin) scheduleOnRN(leaveNow);
         }),
       ),
     );
-    setTimeout(leaveNow, 140 + MORPH + 400);
-  }, [reduce, leaveNow, outro, morph]);
+    setTimeout(leaveNow, 140 + SLIDE.out + 400);
+  }, [reduce, leaveNow, outro, slide]);
   const [final, setFinal] = useState<{ title: string; sub: string } | null>(null);
   const [ask, setAsk] = useState<Friend[]>([]);
   const [prompt, setPrompt] = useState<{ title: string; text: string } | null>(null);
@@ -263,27 +261,12 @@ export default function AiGenderScreen() {
   const known = data.friends.filter((f) => f.gender).length;
   const glow = stage === 'done' || (stage === 'bye' && !!final && known === total);
 
-  // Поле поиска растёт в плашку: сперва гаснут сортировки и подсказка поиска, потом проявляется фраза.
-  const searchH = search.height;
-  const boxStyle = useAnimatedStyle(() => {
-    const k = morph.get();
-    const bh = bannerH.get() || searchH;
-    return { height: searchH + (bh - searchH) * k, borderRadius: 12 + 8 * k };
+  // Плашка выезжает сверху, над заголовком, и в конце уезжает обратно; поиск и сортировки остаются на месте.
+  const topGap = insets.top + 6;
+  const slideStyle = useAnimatedStyle(() => {
+    const h = bannerH.get() || 160;
+    return { transform: [{ translateY: -(1 - slide.get()) * (h + topGap + 24) }] };
   });
-  const edgeStyle = useAnimatedStyle(() => ({ borderRadius: 12 + 8 * morph.get() }));
-  const searchCopy = useAnimatedStyle(() => ({ opacity: Math.max(0, 1 - morph.get() / 0.35) }));
-  const bannerIn = useAnimatedStyle(() => ({ opacity: Math.min(1, Math.max(0, (morph.get() - 0.45) / 0.55)) }));
-  const chipsStyle = useAnimatedStyle(() => {
-    const k = Math.min(1, morph.get() / 0.25);
-    return { opacity: 1 - k, transform: [{ translateY: -8 * k }] };
-  });
-  const measured = useRef(false);
-  const onBanner = (h: number) => {
-    if (!measured.current) {
-      measured.current = true;
-      bannerH.set(h);
-    } else bannerH.set(withTiming(h, { duration: 200 }));
-  };
 
   return (
     <View style={{ flex: 1, opacity: ready ? 1 : 0 }}>
@@ -291,7 +274,7 @@ export default function AiGenderScreen() {
         <RunList
           items={items}
           top={headH}
-          clipTop={search.y}
+          clipTop={headH}
           shift={shift}
           bend={bend}
           reveal={reveal}
@@ -320,46 +303,45 @@ export default function AiGenderScreen() {
             onQuery={noop}
             sort="name"
             onSort={noop}
-            chipsStyle={chipsStyle}
-            onSearchLayout={(f) => setSearch((p) => (p.y === f.y && p.height === f.height ? p : f))}
           />
         </View>
         <View style={StyleSheet.absoluteFill} pointerEvents="none" importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
           <Fab onPress={noop} label="Добавить друга" />
         </View>
-        {searchH > 0 && (
-          <Animated.View
-            pointerEvents="none"
-            style={[{ position: 'absolute', left: 20, right: 20, top: search.y, boxShadow: glow ? '0 0 28px rgba(224, 96, 126, 0.35)' : undefined }, boxStyle]}
-          >
-            <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: colors.card, overflow: 'hidden' }, edgeStyle]}>
-              <Animated.View style={[{ position: 'absolute', left: 0, right: 0, top: 0 }, searchCopy]} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
-                <SearchField value="" onChangeText={noop} placeholder="Поиск по имени" />
-              </Animated.View>
-              <Animated.View
-                style={[{ position: 'absolute', left: 0, right: 0, top: 0, paddingVertical: 12, paddingHorizontal: 16 }, bannerIn]}
-                onLayout={(e) => onBanner(e.nativeEvent.layout.height)}
-              >
-                <BannerBody
-                  phrase={final?.title ?? phrase}
-                  sub={final?.sub}
-                  shift={shift}
-                  geo={geo}
-                  firstReveal={firstReveal}
-                  total={total}
-                  known={known}
-                  outsideKnown={data.friends.filter((f) => f.gender && !onList.includes(f.id)).length}
-                  knownOnList={onList.filter((id) => live.get(id)?.gender).length}
-                  stopped={stopped || !!final}
-                  busy={busy}
-                />
-              </Animated.View>
-            </Animated.View>
-            <Animated.View
-              style={[StyleSheet.absoluteFill, { borderWidth: glow ? 1.5 : 1, borderColor: glow ? '#E0607E' : colors.hairline }, edgeStyle]}
-            />
-          </Animated.View>
-        )}
+        <Animated.View
+          pointerEvents="none"
+          onLayout={(e) => bannerH.set(e.nativeEvent.layout.height)}
+          style={[
+            {
+              position: 'absolute',
+              left: 20,
+              right: 20,
+              top: topGap,
+              backgroundColor: colors.card,
+              borderRadius: 20,
+              borderWidth: glow ? 1.5 : 1,
+              borderColor: glow ? '#E0607E' : colors.hairline,
+              paddingVertical: 10,
+              paddingHorizontal: 14,
+              boxShadow: glow ? '0 0 28px rgba(224, 96, 126, 0.35)' : '0 12px 32px rgba(0, 0, 0, 0.35)',
+            },
+            slideStyle,
+          ]}
+        >
+          <BannerBody
+            phrase={final?.title ?? phrase}
+            sub={final?.sub}
+            shift={shift}
+            geo={geo}
+            firstReveal={firstReveal}
+            total={total}
+            known={known}
+            outsideKnown={data.friends.filter((f) => f.gender && !onList.includes(f.id)).length}
+            knownOnList={onList.filter((id) => live.get(id)?.gender).length}
+            stopped={stopped || !!final}
+            busy={busy}
+          />
+        </Animated.View>
       </View>
 
       <Sheet visible={stage === 'ask'} onClose={leave} style={{ paddingTop: 10, paddingBottom: insets.bottom + 20, paddingHorizontal: 20 }}>

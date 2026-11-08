@@ -1,5 +1,5 @@
 import { memo, useCallback, useRef, useState } from 'react';
-import { StyleSheet, Text, View, useWindowDimensions, type LayoutChangeEvent } from 'react-native';
+import { Platform, StyleSheet, Text, View, useWindowDimensions, type LayoutChangeEvent } from 'react-native';
 import Animated, { interpolateColor, useAnimatedStyle, type SharedValue } from 'react-native-reanimated';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 
@@ -11,6 +11,14 @@ import { AI_STOPS, genderTone } from './palette';
 
 /** Ещё не проявилось. */
 export const HIDDEN = 1e9;
+
+/**
+ * Порядок сдвига и перспективы в transform. Строка стоит на своём месте в длинном списке и уезжает далеко (повторы —
+ * через весь круг), а Android и веб складывают сдвиг с перспективой по-разному: на Android сдвиг до перспективы
+ * раздувает строку тем сильнее, чем дальше она уехала (так было в 1.30.1), в вебе — наоборот, сплющивает строку,
+ * если сдвиг после перспективы. Каждой платформе — свой порядок; строка всегда видна «в лоб».
+ */
+const SHIFT_FIRST = Platform.OS === 'web';
 
 /** Где что в списке, px от его верха: элементы, длина круга, рамка. Меряем на самом списке — до пикселя как в «Друзьях». */
 export type RunGeo = {
@@ -188,7 +196,7 @@ const RunEntry = memo(function RunEntry({
   const place = useAnimatedStyle(() => {
     const g = geo.get();
     // пока не измерили — стоим как в обычном списке (повторы спрятаны)
-    if (!g) return { opacity: real ? 1 : 0, transform: [{ translateY: 0 }, { perspective: 900 }, { scale: 1 }, { rotateX: '0deg' }] };
+    if (!g) return { opacity: real ? 1 : 0, transform: [{ perspective: 900 }, { translateY: 0 }, { scale: 1 }, { rotateX: '0deg' }] };
     const e = bend.get();
     const y = g.y[index] ?? 0;
     const h = g.h[index] ?? 0;
@@ -196,11 +204,12 @@ const RunEntry = memo(function RunEntry({
     // ровный список — только первый круг и с верха списка; повторы и «выше верха» видны, пока список изогнут
     const visible = e > 0.02 ? p > -1.6 * g.row && p < view : real && p > -0.45 * g.row && p < view;
     const b = bendPlace(p + h / 2 - g.mid, e, BEND.radius, 900);
-    // Сначала сдвиг, потом перспектива: каждую строку видно «в лоб», как на Android, даже если она приехала
-    // из другого конца длинного списка (иначе в вебе дальние строки сплющивает).
+    const ty = g.mid + b.y - (y + h / 2);
     return {
       opacity: visible ? 1 : 0,
-      transform: [{ translateY: g.mid + b.y - (y + h / 2) }, { perspective: 900 }, { scale: b.scale }, { rotateX: `${b.angle}deg` }],
+      transform: SHIFT_FIRST
+        ? [{ translateY: ty }, { perspective: 900 }, { scale: b.scale }, { rotateX: `${b.angle}deg` }]
+        : [{ perspective: 900 }, { translateY: ty }, { scale: b.scale }, { rotateX: `${b.angle}deg` }],
     };
   });
   // Карточка группы гаснет, пока список изогнут: строки едут по одной. Цвета считаем здесь — на UI-потоке только числа.
