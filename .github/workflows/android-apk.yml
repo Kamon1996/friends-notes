@@ -159,9 +159,19 @@ jobs:
           if [ "$BUNDLE" = "true" ]; then FILE="friends-notes-$VERSION.aab"; cp friends-notes.aab "$FILE"; else FILE="friends-notes-$VERSION.apk"; cp friends-notes.apk "$FILE"; fi
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             # Через gh api, а не gh release create: при отказе GitHub показывает полный ответ, а не одну строку.
-            if ! gh api -X POST "repos/$GITHUB_REPOSITORY/releases" \
+            # GitHub иногда отвечает 403 «Resource not accessible by integration» без видимой причины — пробуем трижды.
+            create_release() {
+              gh api -X POST "repos/$GITHUB_REPOSITORY/releases" \
                 -f tag_name="$TAG" -f target_commitish="$GITHUB_SHA" -f name="Друзья $VERSION" \
-                -f body="APK собран в GitHub Actions из коммита $GITHUB_SHA. Подпись та же, что у сборок EAS: ставится поверх прошлой версии." >release.log 2>&1; then
+                -f body="APK собран в GitHub Actions из коммита $GITHUB_SHA. Подпись та же, что у сборок EAS: ставится поверх прошлой версии." >release.log 2>&1
+            }
+            created=false
+            for wait in 0 30 90; do
+              sleep "$wait"
+              if create_release || gh release view "$TAG" >/dev/null 2>&1; then created=true; break; fi
+              echo "Релиз не создался, попробую ещё раз: $(head -c 300 release.log)"
+            done
+            if [ "$created" != "true" ]; then
               cat release.log
               echo "Правила для тегов (Settings → Rules → Rulesets):"
               gh api "repos/$GITHUB_REPOSITORY/rulesets?targets=tag" --jq '.[] | "  \(.name): \(.enforcement)"' || true

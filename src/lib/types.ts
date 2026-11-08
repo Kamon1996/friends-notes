@@ -55,6 +55,8 @@ export interface Friend {
   gender?: 'f' | 'm';
   /** Откуда пол: выбран вручную или определён (по имени, Genderize, ИИ). Ручной выбор не перезаписывается. */
   genderBy?: 'manual' | 'names' | 'genderize' | 'device-ai' | 'gemini';
+  /** Пол пока не определён: последняя ступень, которая ответила «не знаю». Следующий проход начнёт со следующей. */
+  genderStage?: 'names' | 'genderize' | 'device-ai' | 'gemini';
   /** Соцсети и сайты человека. */
   socials?: SocialLink[];
 }

@@ -344,18 +344,9 @@ export default function SettingsScreen() {
         )}
       </View>
 
-      <View style={{ gap: 8 }}>
-        <SectionTitle style={{ marginBottom: 0 }}>Друзья</SectionTitle>
-        <Group inset={62}>
-          <ListRow
-            leading={<IconCircle icon="people" />}
-            title="Пол друзей"
-            subtitle={`Для 8 Марта и 23 Февраля · определено ${data.friends.filter((f) => f.gender).length} из ${data.friends.length}`}
-            chevron
-            onPress={() => router.push('/genders')}
-          />
-        </Group>
-        {Platform.OS === 'android' && (
+      {Platform.OS === 'android' && (
+        <View style={{ gap: 8 }}>
+          <SectionTitle style={{ marginBottom: 0 }}>Друзья</SectionTitle>
           <Card style={{ gap: 10 }}>
             <Text style={s.muted}>
               Найти в контактах телефона Telegram, WhatsApp, Viber и фото для уже добавленных друзей — по номеру телефона.
@@ -363,8 +354,8 @@ export default function SettingsScreen() {
             <Button title={enrichStatus === '…' ? 'Ищу…' : 'Подтянуть мессенджеры и фото'} icon="refresh" variant="secondary" onPress={enrich} />
             {enrichStatus && enrichStatus !== '…' && <Text style={s.muted}>{enrichStatus}</Text>}
           </Card>
-        )}
-      </View>
+        </View>
+      )}
 
       <View style={{ gap: 8 }}>
         <SectionTitle style={{ marginBottom: 0 }}>Помощь</SectionTitle>

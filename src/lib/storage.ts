@@ -1,3 +1,4 @@
+import { genderFromName } from './gender';
 import { DEFAULT_SETTINGS, EMPTY_DATA, type AppData, type Friend, type ImportantDate, type Reminder } from './types';
 
 /**
@@ -34,7 +35,7 @@ function normalizeFriend(v: unknown): Friend | null {
     ? v.dates.filter((d): d is ImportantDate => isObject(d) && typeof d.id === 'string' && typeof d.date === 'string').map((d) => ({ ...d, title: str(d.title), yearly: d.yearly !== false }))
     : [];
   // Пол берём только из проверенных полей ниже, а не из исходной записи как есть.
-  const { gender: _gender, genderBy: _genderBy, ...rest } = v;
+  const { gender: _gender, genderBy: _genderBy, genderStage: _genderStage, ...rest } = v;
   return {
     ...(rest as unknown as Friend),
     emoji: str(v.emoji),
@@ -51,12 +52,22 @@ function normalizeFriend(v: unknown): Friend | null {
   };
 }
 
-/** Пол и его источник — только допустимые значения; иначе полей нет вовсе. */
-function genderFields(v: Record<string, unknown>): Pick<Friend, 'gender' | 'genderBy'> {
-  const out: Pick<Friend, 'gender' | 'genderBy'> = {};
-  if (v.gender === 'f' || v.gender === 'm') out.gender = v.gender;
-  if (typeof v.genderBy === 'string' && ['manual', 'names', 'genderize', 'device-ai', 'gemini'].includes(v.genderBy)) out.genderBy = v.genderBy as Friend['genderBy'];
-  return out;
+/**
+ * Пол, его источник и ступень — только допустимые и согласованные значения:
+ * - пол без источника или источник «автоматически» без пола — не доверяем, определим заново;
+ * - пол «по имени», с которым своя база имён теперь не согласна (база стала строже), — тоже заново;
+ * - ступень нужна, только пока пол не определён; «Не указан» вручную — это genderBy: 'manual' без пола.
+ */
+const GENDER_SOURCES = ['manual', 'names', 'genderize', 'device-ai', 'gemini'];
+const GENDER_STAGES = ['names', 'genderize', 'device-ai', 'gemini'];
+
+function genderFields(v: Record<string, unknown>): Pick<Friend, 'gender' | 'genderBy' | 'genderStage'> {
+  const gender = v.gender === 'f' || v.gender === 'm' ? v.gender : undefined;
+  const by = typeof v.genderBy === 'string' && GENDER_SOURCES.includes(v.genderBy) ? (v.genderBy as Friend['genderBy']) : undefined;
+  if (by === 'manual') return gender ? { gender, genderBy: by } : { genderBy: by };
+  if (gender && by && (by !== 'names' || genderFromName(str(v.name)) === gender)) return { gender, genderBy: by };
+  if (!gender && typeof v.genderStage === 'string' && GENDER_STAGES.includes(v.genderStage)) return { genderStage: v.genderStage as Friend['genderStage'] };
+  return {};
 }
 
 function normalizeReminder(v: unknown): Reminder | null {

@@ -1,68 +1,98 @@
 /// <reference types="node" />
-// Пол по имени без интернета: только уверенные случаи; сомнительное остаётся «не знаем» и уходит дальше.
+// Пол по имени без интернета: только уверенные случаи. Всё сомнительное — «не знаем» и уходит дальше
+// (Genderize, ИИ). Ошибка здесь хуже, чем «не знаем»: поздравить мужчину с 8 Марта — неловко.
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
 import { countryByPhone, firstNameForLookup, genderFromName, nameWords } from '../gender';
-import { FEMALE_NAMES, MALE_NAMES } from '../genderNames';
+import { AMBIGUOUS_NAMES, FEMALE_NAMES, FEMALE_WORDS, MALE_NAMES, MALE_WORDS, SURNAME_LOOKALIKES } from '../genderNames';
 
-const g = (name: string) => genderFromName(name);
+const check = (cases: string[], expected: 'f' | 'm' | null) => {
+  for (const name of cases) assert.equal(genderFromName(name), expected, `«${name}» → ожидали ${expected ?? 'не знаем'}`);
+};
 
-describe('пол по имени', () => {
-  test('имена из базы: полные, уменьшительные, казахские, с «ё»', () => {
-    for (const n of ['Анна', 'Аня', 'Маша', 'Алёна', 'Айгерим', 'Алуа', 'Динара', 'Нино']) assert.equal(g(n), 'f', n);
-    for (const n of ['Дмитрий', 'Дима', 'Серёжа', 'Нурлан', 'Ерлан', 'Илья', 'Никита', 'Лёша']) assert.equal(g(n), 'm', n);
+describe('женщины — уверенно', () => {
+  test('полные имена и уменьшительные', () => {
+    check(['Анна', 'Аня', 'Анечка', 'Анюта', 'Мария', 'Маша', 'Машуля', 'Екатерина', 'Катюха', 'Ксюша', 'Лера', 'Алёна', 'Ася', 'Тоня', 'Любовь', 'Нинель', 'Валентина', 'Евгения', 'Александра', 'Ярослава', 'Станислава', 'Владислава', 'Влада', 'Варя'], 'f');
   });
-
-  test('регистр, эмодзи, скобки, пометки рядом с именем не мешают', () => {
-    assert.equal(g('АНЯ 🌸'), 'f');
-    assert.equal(g('Вова (сантехник)'), 'm');
-    assert.equal(g('Аня Йога'), 'f');
-    assert.equal(g('Аня Магазин'), 'f', 'имя из базы главнее «-ин» в конце пометки');
+  test('казахские, татарские, кавказские', () => {
+    check(['Айгерим', 'Алуа', 'Гульнара', 'Гуля', 'Асель', 'Динара', 'Ляйсан', 'Алсу', 'Нино', 'Ануш', 'Камила'], 'f');
   });
-
-  test('родные: «Мама», «Бабуля», «Брат», «Дед»', () => {
-    for (const n of ['Мама', 'мамуля', 'Бабушка Валя', 'Сестрёнка', 'Тёща']) assert.equal(g(n), 'f', n);
-    for (const n of ['Папа', 'Батя', 'Дедушка', 'Брат', 'Муж']) assert.equal(g(n), 'm', n);
+  test('родные и подписи', () => {
+    check(['Мама', 'мамуля', 'Бабушка', 'Бабушка Валя', 'Тётя Женя', 'Сестра Саша', 'Подруга Валя', 'Тёща', 'Дочка', 'Женщина из банка', 'Мамина подруга'], 'f');
   });
-
-  test('отчество и казахские «кызы/улы»', () => {
-    assert.equal(g('Иванова Мария Петровна'), 'f');
-    assert.equal(g('Петров Иван Сергеевич'), 'm');
-    assert.equal(g('Саша Ильинична'), 'f');
-    assert.equal(g('Айдана Нурланкызы'), 'f');
-    assert.equal(g('Ерасыл Серикулы'), 'm');
-    assert.equal(g('Серик улы'), 'm', 'отдельное «улы»');
-    assert.equal(g('Жанар кызы'), 'f', 'отдельное «кызы»');
+  test('неоднозначное имя + женская фамилия, отчество, «кызы»', () => {
+    check(['Саша Иванова', 'Иванова Саша', 'Женя Петрова', 'Валя Сидорова', 'Женя Ковальская', 'Саша Ильинична', 'Женя питерская', 'Айдана Нурланкызы', 'Жанар кызы', 'Иванова Мария Петровна'], 'f');
   });
-
-  test('неоднозначное имя + фамилия по окончанию — по фамилии', () => {
-    assert.equal(g('Саша Иванова'), 'f');
-    assert.equal(g('Женя Петров'), 'm');
-    assert.equal(g('Валя Смирнова'), 'f');
-    assert.equal(g('Слава Кузнецов'), 'm');
-    assert.equal(g('Женя Ковальская'), 'f');
-  });
-
-  test('не уверены — не знаем: неоднозначные имена, прозвища, иностранные, одна фамилия, противоречия', () => {
-    for (const n of ['Саша', 'Женя', 'Валя', 'Алуашка', 'Котик', 'Саша Ким', 'Женя Шевченко', 'Петрова', 'Иванов', 'Anna', 'John Smith', '', '🙂', 'Анна Сергеевич', 'Мама Вова']) {
-      assert.equal(g(n), null, n);
-    }
-  });
-
-  test('в базе нет неоднозначных имён и одно имя не записано в оба пола', () => {
-    for (const n of ['саша', 'женя', 'валя', 'шура', 'слава', 'сева', 'ника', 'мишель', 'ким', 'алекс', 'тоша']) {
-      assert.ok(!FEMALE_NAMES.has(n) && !MALE_NAMES.has(n), n);
-    }
-    for (const n of FEMALE_NAMES) assert.ok(!MALE_NAMES.has(n), `${n} в обоих списках`);
-  });
-
-  test('слова имени: только буквы и дефисы', () => {
-    assert.deepEqual(nameWords('Анна-Мария (работа) 😊 2'), ['анна-мария', 'работа']);
+  test('регистр, ё, эмодзи, цифры, скобки, дефисы', () => {
+    check(['АНЯ', 'аня', 'Аня 🌸', 'Аня2', 'Аня (работа)', 'Аня-йога', 'Анна-Мария', 'Алёна Магазин', 'Аня Магазин'], 'f');
   });
 });
 
-describe('что уходит в Genderize', () => {
+describe('мужчины — уверенно', () => {
+  test('полные имена и уменьшительные, включая на -а и -я', () => {
+    check(['Иван', 'Ваня', 'Дима', 'Димон', 'Илья', 'Никита', 'Кузьма', 'Фома', 'Лука', 'Савва', 'Игорь', 'Лёша', 'Евгений', 'Валентин', 'Александр', 'Ярослав', 'Станислав', 'Владислав', 'Влад'], 'm');
+  });
+  test('мужские уменьшительные от неоднозначных имён', () => {
+    check(['Шурик', 'Санёк', 'Сашок', 'Женёк', 'Славик', 'Валёк'], 'm');
+  });
+  test('казахские, татарские, кавказские', () => {
+    check(['Нурлан', 'Ерлан', 'Айдос', 'Бауыржан', 'Ильдар', 'Ринат', 'Ашот', 'Вахтанг', 'Магомед'], 'm');
+  });
+  test('родные и подписи', () => {
+    check(['Папа', 'Батя', 'Дедушка', 'Дядя Саша', 'Брат Женя', 'Муж', 'Сынок', 'Мужчина из сервиса'], 'm');
+  });
+  test('неоднозначное имя + мужская фамилия, отчество, «улы»', () => {
+    check(['Саша Иванов', 'Женя Петров', 'Слава Кузнецов', 'Валя Ильин', 'Саша Тимофеев', 'Женя Ковальский', 'Женя питерский', 'Иван Петрович', 'Петров Иван Сергеевич', 'Ерасыл Серикулы', 'Серик улы', 'Дима-сантехник'], 'm');
+  });
+});
+
+describe('не знаем — передаём дальше', () => {
+  test('неоднозначные имена сами по себе', () => {
+    check(['Саша', 'Сашка', 'Сашенька', 'Саня', 'Шура', 'Шурочка', 'Женя', 'Женька', 'Женечка', 'Валя', 'Валька', 'Валюша', 'Слава', 'Сева', 'Ника', 'Стася', 'Аля', 'Ким', 'Алекс', 'Мишель', 'Тоша', 'Крис'], null);
+  });
+  test('прозвища, роли, ласковые слова', () => {
+    check(['Алуашка', 'Котик', 'Зайка', 'Солнышко', 'Босс', 'Сосед', 'Начальник', 'Сантехник', 'Таксист', 'Доктор', 'Любимка'], null);
+  });
+  test('неоднозначное имя + слово, похожее на фамилию, но не фамилия', () => {
+    check(['Саша Машина', 'Женя Магазин', 'Валя Бензин', 'Саша Малина', 'Слава Остров', 'Женя Корова', 'Саша Такси', 'Валя Ремонт', 'Саша Сервис'], null);
+  });
+  test('неоднозначное имя + фамилия, у которой нет рода', () => {
+    check(['Саша Ким', 'Женя Шевченко', 'Валя Ли', 'Саша Бондаренко', 'Женя Ковальчук', 'Саша Цой', 'Женя Толстой', 'Саша Лин'], null);
+  });
+  test('одна фамилия без имени — может быть и прозвищем', () => {
+    check(['Петрова', 'Иванов', 'Смирнова', 'Кузнецов'], null);
+  });
+  test('противоречия — не знаем', () => {
+    check(['Анна Сергеевич', 'Мама Вова', 'Папа Маша', 'Брат Аня'], null);
+  });
+  test('латиница и пустое — не наша база, пусть разбирается Genderize', () => {
+    check(['Anna', 'John Smith', 'Alexandra', 'Sasha', 'Аnna', '', '   ', '🙂', '12345', '-'], null);
+  });
+});
+
+describe('сама база', () => {
+  test('ни одно имя не записано в оба пола', () => {
+    for (const n of FEMALE_NAMES) assert.ok(!MALE_NAMES.has(n), `${n} в обоих списках`);
+    for (const n of FEMALE_WORDS) assert.ok(!MALE_WORDS.has(n), `${n} в обоих списках слов`);
+  });
+  test('неоднозначных имён и «похожих на фамилии» слов нет в списках имён', () => {
+    for (const n of [...AMBIGUOUS_NAMES, ...SURNAME_LOOKALIKES]) {
+      assert.ok(!FEMALE_NAMES.has(n) && !MALE_NAMES.has(n) && !FEMALE_WORDS.has(n) && !MALE_WORDS.has(n), n);
+    }
+  });
+  test('всё записано строчными и без «ё»', () => {
+    for (const n of [...FEMALE_NAMES, ...MALE_NAMES, ...AMBIGUOUS_NAMES, ...FEMALE_WORDS, ...MALE_WORDS, ...SURNAME_LOOKALIKES]) {
+      assert.equal(n, n.toLowerCase().replace(/ё/g, 'е'), n);
+    }
+  });
+  test('слова имени: только буквы, дефисы делят на части', () => {
+    assert.deepEqual(nameWords('Анна-Мария (работа) 😊 2'), ['анна', 'мария', 'работа']);
+    assert.deepEqual(nameWords('  '), []);
+  });
+});
+
+describe('что уходит в Genderize и ИИ', () => {
   test('страна по номеру: Казахстан, Россия, Беларусь, Украина', () => {
     assert.equal(countryByPhone('+7 707 606 39 03'), 'KZ');
     assert.equal(countryByPhone('87771234567'), 'KZ');
@@ -70,41 +100,20 @@ describe('что уходит в Genderize', () => {
     assert.equal(countryByPhone('+375 29 111-22-33'), 'BY');
     assert.equal(countryByPhone('+380501234567'), 'UA');
     assert.equal(countryByPhone(''), undefined);
+    assert.equal(countryByPhone(null), undefined);
     assert.equal(countryByPhone('+49 30 123456'), undefined);
   });
 
-  test('только имя: без фамилии, отчества и пометок', () => {
+  test('только имя: без фамилии, отчества, ролей и пометок', () => {
     assert.equal(firstNameForLookup('Саша Ким'), 'Саша');
     assert.equal(firstNameForLookup('Иванова Саша'), 'Саша');
+    assert.equal(firstNameForLookup('Сантехник Валя'), 'Валя');
+    assert.equal(firstNameForLookup('Тётя Женя'), 'Женя');
+    assert.equal(firstNameForLookup('Саша Машина'), 'Саша');
     assert.equal(firstNameForLookup('Алуашка 🌷'), 'Алуашка');
     assert.equal(firstNameForLookup('John Smith'), 'John');
+    assert.equal(firstNameForLookup('Петров Саша Иванович'), 'Саша');
     assert.equal(firstNameForLookup('🙂'), null);
-  });
-});
-
-describe('пол в сохранённых данных', () => {
-  test('берём только «f»/«m» и известный источник; мусор отбрасываем', async () => {
-    const { normalizeData } = await import('../storage');
-    const base = { id: 'a', name: 'Аня' };
-    const [ok, bad, none] = normalizeData({ friends: [{ ...base, gender: 'f', genderBy: 'gemini' }, { ...base, id: 'b', gender: 'x', genderBy: 'hack' }, { ...base, id: 'c' }] }).friends;
-    assert.deepEqual([ok.gender, ok.genderBy], ['f', 'gemini']);
-    assert.ok(!('gender' in bad) && !('genderBy' in bad));
-    assert.ok(!('gender' in none));
-  });
-});
-
-describe('пол нового или изменённого друга', () => {
-  test('по имени — сразу; переименовали — пересчитали; вручную и от сервисов — не трогаем', async () => {
-    const { withNameGender } = await import('../gender');
-    assert.deepEqual(withNameGender({ name: 'Аня' }), { name: 'Аня', gender: 'f', genderBy: 'names' });
-    assert.deepEqual(withNameGender({ name: 'Андрей', gender: 'f' as const, genderBy: 'names' as const }), { name: 'Андрей', gender: 'm', genderBy: 'names' });
-    assert.deepEqual(withNameGender({ name: 'Саша', gender: 'f' as const, genderBy: 'names' as const }), { name: 'Саша' }, 'имя стало неоднозначным — пол не придумываем');
-    assert.deepEqual(withNameGender({ name: 'Саша' }), { name: 'Саша' });
-    const manual = { name: 'Андрей', gender: 'f' as const, genderBy: 'manual' as const };
-    assert.equal(withNameGender(manual), manual);
-    const unset = { name: 'Аня', genderBy: 'manual' as const };
-    assert.equal(withNameGender(unset), unset, '«Не указан» вручную — не заполняем сами');
-    const ai = { name: 'Алуашка', gender: 'f' as const, genderBy: 'gemini' as const };
-    assert.equal(withNameGender(ai), ai);
+    assert.equal(firstNameForLookup('Мама'), null, 'одно «мама» — имени нет');
   });
 });

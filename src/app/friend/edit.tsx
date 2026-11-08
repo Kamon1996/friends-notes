@@ -11,7 +11,7 @@ import { cleanupAvatars, deleteOwnedFiles } from '@/lib/avatars';
 import { confirm, notify } from '@/lib/confirm';
 import { linkSubtitle, linkTitle, mergeLinks } from '@/lib/socials';
 import { newId, useFriend, useStore } from '@/lib/store';
-import { GENDER_SOURCE_LABEL, genderFromName, type Gender } from '@/lib/gender';
+import { genderFromName, type Gender } from '@/lib/gender';
 import type { Friend, ImportantDate } from '@/lib/types';
 
 const blankFriend = (): Friend => ({
@@ -41,13 +41,14 @@ function FriendForm() {
   const [f, setF] = useState<Friend>(() => existing ?? blankFriend());
   const [addSocial, setAddSocial] = useState(false);
   const set = <K extends keyof Friend>(key: K, value: Friend[K]) => setF((prev) => ({ ...prev, [key]: value }));
-  // Пол: пока его не выбирали вручную, подсказываем по имени прямо при вводе (сохранится так же).
-  const shownGender = !f.genderBy || f.genderBy === 'names' ? (genderFromName(f.name) ?? undefined) : f.gender;
-  const setGender = (g: Gender | undefined) =>
-    setF((prev) => {
-      const { gender: _g, ...rest } = prev;
-      return g ? { ...rest, gender: g, genderBy: 'manual' } : { ...rest, genderBy: 'manual' };
-    });
+  // Пол: выбранный вручную — как есть; новое имя — сразу по своей базе (так же и сохранится); иначе — что определилось само.
+  const renamed = !existing || existing.name !== f.name.trim();
+  const shownGender = f.genderBy === 'manual' || !renamed ? f.gender : (genderFromName(f.name) ?? undefined);
+  const genderNote = genderCaption(f, shownGender, renamed);
+  const setGender = (g: Gender | undefined) => {
+    if (!g && !shownGender && f.genderBy !== 'manual') return; // «Не указан» и так выбран — ничего не меняем
+    setF(({ gender: _g, genderBy: _b, genderStage: _s, ...rest }) => (g ? { ...rest, gender: g, genderBy: 'manual' } : { ...rest, genderBy: 'manual' }));
+  };
   // Поля дат, где набранное нельзя сохранить, и где они на экране — чтобы не сохранить молча другую дату и показать, что поправить.
   const [invalid, setInvalid] = useState<Record<string, boolean>>({});
   const [attempted, setAttempted] = useState(false);
@@ -136,11 +137,7 @@ function FriendForm() {
             <Chip label="Мужчина" selected={shownGender === 'm'} onPress={() => setGender('m')} />
             <Chip label="Не указан" selected={!shownGender} onPress={() => setGender(undefined)} />
           </View>
-          {shownGender && f.genderBy !== 'manual' && (
-            <Text style={[s.caption, { marginTop: 6, paddingHorizontal: 4 }]}>
-              {`Определено ${f.genderBy && f.genderBy !== 'names' ? `через ${GENDER_SOURCE_LABEL[f.genderBy]}` : 'по имени'} — можно поправить. Нужно для поздравлений с 8 Марта и 23 Февраля.`}
-            </Text>
-          )}
+          {genderNote && <Text style={[s.caption, { marginTop: 6, paddingHorizontal: 4 }]}>{genderNote}</Text>}
         </View>
         <Card style={{ paddingVertical: 4, marginBottom: 14 }}>
           <SwitchRow icon="star" label="В избранном" sub="Выше остальных в списке друзей" value={!!f.favorite} onChange={(v) => set('favorite', v)} />
@@ -226,4 +223,12 @@ function FriendForm() {
       </ScrollView>
     </KeyboardAvoidingView>
   );
+}
+
+/** Короткая подпись под выбором пола: определилось само или не получилось. Выбранный вручную — без подписи. */
+function genderCaption(f: Friend, shown: Gender | undefined, renamed: boolean): string | null {
+  if (f.genderBy === 'manual') return null;
+  if (shown) return 'Определено автоматически — можно поправить';
+  if (!renamed && f.genderStage && f.genderStage !== 'names') return 'Не удалось определить — выбери сам';
+  return null;
 }

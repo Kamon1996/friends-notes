@@ -8,7 +8,9 @@ import { markCalendarStale, syncDeviceCalendar } from './deviceCalendar';
 import { syncNotifications } from './notifications';
 import { parseStored } from './storage';
 import { EMPTY_DATA, type AppData, type Friend, type Reminder, type Settings } from './types';
-import { withNameGender } from './gender';
+import { genderOnSave } from './gender';
+import { applyGenderUpdate, genderPending } from './genderDetect';
+import { genderSync } from './genderRun';
 
 const STORAGE_KEY = 'friends-notes/data/v1';
 
@@ -82,6 +84,32 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
   }, [data, ready, canPersist]);
 
+  // Пол друзей определяется сам, в фоне: при открытии приложения, при возвращении в него и когда появились новые друзья.
+  // Каждый друг проходит ступени только один раз (см. genderDetect.ts); ручной выбор не трогается.
+  const syncGenders = useCallback(async () => {
+    if (!liveRef.current) return;
+    const friends = dataRef.current.friends;
+    const namesAtStart = new Map(friends.map((f) => [f.id, f.name]));
+    const updates = await genderSync.run(friends).catch(() => []);
+    if (!updates.length) return;
+    const byId = new Map(updates.map((u) => [u.id, u]));
+    setData((d) => ({ ...d, friends: d.friends.map((f) => applyGenderUpdate(f, byId.get(f.id), namesAtStart.get(f.id))) }));
+  }, []);
+  // Сколько друзей ещё не прошли Genderize и дальше: растёт, когда добавили друга, импортировали или переименовали.
+  const freshGenders = useMemo(() => data.friends.filter((f) => genderPending(f) && (!f.genderStage || f.genderStage === 'names')).length, [data.friends]);
+  const seenFresh = useRef(-1);
+  useEffect(() => {
+    if (!ready || !canPersist) return;
+    // Первый раз — вскоре после запуска; потом — когда появились новые, кого ещё не спрашивали.
+    if (seenFresh.current >= 0 && freshGenders <= seenFresh.current) {
+      seenFresh.current = freshGenders;
+      return;
+    }
+    seenFresh.current = freshGenders;
+    const t = setTimeout(syncGenders, 2500);
+    return () => clearTimeout(t);
+  }, [freshGenders, ready, canPersist, syncGenders]);
+
   // При возврате в приложение — пересчитываем окно уведомлений (их число ограничено).
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
@@ -90,14 +118,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         // Пока приложение было свёрнуто, события могли удалить прямо в календаре — проверим и вернём.
         markCalendarStale();
         syncDeviceCalendar(dataRef.current);
+        syncGenders();
       }
     });
     return () => sub.remove();
-  }, []);
+  }, [syncGenders]);
 
   const saveFriend = useCallback((input: Friend) => {
-    const f = withNameGender(input);
     setData((d) => {
+      const f = genderOnSave(d.friends.find((x) => x.id === input.id), input);
       const exists = d.friends.some((x) => x.id === f.id);
       const friends = exists ? d.friends.map((x) => (x.id === f.id ? f : x)) : [...d.friends, f];
       return { ...d, friends };
@@ -105,7 +134,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const addFriends = useCallback((list: Friend[]) => {
-    setData((d) => ({ ...d, friends: [...d.friends, ...list.map(withNameGender)] }));
+    setData((d) => ({ ...d, friends: [...d.friends, ...list.map((f) => genderOnSave(undefined, f))] }));
   }, []);
 
   const updateFriends = useCallback((update: (f: Friend) => Friend) => {

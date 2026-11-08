@@ -1,30 +1,22 @@
-import { FEMALE_NAMES, FEMALE_WORDS, MALE_NAMES, MALE_WORDS } from './genderNames';
+import { AMBIGUOUS_NAMES, FEMALE_NAMES, FEMALE_WORDS, MALE_NAMES, MALE_WORDS, SURNAME_LOOKALIKES } from './genderNames';
 
 /**
  * Пол друга — для поздравлений с 8 Марта и 23 Февраля. Определяется по ступеням:
  * 1) своя база имён и правила — только то, что точно (здесь, без интернета);
  * 2) Genderize.io — по имени, с подсказкой страны;
- * 3) ИИ: сначала встроенный в телефон (Gemini Nano), если его нет — Gemini по ключу.
- * Что не определилось — человек выбирает сам. Ручной выбор ничем не перезаписывается.
+ * 3) ИИ: сначала встроенный в телефон (Gemini Nano), если он есть; что он не понял или если его нет — Gemini.
+ * Всё происходит само, при запуске; каждая ступень спрашивается про человека один раз (см. genderDetect.ts).
+ * Что не определилось — человек выбирает сам в карточке друга. Ручной выбор ничем не перезаписывается.
  */
 export type Gender = 'f' | 'm';
 export type GenderSource = 'manual' | 'names' | 'genderize' | 'device-ai' | 'gemini';
 
-export const GENDER_SOURCE_LABEL: Record<GenderSource, string> = {
-  manual: 'вручную',
-  names: 'по имени',
-  genderize: 'Genderize',
-  'device-ai': 'ИИ телефона',
-  gemini: 'Gemini',
-};
-
 const norm = (s: string) => s.toLowerCase().replace(/ё/g, 'е');
 
-/** Слова имени: только буквы и дефисы, без эмодзи, скобок и цифр. */
+/** Слова имени: только буквы, без эмодзи, скобок и цифр; «Анна-Мария» и «Дима-сантехник» — по частям. */
 export function nameWords(name: string): string[] {
   return norm(name)
-    .split(/[^\p{L}-]+/u)
-    .map((w) => w.replace(/^-+|-+$/g, ''))
+    .split(/[^\p{L}]+/u)
     .filter((w) => w.length >= 2);
 }
 
@@ -32,6 +24,7 @@ type Vote = { gender: Gender; strong: boolean };
 
 /** Что говорит одно слово: имя из базы, «мама», отчество, «кызы/улы», фамилия по окончанию. */
 function voteOf(word: string, alone: boolean): Vote | null {
+  if (AMBIGUOUS_NAMES.has(word) || SURNAME_LOOKALIKES.has(word)) return null;
   if (FEMALE_NAMES.has(word) || FEMALE_WORDS.has(word)) return { gender: 'f', strong: true };
   if (MALE_NAMES.has(word) || MALE_WORDS.has(word)) return { gender: 'm', strong: true };
   // Казахские «дочь/сын»: Айгерим Нурланкызы, Ерлан Серикулы.
@@ -43,8 +36,9 @@ function voteOf(word: string, alone: boolean): Vote | null {
   if (/(ович|евич)$/.test(word)) return { gender: 'm', strong: true };
   // Фамилия по окончанию — только если рядом есть ещё слово (одно «Петрова» может быть и прозвищем).
   if (alone) return null;
-  if (/(ова|ева|ина|ына|ская|цкая)$/.test(word)) return { gender: 'f', strong: false };
-  if (/(ов|ев|ин|ын|ский|цкий)$/.test(word)) return { gender: 'm', strong: false };
+  // Основа перед окончанием — хотя бы три буквы: «Ильин», «Петрова», но не случайные короткие слова.
+  if (/^[а-я]{3,}(ова|ева|ина|ына|ская|цкая)$/.test(word)) return { gender: 'f', strong: false };
+  if (/^[а-я]{3,}(ов|ев|ин|ын|ский|цкий)$/.test(word)) return { gender: 'm', strong: false };
   return null;
 }
 
@@ -78,31 +72,51 @@ export function countryByPhone(phone: string | null | undefined): string | undef
 }
 
 /**
- * Имя, которое отправим в Genderize: первое слово, которое не похоже на фамилию, отчество или «маму».
+ * Имя, которое отправим в Genderize и ИИ: само имя, без фамилии, отчества и пометок («Сантехник Валя» → «Валя»).
+ * Сначала ищем слово, похожее на имя (из базы или неоднозначное), иначе — первое слово, не похожее на фамилию.
  * Фамилии и телефоны не отправляем никогда.
  */
 export function firstNameForLookup(name: string): string | null {
-  const raw = name.split(/[^\p{L}-]+/u).filter((w) => w.length >= 2);
-  for (const w of raw) {
+  const raw = name.split(/[^\p{L}]+/u).filter((w) => w.length >= 2);
+  const candidates = raw.filter((w) => {
     const n = norm(w);
-    if (/(овна|евна|ична|ович|евич|кызы|улы)$/.test(n)) continue;
-    if (raw.length > 1 && n.length >= 5 && /(ова|ева|ина|ына|ская|цкая|ов|ев|ин|ын|ский|цкий)$/.test(n)) continue;
-    return w;
-  }
-  return null;
+    if (/(овна|евна|ична|ович|евич|кызы|улы)$/.test(n)) return false;
+    if (FEMALE_WORDS.has(n) || MALE_WORDS.has(n) || SURNAME_LOOKALIKES.has(n)) return false;
+    if (raw.length > 1 && /^[а-я]{3,}(ова|ева|ина|ына|ская|цкая|ов|ев|ин|ын|ский|цкий)$/.test(n)) return false;
+    return true;
+  });
+  const known = candidates.find((w) => {
+    const n = norm(w);
+    return AMBIGUOUS_NAMES.has(n) || FEMALE_NAMES.has(n) || MALE_NAMES.has(n);
+  });
+  return known ?? candidates[0] ?? null;
 }
 
+/** Поля пола у друга (тип повторяет Friend, чтобы gender.ts не зависел от остального приложения). */
+export interface GenderFields {
+  name: string;
+  gender?: Gender;
+  genderBy?: GenderSource;
+  genderStage?: 'names' | 'genderize' | 'device-ai' | 'gemini';
+}
+
+const pickGender = ({ gender, genderBy, genderStage }: GenderFields): Omit<GenderFields, 'name'> => ({
+  ...(gender && { gender }),
+  ...(genderBy && { genderBy }),
+  ...(genderStage && !gender && { genderStage }),
+});
+
 /**
- * Пол по имени для нового или изменённого друга — только своя база, без интернета. Выбранный вручную или
- * определённый сервисом не трогаем; определённый по имени пересчитываем, если имя поменяли.
+ * Пол при сохранении друга:
+ * - выбран вручную — сохраняем как выбрали, и дальше автоматика его не трогает;
+ * - имя то же — пол и ступень берём из сохранённого друга (фоновый проход мог определить пол, пока форма была открыта);
+ * - новый друг или другое имя — всё, что знали о поле, сбрасываем и сразу пробуем свою базу имён; остальное доделает
+ *   фоновый проход.
  */
-export function withNameGender<T extends { name: string; gender?: Gender; genderBy?: GenderSource }>(f: T): T {
-  if (f.genderBy && f.genderBy !== 'names') return f;
-  const g = genderFromName(f.name);
-  if (g) return f.gender === g && f.genderBy === 'names' ? f : { ...f, gender: g, genderBy: 'names' };
-  if (f.genderBy === 'names') {
-    const { gender: _g, genderBy: _b, ...rest } = f;
-    return rest as T;
-  }
-  return f;
+export function genderOnSave<T extends GenderFields>(prev: GenderFields | undefined, next: T): T {
+  const { gender: _g, genderBy: _b, genderStage: _s, ...rest } = next;
+  if (next.genderBy === 'manual') return { ...rest, ...(next.gender && { gender: next.gender }), genderBy: 'manual' } as T;
+  if (prev && prev.name === next.name) return { ...rest, ...pickGender(prev) } as T;
+  const g = genderFromName(next.name);
+  return (g ? { ...rest, gender: g, genderBy: 'names' } : { ...rest, genderStage: 'names' }) as T;
 }

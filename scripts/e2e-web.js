@@ -675,57 +675,103 @@ scenario('Календарь: без дат выгружать нечего', as
 }, { data: seed({ friends: [F({ id: 'x', name: 'Маша' })], reminders: [] }) });
 
 // ===== Пол друзей =====
+// Определяется сам при запуске, без вопросов; Genderize и Gemini по умолчанию «без интернета» (см. run), сценарий подставляет ответ.
 const GENDER_FRIENDS = [ANYA, IGOR, MAMA, F({ id: 's', name: 'Саша' }), F({ id: 'k', name: 'Алуашка', phone: '+7 707 606 39 03' })];
+const genderOf = (f) => [f.id, f.gender ?? null, f.genderBy ?? null, f.genderStage ?? null];
 
-scenario('Пол друзей: без интернета — своя база, остальных выбираю вручную', async ({ ui, page }) => {
-  await ui.go('/settings');
-  await ui.see('Для 8 Марта и 23 Февраля · определено 0 из 5');
-  await ui.tap('Пол друзей');
-  await ui.see('Определено 0 из 5');
-  ui.dismissNextDialog(); // «Только на телефоне»
-  await ui.tap('Определить автоматически');
-  await ui.see('Определено: 3. Осталось выбрать вручную: 2.');
-  assert.match(ui.dialogs.join('\n'), /Своя база имён не узнаёт 2 человек\. Их имена — без фамилий и телефонов/);
-  const data = await ui.waitData((x) => x.friends.filter((f) => f.gender).length === 3, 'своя база не сработала');
-  assert.deepEqual(data.friends.map((f) => [f.id, f.gender ?? null, f.genderBy ?? null]), [['a', 'f', 'names'], ['b', 'm', 'names'], ['c', 'f', 'names'], ['s', null, null], ['k', null, null]]);
-  await ui.tap('Саша: мужчина');
-  await ui.waitData((x) => x.friends.find((f) => f.id === 's').gender === 'm' && x.friends.find((f) => f.id === 's').genderBy === 'manual', 'ручной выбор не сохранился');
-  await ui.see('Определено 4 из 5');
-  await ui.tap('Мужчины · 2');
-  await ui.see('Игорь Ветров');
-  await ui.see('вручную');
-}, { data: seed({ friends: GENDER_FRIENDS }) });
-
-scenario('Пол друзей: с согласием — Genderize получает только имя и страну', async ({ ui, page }) => {
+/** Подставной Genderize: уверенно знает только имена из known, остальных — «не знаю»; запросы записываются. */
+async function genderizeStub(page, known = {}) {
   const asked = [];
   await page.context().route(/api\.genderize\.io/, (route) => {
-    asked.push(decodeURIComponent(route.request().url()));
-    route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify([{ name: 'Алуашка', gender: 'female', probability: 0.97, count: 40 }]) });
+    const url = new URL(route.request().url());
+    const names = url.searchParams.getAll('name[]');
+    asked.push({ names, country: url.searchParams.get('country_id'), raw: decodeURIComponent(url.href) });
+    const body = names.map((name) => (known[name] ? { name, gender: known[name], probability: 0.98, count: 300 } : { name, gender: null, probability: 0, count: 0 }));
+    route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(body) });
   });
-  await ui.go('/genders');
-  await ui.tap('Определить автоматически'); // вопрос подтверждён — через интернет
-  await ui.see('Определено: 4. Осталось выбрать вручную: 1.');
-  const data = await ui.data();
-  assert.deepEqual(data.friends.find((f) => f.id === 'k').genderBy, 'genderize');
-  assert.ok(asked.length >= 1);
-  assert.ok(asked.some((u) => u.includes('name[]=Алуашка') && u.endsWith('country_id=KZ')), asked.join('\n'));
-  assert.ok(!asked.some((u) => /Смирнова|707|606/.test(u)), 'ни фамилий, ни номеров');
+  return asked;
+}
+
+scenario('Пол сам при запуске: своя база, в Genderize — только имя и страна, второй раз не спрашиваем', async ({ ui, page }) => {
+  const asked = await genderizeStub(page, { 'Алуашка': 'female' });
+  await ui.go('/');
+  const data = await ui.waitData((x) => x.friends.find((f) => f.id === 'k').gender === 'f', 'Genderize не помог');
+  assert.deepEqual(data.friends.map(genderOf), [
+    ['a', 'f', 'names', null],
+    ['b', 'm', 'names', null],
+    ['c', 'f', 'names', null],
+    ['s', null, null, 'genderize'],
+    ['k', 'f', 'genderize', null],
+  ]);
+  assert.deepEqual(asked.map((a) => [a.country, a.names]).sort(), [[null, ['Саша']], ['KZ', ['Алуашка']]]);
+  assert.ok(!asked.some((a) => /Смирнова|Ветров|707|606|999/.test(a.raw)), 'ни фамилий, ни номеров');
+  // Перезапуск: всех уже спросили — запросов нет, ничего не поменялось.
+  await page.reload();
+  await ui.pause(4000);
+  assert.equal(asked.length, 2, 'никого не переспросили');
+  assert.deepEqual((await ui.data()).friends.map(genderOf), data.friends.map(genderOf));
+  // Пол нигде не показывается, кроме формы друга: в настройках его нет.
+  await ui.go('/settings');
+  await ui.notSee('Пол друзей');
 }, { data: seed({ friends: GENDER_FRIENDS }) });
 
-scenario('Пол в форме друга: подсказка по имени при вводе, ручной выбор главнее', async ({ ui, page }) => {
+scenario('Пол без интернета: своя база сразу, остальных никто не отмечает — спросим, когда сеть будет', async ({ ui, page }) => {
+  await ui.go('/');
+  await ui.waitData((x) => x.friends.find((f) => f.id === 'a').gender === 'f', 'своя база не сработала');
+  await ui.pause(1500);
+  assert.deepEqual((await ui.data()).friends.map(genderOf).slice(3), [['s', null, null, 'names'], ['k', null, null, 'names']]);
+  // Сеть появилась — при следующем открытии спрашиваем.
+  const asked = await genderizeStub(page, { 'Алуашка': 'female' });
+  await page.reload();
+  await ui.waitData((x) => x.friends.find((f) => f.id === 'k').genderBy === 'genderize', 'при следующем запуске не спросили');
+  assert.equal(asked.length, 2);
+}, { data: seed({ friends: GENDER_FRIENDS }) });
+
+scenario('Пол в форме: «определено само» или «выбери сам»; ручной выбор главнее, и после переименования', async ({ ui }) => {
+  await ui.go('/friend/edit?id=k');
+  await ui.see('Определено автоматически — можно поправить');
+  await ui.go('/friend/edit?id=s');
+  await ui.see('Не удалось определить — выбери сам');
+  await ui.tap('Мужчина');
+  await ui.notSee('Не удалось определить');
+  await ui.fill('Например, Аня', 'Саша Иванова'); // фамилия «женская», но пол выбран вручную
+  await ui.notSee('Определено автоматически');
+  await ui.tap('Сохранить');
+  const data = await ui.waitData((x) => x.friends.find((f) => f.id === 's').name === 'Саша Иванова', 'не сохранилось');
+  assert.deepEqual(genderOf(data.friends.find((f) => f.id === 's')), ['s', 'm', 'manual', null]);
+  await ui.pause(3500);
+  assert.deepEqual(genderOf((await ui.data()).friends.find((f) => f.id === 's')), ['s', 'm', 'manual', null], 'фоновый проход не тронул ручной');
+}, { data: seed({ friends: [ANYA, F({ id: 's', name: 'Саша', genderStage: 'gemini' }), F({ id: 'k', name: 'Алуашка', gender: 'f', genderBy: 'genderize' })] }) });
+
+scenario('Новый друг: пол по имени сразу; сомнительное имя — в фон, один раз; «Не указан» вручную не перезаписывается', async ({ ui, page }) => {
+  const asked = await genderizeStub(page);
   await ui.go('/friend/edit');
   await ui.fill('Например, Аня', 'Вероника');
-  await ui.see('Определено по имени', { exact: false });
+  await ui.see('Определено автоматически — можно поправить');
   await ui.tap('Сохранить');
-  const data = await ui.waitData((x) => x.friends.some((f) => f.name === 'Вероника'), 'друг не сохранился');
+  let data = await ui.waitData((x) => x.friends.some((f) => f.name === 'Вероника'), 'друг не сохранился');
   const v = data.friends.find((f) => f.name === 'Вероника');
   assert.deepEqual([v.gender, v.genderBy], ['f', 'names']);
+
+  await ui.go('/friend/edit');
+  await ui.fill('Например, Аня', 'Женя');
+  await ui.notSee('Определено автоматически');
+  await ui.tap('Сохранить');
+  await ui.waitData((x) => x.friends.find((f) => f.name === 'Женя')?.genderStage === 'genderize', 'Женю не отправили в Genderize');
+  assert.deepEqual(asked.map((a) => a.names), [['Женя']]);
+
   await ui.go(`/friend/edit?id=${v.id}`);
   await ui.tap('Не указан');
+  await ui.notSee('Определено автоматически');
   await ui.tap('Сохранить');
-  const after = await ui.waitData((x) => x.friends.find((f) => f.id === v.id).genderBy === 'manual', 'ручной выбор не сохранился');
-  assert.equal(after.friends.find((f) => f.id === v.id).gender, undefined, '«Не указан» вручную — и база имён его не перезаписывает');
-});
+  data = await ui.waitData((x) => x.friends.find((f) => f.id === v.id).genderBy === 'manual', 'ручной выбор не сохранился');
+  assert.equal(data.friends.find((f) => f.id === v.id).gender, undefined);
+  await page.reload();
+  await ui.pause(3500);
+  data = await ui.data();
+  assert.deepEqual(genderOf(data.friends.find((f) => f.id === v.id)), [v.id, null, 'manual', null], '«Не указан» вручную — база имён его не перезаписывает');
+  assert.equal(asked.length, 1, 'никого не переспросили');
+}, { data: seed({ friends: [ANYA] }) });
 
 // ===== Резервная копия =====
 const PNG_1PX = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
@@ -775,6 +821,8 @@ scenario('Резервная копия: восстановить — вопро
 
 scenario('Резервная копия: туда и обратно — сохранил, поменял, восстановил тот же файл — всё как было', async ({ ui, page }) => {
   await ui.go('/settings');
+  // Сначала дождёмся фонового определения пола, чтобы копия и «как было» описывали одно и то же состояние.
+  await ui.waitData((x) => x.friends.every((f) => f.gender), 'пол не определился');
   const download = page.waitForEvent('download', { timeout: 10000 });
   await ui.tap('Сохранить копию');
   const saved = await (await download).path();
@@ -1084,6 +1132,8 @@ async function run(browser, s, index) {
   const ctx = await browser.newContext({ ...devices['iPhone 13'], deviceScaleFactor: 1, locale: 'ru-RU', timezoneId: TZ, ...(s.viewport ? { viewport: s.viewport } : {}) });
   // Часы стоят на NOW и дальше идут сами: дата в сценариях та же, а анимации (они меряют время по Date.now) доигрывают.
   await ctx.clock.install({ time: NOW });
+  // Сервисы определения пола по умолчанию «без интернета»: сценарий, которому они нужны, подставляет ответ сам.
+  await ctx.route(/api\.genderize\.io|generativelanguage\.googleapis\.com/, (route) => route.abort('internetdisconnected'));
   const data = s.data === undefined ? seed() : s.data;
   const raw = s.raw ?? (data ? JSON.stringify(data) : null);
   await ctx.addInitScript(([key, value, extra]) => {

@@ -34,16 +34,3 @@ export function confirmUnsaved(): Promise<'save' | 'discard' | 'stay'> {
     ], { cancelable: true, onDismiss: () => resolve('stay') }),
   );
 }
-
-/** Вопрос с двумя равноправными ответами (не удаление): «Через интернет» / «Только на телефоне». */
-export function ask(title: string, message: string, yes: string, no: string): Promise<boolean> {
-  if (Platform.OS === 'web') {
-    return Promise.resolve(globalThis.confirm?.(`${title}\n\n${message}`) ?? false);
-  }
-  return new Promise((resolve) =>
-    Alert.alert(title, message, [
-      { text: no, style: 'cancel', onPress: () => resolve(false) },
-      { text: yes, onPress: () => resolve(true) },
-    ], { cancelable: true, onDismiss: () => resolve(false) }),
-  );
-}
