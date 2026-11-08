@@ -1,0 +1,37 @@
+name: Sentry issues
+
+# Свежие ошибки приложения из Sentry — со стеком, устройством и последними шагами — в итог запуска.
+# Запуск: вручную (Actions → Sentry issues) или коммитом с «[sentry]» в первой строке.
+# Нужен секрет репозитория SENTRY_READ_TOKEN — личный токен Sentry только для чтения (event:read, project:read, org:read).
+on:
+  workflow_dispatch:
+    inputs:
+      query:
+        description: 'Фильтр Sentry'
+        default: 'is:unresolved'
+      days:
+        description: 'За сколько дней'
+        default: '14'
+      issue:
+        description: 'Номер одной проблемы (необязательно)'
+        default: ''
+  push:
+    branches: [main, claude/mobile-project-creation-pgqs46]
+
+permissions:
+  contents: read
+
+jobs:
+  issues:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[sentry]')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch issues
+        env:
+          SENTRY_READ_TOKEN: ${{ secrets.SENTRY_READ_TOKEN }}
+          # Поля запуска — через переменные, а не вставкой в команду.
+          QUERY: ${{ github.event.inputs.query || 'is:unresolved' }}
+          DAYS: ${{ github.event.inputs.days || '14' }}
+          ISSUE: ${{ github.event.inputs.issue || '' }}
+        run: python3 scripts/sentry/issues.py --query "$QUERY" --days "$DAYS" --issue "$ISSUE"
