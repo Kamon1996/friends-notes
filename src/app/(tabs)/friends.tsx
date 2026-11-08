@@ -4,6 +4,8 @@ import { FlatList, Pressable, Text, View } from 'react-native';
 import ReanimatedSwipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 
 import { Avatar } from '@/components/Avatar';
+import { AiButton } from '@/components/ai/AiIcon';
+import { AiSheet } from '@/components/ai/AiSheet';
 import { Icon } from '@/components/Icon';
 import { SelectionBar } from '@/components/SelectionBar';
 import { TelegramImportCard } from '@/components/TelegramImportCard';
@@ -18,7 +20,8 @@ import type { Friend } from '@/lib/types';
 import { zodiacShown } from '@/lib/zodiac';
 
 export default function FriendsScreen() {
-  const { data, deleteFriends, updateFriends } = useStore();
+  const { data, deleteFriends, updateFriends, genderBusy } = useStore();
+  const [aiOpen, setAiOpen] = useState(false);
   const { s, colors } = useTheme();
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<FriendSort>('name');
@@ -83,6 +86,7 @@ export default function FriendsScreen() {
                 subtitle={n ? `${n} ${plural(n, 'человек', 'человека', 'человек')}${inMonth ? ` · ${inMonth} ${plural(inMonth, 'день рождения', 'дня рождения', 'дней рождения')} в ближайший месяц` : ''}` : undefined}
                 right={
                   <>
+                    {n > 0 && <AiButton busy={genderBusy} onPress={() => setAiOpen(true)} />}
                     <IconButton icon="import" label="Импорт друзей" onPress={() => router.push('/import')} />
                     <IconButton icon="sliders" label="Настройки" onPress={() => router.push('/settings')} />
                   </>
@@ -154,6 +158,15 @@ export default function FriendsScreen() {
         />
       )}
       {!selecting && <Fab onPress={() => router.push('/friend/edit')} label="Добавить друга" />}
+      <AiSheet
+        visible={aiOpen}
+        onClose={() => setAiOpen(false)}
+        gender={{ known: data.friends.filter((f) => f.gender).length, total: n }}
+        onGender={() => {
+          setAiOpen(false);
+          router.push('/ai-gender');
+        }}
+      />
     </View>
   );
 }

@@ -759,6 +759,39 @@ scenario('Переименование: не определился — проб
   assert.deepEqual(genderOf(data.friends.find((f) => f.id === 'k')), ['k', 'f', 'genderize', null], 'определённый пол переименование не трогает');
 }, { data: seed({ friends: [ANYA, F({ id: 's', name: 'Саша', genderStage: 'ai' }), F({ id: 'k', name: 'Алуашка', gender: 'f', genderBy: 'genderize' })] }) });
 
+scenario('ИИ: значок → «Пол друзей» → барабан → итог; кого не понять — выбираешь сам', async ({ ui }) => {
+  await ui.go('/friends');
+  await ui.tap('ИИ для друзей');
+  await ui.see('ИИ для друзей');
+  await ui.see('Пройдёт по всем друзьям сам');
+  await ui.see('скоро');
+  await ui.tap('Пол друзей — запустить');
+  await ui.see('Пролистываю друзей…');
+  await ui.see('Друг');
+  await ui.pause(4500);
+  await ui.see('Женщины');
+  await ui.see('Выбери сам');
+  await ui.see('Этих по имени не понять');
+  await ui.tap('Саша: мужчина');
+  let data = await ui.waitData((x) => x.friends.find((f) => f.id === 's').gender === 'm', 'выбор не сохранился');
+  assert.deepEqual(genderOf(data.friends.find((f) => f.id === 's')), ['s', 'm', 'manual', null]);
+  // Выбранный остаётся в списке — не исчезает из-под пальца, а в кольце стало на одного больше.
+  await ui.see('Саша');
+  await ui.tap('Саша: женщина');
+  data = await ui.waitData((x) => x.friends.find((f) => f.id === 's').gender === 'f', 'передумать нельзя');
+  await ui.tap('Готово');
+  await ui.see('Аня Смирнова');
+  await ui.notSee('Пролистываю друзей…');
+  const text = await ui.text();
+  assert.ok(!/gemini|openrouter|genderize|hugging|google/i.test(text), 'в интерфейсе не называем, как это устроено');
+}, { data: seed({ friends: [ANYA, IGOR, MAMA, F({ id: 's', name: 'Саша', genderStage: 'ai' }), F({ id: 'k', name: 'Карина' })] }) });
+
+scenario('ИИ: без друзей значка нет', async ({ ui }) => {
+  await ui.go('/friends');
+  await ui.see('Пока никого');
+  await ui.notSee('ИИ для друзей', { label: true });
+}, { data: seed({ friends: [], reminders: [] }) });
+
 scenario('Новый друг: пол по имени сразу; сомнительное имя — в фон, один раз; «Не указан» вручную не перезаписывается', async ({ ui, page }) => {
   const asked = await genderizeStub(page);
   await ui.go('/friend/edit');

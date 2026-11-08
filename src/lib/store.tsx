@@ -35,6 +35,10 @@ interface Store {
   updateSettings: (patch: Partial<Settings>) => void;
   /** Заменить все данные (восстановление из копии). Прежние откладываются в хранилище — на случай, если копия не та. */
   replaceData: (next: AppData) => Promise<void>;
+  /** Определить пол тем, кто ещё ждёт; если проход уже идёт в фоне — дождаться его. */
+  detectGenders: () => Promise<void>;
+  /** Идёт определение пола (значок ИИ тихо светится). */
+  genderBusy: boolean;
 }
 
 const StoreContext = createContext<Store | null>(null);
@@ -86,14 +90,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   // Пол друзей определяется сам, в фоне: при открытии приложения, при возвращении в него и когда появились новые друзья.
   // Каждый друг проходит ступени только один раз (см. genderDetect.ts); ручной выбор не трогается.
-  const syncGenders = useCallback(async () => {
-    if (!liveRef.current) return;
+  const [genderBusy, setGenderBusy] = useState(false);
+  const genderRunRef = useRef<Promise<void> | null>(null);
+  const syncGenders = useCallback((): Promise<void> => {
+    if (genderRunRef.current) return genderRunRef.current;
+    if (!liveRef.current) return Promise.resolve();
     const friends = dataRef.current.friends;
+    if (!friends.some(genderPending)) return Promise.resolve();
     const namesAtStart = new Map(friends.map((f) => [f.id, f.name]));
-    const updates = await genderSync.run(friends).catch(() => []);
-    if (!updates.length) return;
-    const byId = new Map(updates.map((u) => [u.id, u]));
-    setData((d) => ({ ...d, friends: d.friends.map((f) => applyGenderUpdate(f, byId.get(f.id), namesAtStart.get(f.id))) }));
+    setGenderBusy(true);
+    const run = (async () => {
+      const updates = await genderSync.run(friends).catch(() => []);
+      if (!updates.length) return;
+      const byId = new Map(updates.map((u) => [u.id, u]));
+      setData((d) => ({ ...d, friends: d.friends.map((f) => applyGenderUpdate(f, byId.get(f.id), namesAtStart.get(f.id))) }));
+    })().finally(() => {
+      genderRunRef.current = null;
+      setGenderBusy(false);
+    });
+    genderRunRef.current = run;
+    return run;
   }, []);
   // Сколько друзей ещё не прошли Genderize и дальше: растёт, когда добавили друга, импортировали или переименовали.
   const freshGenders = useMemo(() => data.friends.filter((f) => genderPending(f) && (!f.genderStage || f.genderStage === 'names')).length, [data.friends]);
@@ -106,7 +122,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       return;
     }
     seenFresh.current = freshGenders;
-    const t = setTimeout(syncGenders, 2500);
+    const t = setTimeout(() => void syncGenders(), 2500);
     return () => clearTimeout(t);
   }, [freshGenders, ready, canPersist, syncGenders]);
 
@@ -203,8 +219,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ ready, data, saveFriend, addFriends, updateFriends, deleteFriend, deleteFriends, saveReminder, deleteReminder, deleteReminders, toggleReminderDone, setRemindersDone, updateSettings, replaceData }),
-    [ready, data, saveFriend, addFriends, updateFriends, deleteFriend, deleteFriends, saveReminder, deleteReminder, deleteReminders, toggleReminderDone, setRemindersDone, updateSettings, replaceData],
+    () => ({
+      ready,
+      data,
+      saveFriend,
+      addFriends,
+      updateFriends,
+      deleteFriend,
+      deleteFriends,
+      saveReminder,
+      deleteReminder,
+      deleteReminders,
+      toggleReminderDone,
+      setRemindersDone,
+      updateSettings,
+      replaceData,
+      detectGenders: syncGenders,
+      genderBusy,
+    }),
+    [ready, data, saveFriend, addFriends, updateFriends, deleteFriend, deleteFriends, saveReminder, deleteReminder, deleteReminders, toggleReminderDone, setRemindersDone, updateSettings, replaceData, syncGenders, genderBusy],
   );
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
