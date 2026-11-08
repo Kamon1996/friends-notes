@@ -1,15 +1,18 @@
+import { TASK_PROVIDERS } from './ai/tasks';
+import { extractJson } from './ai/providers';
+import type { AiRunner, AiTask } from './ai/types';
 import { countryByPhone, firstNameForLookup, genderFromName, type Gender, type GenderSource } from './gender';
 
 /**
  * Пол друзей определяется сам, в фоне, по ступеням:
- *   names → genderize → device-ai → gemini
+ *   names → genderize → device-ai → ai (облачные ИИ из src/lib/ai: Gemini, Groq, OpenRouter, Hugging Face)
  * У каждого друга запоминается последняя ступень, которая честно ответила «не знаю» (genderStage), — в следующий раз
  * начинаем со следующей и одного и того же человека дважды не спрашиваем. Ступень отмечается только когда ответ
- * получен; сбой сети ничего не отмечает (попробуем при следующем запуске). Если сервис отказал надолго
- * (лимит, страна не поддерживается, неверный ключ) — пауза для всего сервиса (backoff). Ручной выбор главнее всего.
+ * получен; сбой сети ничего не отмечает (попробуем при следующем запуске). Если Genderize отказал надолго
+ * (лимит, неверный ключ) — пауза для него (backoff); паузы облачных ИИ ведёт сам модуль ИИ. Ручной выбор главнее всего.
  * Сеть и ИИ приходят снаружи (deps), поэтому всё проверяется тестами без телефона.
  */
-export const GENDER_STAGES = ['names', 'genderize', 'device-ai', 'gemini'] as const;
+export const GENDER_STAGES = ['names', 'genderize', 'device-ai', 'ai'] as const;
 export type GenderStage = (typeof GENDER_STAGES)[number];
 
 export interface GenderSubject {
@@ -24,16 +27,16 @@ export interface GenderSubject {
 export type DeviceAiStatus = 'available' | 'downloadable' | 'downloading' | 'unavailable';
 
 export interface GenderDeps {
+  /** Для Genderize. */
   fetch: (url: string, init?: { method?: string; headers?: Record<string, string>; body?: string }) => Promise<{ ok: boolean; status: number; json(): Promise<unknown> }>;
   deviceAi?: { status(): Promise<DeviceAiStatus>; generate(prompt: string): Promise<string> };
-  geminiKey?: string;
-  geminiModels?: string[];
+  /** Облачные ИИ с приоритетами и запасными вариантами (src/lib/ai). */
+  ai?: AiRunner;
 }
 
-/** До какого времени (мс) сервис не трогаем. */
+/** До какого времени (мс) Genderize не трогаем. */
 export interface GenderBackoff {
   genderize?: number;
-  gemini?: number;
 }
 
 export interface GenderUpdate {
@@ -57,13 +60,15 @@ export const BACKOFF_REFUSED = 7 * 24 * HOUR;
 /** Сервис сломался на своей стороне (5xx) — не дёргаем его при каждом возвращении в приложение. */
 export const BACKOFF_SERVER = HOUR;
 /** Сколько имён за один проход — по бесплатным лимитам (Genderize — 100 имён в день); остальные — в следующий раз. */
-export const PASS_LIMITS = { genderize: 100, deviceAi: 100, gemini: 100 };
+export const PASS_LIMITS = { genderize: 100, deviceAi: 100, ai: 100 };
+/** Сколько имён в одном вопросе облачному ИИ. */
+export const AI_BATCH = 25;
 
 const stageIndex = (s: GenderStage | undefined) => (s ? GENDER_STAGES.indexOf(s) : -1);
 
 /** Есть ли что ещё пробовать: пола нет, вручную не ставили, и ступени не кончились. */
 export function genderPending(f: Pick<GenderSubject, 'gender' | 'genderBy' | 'genderStage'>): boolean {
-  return !f.gender && f.genderBy !== 'manual' && f.genderStage !== 'gemini';
+  return !f.gender && f.genderBy !== 'manual' && f.genderStage !== 'ai';
 }
 
 // ---------- Genderize ----------
@@ -94,42 +99,39 @@ export function parseGenderize(body: unknown): Map<string, Gender | null> {
 
 // ---------- ИИ ----------
 
-/** Запрос к Gemini: пачка имён, ответ — JSON-массив. */
-export function geminiPrompt(names: string[]): string {
+/** Вопрос облачному ИИ: пачка имён, ответ — JSON. */
+export function genderPrompt(names: string[]): string {
   return [
     'Ниже — имена людей, как их записали в телефонной книге: полное имя, уменьшительное или прозвище; имена русские, казахские и другие.',
     'Определи пол каждого. Если по имени нельзя понять уверенно (например, Саша, Женя, Валя бывают и мужскими, и женскими), ответь "u". Не угадывай.',
-    'Ответ — только JSON-массив вида [{"i":0,"g":"f"}], где g — "f" (женщина), "m" (мужчина) или "u".',
+    'Ответ — только JSON вида {"answers":[{"i":0,"g":"f"}]}, где i — номер строки, g — "f" (женщина), "m" (мужчина) или "u".',
     ...names.map((n, i) => `${i}: ${n}`),
   ].join('\n');
 }
 
-export function geminiBody(names: string[]): string {
-  return JSON.stringify({
-    contents: [{ role: 'user', parts: [{ text: geminiPrompt(names) }] }],
-    generationConfig: { temperature: 0, responseMimeType: 'application/json' },
-  });
-}
-
-/** Ответ Gemini → пол по номеру строки. null — ответ не разобрать. */
-export function parseGemini(body: unknown, count: number): Map<number, Gender> | null {
-  const out = new Map<number, Gender>();
-  const parts = (body as { candidates?: { content?: { parts?: { text?: string }[] } }[] })?.candidates?.[0]?.content?.parts ?? [];
-  const text = parts.map((p) => p?.text ?? '').join('');
-  let list: unknown;
-  try {
-    list = JSON.parse(text.replace(/^\s*```(?:json)?|```\s*$/g, '').trim());
-  } catch {
-    return null;
-  }
+/** Ответ ИИ → пол по номеру строки. null — ответ не разобрать (тогда модуль ИИ спросит другую модель). */
+export function parseGenderAnswer(text: string, count: number): Map<number, Gender> | null {
+  const json = extractJson(text);
+  const obj = json && typeof json === 'object' && !Array.isArray(json) ? (json as Record<string, unknown>) : null;
+  const list = Array.isArray(json) ? json : (obj?.answers ?? obj?.result ?? obj?.items);
   if (!Array.isArray(list)) return null;
+  const out = new Map<number, Gender>();
   for (const item of list as Record<string, unknown>[]) {
-    const i = typeof item?.i === 'number' ? item.i : NaN;
+    const i = typeof item?.i === 'number' ? item.i : typeof item?.i === 'string' ? Number(item.i) : NaN;
     if (!Number.isInteger(i) || i < 0 || i >= count) continue;
-    if (item.g === 'f' || item.g === 'm') out.set(i, item.g);
+    const g = typeof item.g === 'string' ? item.g.toLowerCase() : '';
+    if (g === 'f' || g === 'm') out.set(i, g);
   }
   return out;
 }
+
+/** Задача «пол по именам» для модуля ИИ. */
+export const GENDER_TASK: AiTask<string[], Map<number, Gender>> = {
+  id: 'gender',
+  providers: TASK_PROVIDERS.gender,
+  request: (names) => ({ prompt: genderPrompt(names), json: true, temperature: 0, maxTokens: 400 + names.length * 30 }),
+  parse: (text, names) => parseGenderAnswer(text, names.length),
+};
 
 /** Вопрос встроенному ИИ телефона: модель маленькая, поэтому по одному имени и ответ одним словом. */
 export function devicePrompt(name: string): string {
@@ -238,7 +240,7 @@ export async function genderPass(friends: GenderSubject[], deps: GenderDeps, opt
         try {
           asked.set(key, parseDeviceAnswer(await deps.deviceAi.generate(devicePrompt(name))));
         } catch {
-          continue; // сбой на этом человеке — не отмечаем, дальше его спросит Gemini
+          continue; // сбой на этом человеке — не отмечаем, дальше его спросит облачный ИИ
         }
       }
       const g = asked.get(key);
@@ -247,28 +249,27 @@ export async function genderPass(friends: GenderSubject[], deps: GenderDeps, opt
     }
   }
 
-  // 3б. Gemini — после встроенного ИИ (или если его нет). Только имена; одинаковые — один раз.
-  const forGemini = people.filter((p) => !found.has(p.id) && last.get(p.id)! >= GENDER_STAGES.indexOf('genderize') && last.get(p.id)! < GENDER_STAGES.indexOf('gemini'));
-  if (forGemini.length && deps.geminiKey && (backoff.gemini ?? 0) <= opts.now) {
-    for (const p of forGemini) if (!lookup.get(p.id)) mark(p, 'gemini');
-    const withName = forGemini.filter((p) => lookup.get(p.id)).slice(0, limits.gemini);
+  // 3б. Облачный ИИ — после встроенного (или если его нет). Только имена; одинаковые — один раз.
+  //     Модуль ИИ сам выбирает сервис по приоритету, переходит к следующему, если сервис не ответил, и ставит паузы.
+  const forAi = people.filter((p) => !found.has(p.id) && last.get(p.id)! >= GENDER_STAGES.indexOf('genderize') && last.get(p.id)! < GENDER_STAGES.indexOf('ai'));
+  if (forAi.length && deps.ai) {
+    for (const p of forAi) if (!lookup.get(p.id)) mark(p, 'ai'); // спрашивать нечего
+    const withName = forAi.filter((p) => lookup.get(p.id)).slice(0, limits.ai);
     const names = [...new Map(withName.map((p) => [lookup.get(p.id)!.toLowerCase(), lookup.get(p.id)!])).values()];
-    try {
-      for (const part of chunk(names, 25)) {
-        const answers = await askGemini(deps, part);
-        const index = new Map(part.map((n, i) => [n.toLowerCase(), i]));
-        for (const p of withName) {
-          const i = index.get(lookup.get(p.id)!.toLowerCase());
-          if (i === undefined) continue;
-          const g = answers?.get(i);
-          if (g) found.set(p.id, { gender: g, by: 'gemini' });
-          else mark(p, 'gemini'); // ответил «не знаю» или прислал непонятное — второй раз не спрашиваем
-        }
+    for (const part of chunk(names, AI_BATCH)) {
+      const result = await deps.ai.run(GENDER_TASK, part).catch(() => null);
+      if (!result || result.status === 'unavailable') {
+        problems.push('ИИ сейчас недоступен — спросим в следующий раз');
+        break;
       }
-    } catch (e) {
-      const stop = e instanceof StopStage ? e : new StopStage('Gemini недоступен');
-      problems.push(stop.message);
-      if (stop.backoffMs) backoff.gemini = opts.now + stop.backoffMs;
+      const index = new Map(part.map((n, i) => [n.toLowerCase(), i]));
+      for (const p of withName) {
+        const i = index.get(lookup.get(p.id)!.toLowerCase());
+        if (i === undefined) continue;
+        const g = result.status === 'ok' ? result.value.get(i) : undefined;
+        if (g) found.set(p.id, { gender: g, by: 'ai' });
+        else mark(p, 'ai'); // ответил «не знаю» или ответил не по делу — второй раз не спрашиваем
+      }
     }
   }
 
@@ -279,32 +280,6 @@ export async function genderPass(friends: GenderSubject[], deps: GenderDeps, opt
     else if (last.get(p.id)! > stageIndex(p.genderStage)) updates.push({ id: p.id, stage: GENDER_STAGES[last.get(p.id)!] });
   }
   return { updates, backoff, problems };
-}
-
-async function askGemini(deps: GenderDeps, names: string[]): Promise<Map<number, Gender> | null> {
-  const models = deps.geminiModels?.length ? deps.geminiModels : ['gemini-flash-lite-latest', 'gemini-flash-latest'];
-  for (const model of models) {
-    let res;
-    try {
-      res = await deps.fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-goog-api-key': deps.geminiKey! },
-        body: geminiBody(names),
-      });
-    } catch {
-      throw new StopStage('Gemini недоступен');
-    }
-    if (res.ok) return parseGemini(await res.json().catch(() => null), names.length);
-    if (res.status === 404) continue; // модель переименовали — пробуем следующую
-    const err = (await res.json().catch(() => null)) as { error?: { status?: string; message?: string } } | null;
-    if (err?.error?.status === 'FAILED_PRECONDITION' || /location is not supported/i.test(err?.error?.message ?? '')) {
-      throw new StopStage('Gemini недоступен в этой стране', BACKOFF_REFUSED);
-    }
-    if (res.status === 429) throw new StopStage('Gemini: лимит бесплатного ключа исчерпан', BACKOFF_RATE_LIMIT);
-    if (res.status === 400 || res.status === 401 || res.status === 403) throw new StopStage(`Gemini отказал (${res.status}): проверь ключ`, BACKOFF_REFUSED);
-    throw new StopStage(`Gemini: ошибка ${res.status}`, res.status >= 500 ? BACKOFF_SERVER : 0);
-  }
-  throw new StopStage('Gemini: модель не найдена', BACKOFF_REFUSED);
 }
 
 /**

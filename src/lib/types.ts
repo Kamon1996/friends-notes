@@ -54,9 +54,9 @@ export interface Friend {
   /** Пол — для поздравлений с 8 Марта и 23 Февраля. Нет значения — не знаем. */
   gender?: 'f' | 'm';
   /** Откуда пол: выбран вручную или определён (по имени, Genderize, ИИ). Ручной выбор не перезаписывается. */
-  genderBy?: 'manual' | 'names' | 'genderize' | 'device-ai' | 'gemini';
+  genderBy?: 'manual' | 'names' | 'genderize' | 'device-ai' | 'ai';
   /** Пол пока не определён: последняя ступень, которая ответила «не знаю». Следующий проход начнёт со следующей. */
-  genderStage?: 'names' | 'genderize' | 'device-ai' | 'gemini';
+  genderStage?: 'names' | 'genderize' | 'device-ai' | 'ai';
   /** Соцсети и сайты человека. */
   socials?: SocialLink[];
 }

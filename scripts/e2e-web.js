@@ -675,7 +675,7 @@ scenario('Календарь: без дат выгружать нечего', as
 }, { data: seed({ friends: [F({ id: 'x', name: 'Маша' })], reminders: [] }) });
 
 // ===== Пол друзей =====
-// Определяется сам при запуске, без вопросов; Genderize и Gemini по умолчанию «без интернета» (см. run), сценарий подставляет ответ.
+// Определяется сам при запуске, без вопросов; Genderize и облачные ИИ по умолчанию «без интернета» (см. run), сценарий подставляет ответ.
 const GENDER_FRIENDS = [ANYA, IGOR, MAMA, F({ id: 's', name: 'Саша' }), F({ id: 'k', name: 'Алуашка', phone: '+7 707 606 39 03' })];
 const genderOf = (f) => [f.id, f.gender ?? null, f.genderBy ?? null, f.genderStage ?? null];
 
@@ -741,7 +741,7 @@ scenario('Пол в форме: «определено само» или «вы�
   assert.deepEqual(genderOf(data.friends.find((f) => f.id === 's')), ['s', 'm', 'manual', null]);
   await ui.pause(3500);
   assert.deepEqual(genderOf((await ui.data()).friends.find((f) => f.id === 's')), ['s', 'm', 'manual', null], 'фоновый проход не тронул ручной');
-}, { data: seed({ friends: [ANYA, F({ id: 's', name: 'Саша', genderStage: 'gemini' }), F({ id: 'k', name: 'Алуашка', gender: 'f', genderBy: 'genderize' })] }) });
+}, { data: seed({ friends: [ANYA, F({ id: 's', name: 'Саша', genderStage: 'ai' }), F({ id: 'k', name: 'Алуашка', gender: 'f', genderBy: 'genderize' })] }) });
 
 scenario('Новый друг: пол по имени сразу; сомнительное имя — в фон, один раз; «Не указан» вручную не перезаписывается', async ({ ui, page }) => {
   const asked = await genderizeStub(page);
@@ -1133,7 +1133,7 @@ async function run(browser, s, index) {
   // Часы стоят на NOW и дальше идут сами: дата в сценариях та же, а анимации (они меряют время по Date.now) доигрывают.
   await ctx.clock.install({ time: NOW });
   // Сервисы определения пола по умолчанию «без интернета»: сценарий, которому они нужны, подставляет ответ сам.
-  await ctx.route(/api\.genderize\.io|generativelanguage\.googleapis\.com/, (route) => route.abort('internetdisconnected'));
+  await ctx.route(/api\.genderize\.io|generativelanguage\.googleapis\.com|api\.groq\.com|openrouter\.ai|router\.huggingface\.co/, (route) => route.abort('internetdisconnected'));
   const data = s.data === undefined ? seed() : s.data;
   const raw = s.raw ?? (data ? JSON.stringify(data) : null);
   await ctx.addInitScript(([key, value, extra]) => {

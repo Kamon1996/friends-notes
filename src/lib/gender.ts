@@ -4,12 +4,13 @@ import { AMBIGUOUS_NAMES, FEMALE_NAMES, FEMALE_WORDS, MALE_NAMES, MALE_WORDS, SU
  * Пол друга — для поздравлений с 8 Марта и 23 Февраля. Определяется по ступеням:
  * 1) своя база имён и правила — только то, что точно (здесь, без интернета);
  * 2) Genderize.io — по имени, с подсказкой страны;
- * 3) ИИ: сначала встроенный в телефон (Gemini Nano), если он есть; что он не понял или если его нет — Gemini.
+ * 3) ИИ: сначала встроенный в телефон (Gemini Nano), если он есть; что он не понял или если его нет — облачный ИИ
+ *    (src/lib/ai: Gemini, Groq, OpenRouter, Hugging Face — по приоритету, с запасными вариантами).
  * Всё происходит само, при запуске; каждая ступень спрашивается про человека один раз (см. genderDetect.ts).
  * Что не определилось — человек выбирает сам в карточке друга. Ручной выбор ничем не перезаписывается.
  */
 export type Gender = 'f' | 'm';
-export type GenderSource = 'manual' | 'names' | 'genderize' | 'device-ai' | 'gemini';
+export type GenderSource = 'manual' | 'names' | 'genderize' | 'device-ai' | 'ai';
 
 const norm = (s: string) => s.toLowerCase().replace(/ё/g, 'е');
 
@@ -97,7 +98,7 @@ export interface GenderFields {
   name: string;
   gender?: Gender;
   genderBy?: GenderSource;
-  genderStage?: 'names' | 'genderize' | 'device-ai' | 'gemini';
+  genderStage?: 'names' | 'genderize' | 'device-ai' | 'ai';
 }
 
 const pickGender = ({ gender, genderBy, genderStage }: GenderFields): Omit<GenderFields, 'name'> => ({

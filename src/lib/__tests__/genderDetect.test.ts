@@ -1,25 +1,29 @@
 /// <reference types="node" />
-// Пол определяется сам при каждом запуске, по ступеням: своя база → Genderize → ИИ телефона → Gemini.
+// Пол определяется сам при каждом запуске, по ступеням: своя база → Genderize → ИИ телефона → облачный ИИ.
 // Каждую ступень про человека спрашиваем один раз; ручной выбор главнее всего. Здесь — подставной интернет,
-// подставной ИИ телефона и «телефон», который запускают много раз подряд, с перезаписью данных между запусками.
+// подставной ИИ телефона и облачный ИИ, и «телефон», который запускают много раз подряд, с перезаписью данных.
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
+import { createAi } from '../ai/router';
+import type { AiFetch, AiResult, AiRunner, AiTask } from '../ai/types';
 import { genderOnSave } from '../gender';
 import {
+  AI_BATCH,
   BACKOFF_RATE_LIMIT,
   BACKOFF_REFUSED,
   BACKOFF_SERVER,
+  GENDER_TASK,
   PASS_LIMITS,
   applyGenderUpdate,
   createGenderSync,
   devicePrompt,
-  geminiBody,
   genderPass,
   genderPending,
+  genderPrompt,
   genderizeUrl,
   parseDeviceAnswer,
-  parseGemini,
+  parseGenderAnswer,
   parseGenderize,
   type DeviceAiStatus,
   type GenderDeps,
@@ -31,7 +35,6 @@ import type { Friend } from '../types';
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
 const T0 = Date.UTC(2026, 10, 8, 9);
-const KEY = 'test-key';
 
 const friend = (id: string, name: string, extra: Partial<Friend> = {}): Friend => ({
   id,
@@ -53,45 +56,34 @@ const latinName = (i: number) => `Q${String.fromCharCode(97 + Math.floor(i / 26)
 
 type Reply = { status: number; body?: unknown } | 'offline';
 
-/** Подставной интернет: Genderize и Gemini отвечают из словарей; все запросы и все отвеченные имена записываются. */
+/** Подставной Genderize: отвечает из словаря; все запросы и все отвеченные имена записываются. */
 class Net {
-  calls: { url: string; body?: string; headers?: Record<string, string> }[] = [];
+  calls: { url: string }[] = [];
   /** Имя (строчными) → пол, в котором Genderize уверен. Нет в словаре — «не знаю». */
   genderize = new Map<string, 'f' | 'm'>();
-  /** Имя (строчными) → пол по мнению Gemini. Нет в словаре — «u». */
-  gemini = new Map<string, 'f' | 'm'>();
   genderizeReply: Reply | null = null;
-  geminiReply: Reply | null = null;
-  geminiByModel = new Map<string, Reply>();
   /** Сколько раз сервис ОТВЕТИЛ про имя — это и есть «спросили». */
-  answered = { genderize: new Map<string, number>(), gemini: new Map<string, number>() };
+  answered = { genderize: new Map<string, number>() };
 
-  fetch: GenderDeps['fetch'] = async (url, init) => {
-    this.calls.push({ url, body: init?.body, headers: init?.headers });
-    const reply = url.startsWith('https://api.genderize.io') ? this.answerGenderize(url) : this.answerGemini(url, init?.body ?? '');
+  fetch: GenderDeps['fetch'] = async (url) => {
+    this.calls.push({ url });
+    const reply = this.answerGenderize(url);
     if (reply === 'offline') throw new TypeError('Network request failed');
     return { ok: reply.status >= 200 && reply.status < 300, status: reply.status, json: async () => reply.body };
   };
 
   get genderizeCalls() {
-    return this.calls.filter((c) => c.url.startsWith('https://api.genderize.io'));
-  }
-  get geminiCalls() {
-    return this.calls.filter((c) => c.url.includes('generativelanguage'));
+    return this.calls;
   }
   /** Самый частый ответ про одно имя — должен быть не больше 1. */
-  maxAnswered(service: 'genderize' | 'gemini') {
+  maxAnswered(service: 'genderize') {
     return Math.max(0, ...this.answered[service].values());
-  }
-
-  private count(service: 'genderize' | 'gemini', names: string[]) {
-    for (const n of names) this.answered[service].set(n.toLowerCase(), (this.answered[service].get(n.toLowerCase()) ?? 0) + 1);
   }
 
   private answerGenderize(url: string): Reply {
     if (this.genderizeReply) return this.genderizeReply;
     const names = genderizeNames(url);
-    this.count('genderize', names);
+    for (const n of names) this.answered.genderize.set(n.toLowerCase(), (this.answered.genderize.get(n.toLowerCase()) ?? 0) + 1);
     return {
       status: 200,
       body: names.map((name) => {
@@ -100,25 +92,38 @@ class Net {
       }),
     };
   }
-
-  private answerGemini(url: string, body: string): Reply {
-    const model = /models\/([^:]+):generateContent/.exec(url)?.[1] ?? '';
-    const special = this.geminiByModel.get(model) ?? this.geminiReply;
-    if (special) return special;
-    const names = geminiNames(body);
-    this.count('gemini', names);
-    return { status: 200, body: geminiAnswer(names.map((n, i) => ({ i, g: this.gemini.get(n.toLowerCase()) ?? 'u' }))) };
-  }
 }
 
 const genderizeNames = (url: string) => new URL(url).searchParams.getAll('name[]');
 const genderizeCountry = (url: string) => new URL(url).searchParams.get('country_id');
-const geminiNames = (body: string) =>
-  (JSON.parse(body).contents[0].parts[0].text as string)
-    .split('\n')
-    .filter((l) => /^\d+: /.test(l))
-    .map((l) => l.replace(/^\d+: /, ''));
-const geminiAnswer = (list: unknown) => ({ candidates: [{ content: { parts: [{ text: JSON.stringify(list) }] } }] });
+
+/**
+ * Подставной облачный ИИ (вместо модуля src/lib/ai): отвечает из словаря, записывает, про какие имена спрашивали.
+ * Сам модуль — с сервисами, запасными вариантами и паузами — проверяется в ai.test.ts.
+ */
+class FakeAi implements AiRunner {
+  /** Имя (строчными) → пол. Нет в словаре — «u». */
+  answers = new Map<string, 'f' | 'm'>();
+  mode: 'ok' | 'unusable' | 'unavailable' | 'throw' = 'ok';
+  asked: string[][] = [];
+  prompts: string[] = [];
+  answered = new Map<string, number>();
+  async run<I, O>(task: AiTask<I, O>, input: I): Promise<AiResult<O>> {
+    const names = input as unknown as string[];
+    this.asked.push(names);
+    this.prompts.push(task.request(input).prompt);
+    if (this.mode === 'throw') throw new Error('сбой');
+    if (this.mode === 'unavailable') return { status: 'unavailable', attempts: [] };
+    if (this.mode === 'unusable') return { status: 'unusable', attempts: [] };
+    for (const n of names) this.answered.set(n.toLowerCase(), (this.answered.get(n.toLowerCase()) ?? 0) + 1);
+    const text = JSON.stringify({ answers: names.map((n, i) => ({ i, g: this.answers.get(n.toLowerCase()) ?? 'u' })) });
+    const value = task.parse(text, input);
+    return value === null ? { status: 'unusable', attempts: [] } : { status: 'ok', value, provider: 'gemini', model: 'test', attempts: [] };
+  }
+  maxAnswered() {
+    return Math.max(0, ...this.answered.values());
+  }
+}
 
 /** Подставной ИИ телефона. */
 class Device {
@@ -189,15 +194,16 @@ class Phone {
     return Object.fromEntries(this.friends.map((f) => [f.id, [f.gender ?? null, f.genderBy ?? null, f.genderStage ?? null]]));
   }
   get pause() {
-    return JSON.parse(this.backoff) as { genderize?: number; gemini?: number };
+    return JSON.parse(this.backoff) as { genderize?: number };
   }
 }
 
-const setup = (friends: Friend[], opts: { key?: boolean; device?: boolean } = {}) => {
+const setup = (friends: Friend[], opts: { ai?: boolean; device?: boolean } = {}) => {
   const net = new Net();
   const device = new Device();
-  const phone = new Phone(friends, { fetch: net.fetch, geminiKey: opts.key ? KEY : undefined, deviceAi: opts.device ? device.api : undefined });
-  return { net, device, phone };
+  const ai = new FakeAi();
+  const phone = new Phone(friends, { fetch: net.fetch, ai: opts.ai ? ai : undefined, deviceAi: opts.device ? device.api : undefined });
+  return { net, device, ai, phone };
 };
 
 describe('разбор ответов', () => {
@@ -226,24 +232,28 @@ describe('разбор ответов', () => {
     assert.deepEqual(genderizeNames(genderizeUrl(['Анна-Мария', 'O&Neil'])), ['Анна-Мария', 'O&Neil'], 'спецсимволы не ломают адрес');
   });
 
-  test('Gemini: JSON по номерам строк; «u», чужие номера и мусор — «не знаем»; совсем непонятный ответ — null', () => {
-    assert.deepEqual([...parseGemini(geminiAnswer([{ i: 0, g: 'f' }, { i: 1, g: 'u' }, { i: 2, g: 'm' }, { i: 9, g: 'f' }, { i: 'x', g: 'm' }, null]), 3)!], [
+  test('ответ ИИ: {"answers":[…]} или просто массив; «u», чужие номера и мусор — «не знаем»; непонятный ответ — null', () => {
+    const text = (list: unknown) => JSON.stringify({ answers: list });
+    assert.deepEqual([...parseGenderAnswer(text([{ i: 0, g: 'f' }, { i: 1, g: 'u' }, { i: 2, g: 'M' }, { i: 9, g: 'f' }, { i: 'x', g: 'm' }, null]), 3)!], [
       [0, 'f'],
       [2, 'm'],
     ]);
-    assert.deepEqual([...parseGemini({ candidates: [{ content: { parts: [{ text: '```json\n[{"i":0,"g":"m"}]\n```' }] } }] }, 1)!], [[0, 'm']], 'обёртка ``` не мешает');
-    assert.equal(parseGemini({ candidates: [{ content: { parts: [{ text: 'не JSON' }] } }] }, 1), null);
-    assert.equal(parseGemini({ candidates: [{ content: { parts: [{ text: '{"i":0}' }] } }] }, 1), null, 'не массив');
-    assert.equal(parseGemini({}, 1), null);
-    assert.equal(parseGemini(null, 1), null);
+    assert.deepEqual([...parseGenderAnswer('[{"i":0,"g":"m"}]', 1)!], [[0, 'm']], 'массив без обёртки');
+    assert.deepEqual([...parseGenderAnswer('```json\n{"answers":[{"i":"0","g":"f"}]}\n```', 1)!], [[0, 'f']], 'номер строкой и ``` не мешают');
+    assert.deepEqual([...parseGenderAnswer('<think>Саша — неясно</think>{"answers":[{"i":0,"g":"u"}]}', 1)!], [], 'рассуждения модели не мешают');
+    assert.equal(parseGenderAnswer('не JSON', 1), null);
+    assert.equal(parseGenderAnswer('{"i":0}', 1), null, 'нет списка');
+    assert.equal(parseGenderAnswer('', 1), null);
   });
 
-  test('запрос к Gemini: имена пронумерованы, температура 0, ответ JSON, просим не угадывать', () => {
-    const body = JSON.parse(geminiBody(['Алуашка', 'Саша']));
-    assert.equal(body.generationConfig.temperature, 0);
-    assert.equal(body.generationConfig.responseMimeType, 'application/json');
-    assert.match(body.contents[0].parts[0].text, /0: Алуашка\n1: Саша$/);
-    assert.match(body.contents[0].parts[0].text, /Не угадывай/);
+  test('вопрос ИИ: имена пронумерованы, просим JSON и не угадывать; сервисы по приоритету — Gemini первый', () => {
+    const req = GENDER_TASK.request(['Алуашка', 'Саша']);
+    assert.equal(req.prompt, genderPrompt(['Алуашка', 'Саша']));
+    assert.match(req.prompt, /0: Алуашка\n1: Саша$/);
+    assert.match(req.prompt, /Не угадывай/);
+    assert.equal(req.json, true);
+    assert.equal(req.temperature, 0);
+    assert.deepEqual(GENDER_TASK.providers, ['gemini', 'groq', 'openrouter', 'huggingface']);
   });
 
   test('ответ встроенного ИИ одним словом', () => {
@@ -265,7 +275,7 @@ describe('кому ещё нужно определять', () => {
     assert.equal(genderPending({ genderStage: 'names' }), true);
     assert.equal(genderPending({ genderStage: 'genderize' }), true);
     assert.equal(genderPending({ genderStage: 'device-ai' }), true);
-    assert.equal(genderPending({ genderStage: 'gemini' }), false, 'все ступени пройдены — выбирает человек');
+    assert.equal(genderPending({ genderStage: 'ai' }), false, 'все ступени пройдены — выбирает человек');
     assert.equal(genderPending({ gender: 'f', genderBy: 'names' }), false);
     assert.equal(genderPending({ genderBy: 'manual' }), false, '«Не указан» вручную');
     assert.equal(genderPending({ gender: 'm', genderBy: 'manual' }), false);
@@ -274,7 +284,7 @@ describe('кому ещё нужно определять', () => {
 
 describe('своя база — без интернета', () => {
   test('уверенные имена определяются сразу, в интернет ничего не уходит', async () => {
-    const { net, phone } = setup([friend('a', 'Аня'), friend('b', 'Иван Петров'), friend('c', 'Мама'), friend('d', 'Саша Иванова'), friend('e', 'Дядя Женя')], { key: true });
+    const { net, phone } = setup([friend('a', 'Аня'), friend('b', 'Иван Петров'), friend('c', 'Мама'), friend('d', 'Саша Иванова'), friend('e', 'Дядя Женя')], { ai: true });
     await phone.launch();
     assert.equal(net.calls.length, 0);
     assert.deepEqual(phone.state(), {
@@ -300,18 +310,18 @@ describe('своя база — без интернета', () => {
 
   test('база пополнилась в новой версии — ждущих проверяем ею снова, без интернета', async () => {
     // «Анна» уже прошла Genderize (например, раньше база её не знала) — теперь база знает, сеть не нужна.
-    const { net, phone } = setup([friend('a', 'Анна', { genderStage: 'genderize' }), friend('b', 'Иван', { genderStage: 'device-ai' })], { key: true });
+    const { net, phone } = setup([friend('a', 'Анна', { genderStage: 'genderize' }), friend('b', 'Иван', { genderStage: 'device-ai' })], { ai: true });
     await phone.launch();
     assert.equal(net.calls.length, 0);
     assert.deepEqual(phone.state(), { a: ['f', 'names', null], b: ['m', 'names', null] });
   });
 
   test('ни имени, ни подписи (эмодзи, цифры) — никуда не отправляем, сразу «выбери сам»', async () => {
-    const { net, device, phone } = setup([friend('x', '🙂'), friend('y', '12345'), friend('z', '—')], { key: true, device: true });
+    const { net, device, phone } = setup([friend('x', '🙂'), friend('y', '12345'), friend('z', '—')], { ai: true, device: true });
     await phone.launch();
     assert.equal(net.calls.length, 0);
     assert.equal(device.asked.length, 0);
-    assert.deepEqual(phone.state(), { x: [null, null, 'gemini'], y: [null, null, 'gemini'], z: [null, null, 'gemini'] });
+    assert.deepEqual(phone.state(), { x: [null, null, 'ai'], y: [null, null, 'ai'], z: [null, null, 'ai'] });
   });
 });
 
@@ -439,156 +449,129 @@ describe('Genderize', () => {
   });
 });
 
-describe('ИИ: сначала телефона, потом Gemini', () => {
-  test('ИИ телефона понял — Gemini не спрашиваем', async () => {
-    const { net, device, phone } = setup([friend('k', 'Алуашка')], { key: true, device: true });
+describe('ИИ: сначала телефона, потом облачный', () => {
+  test('ИИ телефона понял — облачный не спрашиваем', async () => {
+    const { ai, device, phone } = setup([friend('k', 'Алуашка')], { ai: true, device: true });
     device.answers.set('алуашка', 'Женщина');
     await phone.launch();
     assert.deepEqual(phone.state(), { k: ['f', 'device-ai', null] });
-    assert.equal(net.geminiCalls.length, 0);
+    assert.equal(ai.asked.length, 0);
   });
 
-  test('ИИ телефона не понял — спрашиваем Gemini; не понял и он — больше никого не спрашиваем', async () => {
-    const { net, device, phone } = setup([friend('s', 'Саша')], { key: true, device: true });
+  test('ИИ телефона не понял — спрашиваем облачный; не понял и он — больше никого не спрашиваем', async () => {
+    const { net, ai, device, phone } = setup([friend('s', 'Саша')], { ai: true, device: true });
     await phone.launch();
-    assert.deepEqual(phone.state(), { s: [null, null, 'gemini'] });
-    assert.deepEqual(device.asked, ['Саша']);
+    assert.deepEqual(phone.state(), { s: [null, null, 'ai'] });
     for (let i = 0; i < 4; i++) await phone.launch();
-    assert.equal(net.calls.length, 2, 'Genderize и Gemini — по одному разу');
-    assert.deepEqual(device.asked, ['Саша']);
+    assert.equal(net.calls.length, 1, 'Genderize — один раз');
+    assert.deepEqual(device.asked, ['Саша'], 'ИИ телефона — один раз');
+    assert.deepEqual(ai.asked, [['Саша']], 'облачный ИИ — один раз');
   });
 
-  test('ИИ телефона не понял, а Gemini понял', async () => {
-    const { net, phone } = setup([friend('k', 'Алуашка')], { key: true, device: true });
-    net.gemini.set('алуашка', 'f');
+  test('ИИ телефона не понял, а облачный понял', async () => {
+    const { ai, phone } = setup([friend('k', 'Алуашка')], { ai: true, device: true });
+    ai.answers.set('алуашка', 'f');
     await phone.launch();
-    assert.deepEqual(phone.state(), { k: ['f', 'gemini', null] });
+    assert.deepEqual(phone.state(), { k: ['f', 'ai', null] });
   });
 
   for (const state of ['unavailable', 'downloadable', 'downloading', 'broken'] as const) {
-    test(`ИИ телефона ${state} — сразу Gemini, ступень ИИ телефона не отмечаем`, async () => {
-      const { net, device, phone } = setup([friend('k', 'Алуашка'), friend('s', 'Саша')], { key: true, device: true });
+    test(`ИИ телефона ${state} — сразу облачный, ступень ИИ телефона не отмечаем`, async () => {
+      const { ai, device, phone } = setup([friend('k', 'Алуашка'), friend('s', 'Саша')], { ai: true, device: true });
       device.state = state;
-      net.gemini.set('алуашка', 'f');
+      ai.answers.set('алуашка', 'f');
       await phone.launch();
       assert.equal(device.asked.length, 0);
-      assert.deepEqual(phone.state(), { k: ['f', 'gemini', null], s: [null, null, 'gemini'] });
+      assert.deepEqual(phone.state(), { k: ['f', 'ai', null], s: [null, null, 'ai'] });
     });
   }
 
-  test('ИИ телефона ещё не скачан, а Gemini на паузе — ждём, потом спросим ИИ телефона', async () => {
-    const { net, device, phone } = setup([friend('k', 'Алуашка')], { key: true, device: true });
+  test('ИИ телефона ещё не скачан, а облачный недоступен — ждём, потом спросим ИИ телефона', async () => {
+    const { ai, device, phone } = setup([friend('k', 'Алуашка')], { ai: true, device: true });
     device.state = 'downloading';
-    net.geminiReply = { status: 429 };
+    ai.mode = 'unavailable';
     await phone.launch();
     assert.deepEqual(phone.state(), { k: [null, null, 'genderize'] });
     device.state = 'available';
     device.answers.set('алуашка', 'женщина');
     await phone.launch();
     assert.deepEqual(phone.state(), { k: ['f', 'device-ai', null] });
-    assert.equal(net.geminiCalls.length, 1);
+    assert.equal(ai.asked.length, 1);
   });
 
-  test('ИИ телефона сломался на человеке — не отмечаем, спрашиваем Gemini', async () => {
-    const { net, device, phone } = setup([friend('k', 'Kai')], { key: true, device: true });
+  test('ИИ телефона сломался на человеке — не отмечаем, спрашиваем облачный', async () => {
+    const { ai, device, phone } = setup([friend('k', 'Kai')], { ai: true, device: true });
     device.failOn.add('Kai');
-    net.gemini.set('kai', 'm');
+    ai.answers.set('kai', 'm');
     await phone.launch();
-    assert.deepEqual(phone.state(), { k: ['m', 'gemini', null] });
+    assert.deepEqual(phone.state(), { k: ['m', 'ai', null] });
   });
 
   test('ИИ телефона: одинаковые имена — один вопрос; в вопросе только имя', async () => {
     const { device, phone } = setup([friend('a', 'Саша Ким'), friend('b', 'Саша Цой'), friend('c', 'Саша')], { device: true });
     await phone.launch();
     assert.deepEqual(device.asked, ['Саша']);
-    assert.ok(phone.friends.every((f) => f.genderStage === 'device-ai'), 'без ключа Gemini дальше не идём');
+    assert.ok(phone.friends.every((f) => f.genderStage === 'device-ai'), 'без облачного ИИ дальше не идём');
   });
 
-  test('Gemini: только имена, ключ в заголовке (не в адресе), одинаковые — один раз', async () => {
-    const { net, phone } = setup([friend('a', 'Саша Ким', { phone: '+7 707 606 39 03' }), friend('b', 'Саша Цой'), friend('c', 'Сантехник Валя')], { key: true });
+  test('облачный ИИ: только имена, одинаковые — один раз', async () => {
+    const { ai, phone } = setup([friend('a', 'Саша Ким', { phone: '+7 707 606 39 03' }), friend('b', 'Саша Цой'), friend('c', 'Сантехник Валя')], { ai: true });
     await phone.launch();
-    assert.equal(net.geminiCalls.length, 1);
-    const call = net.geminiCalls[0];
-    assert.deepEqual(geminiNames(call.body!), ['Саша', 'Валя']);
-    assert.equal(call.headers?.['x-goog-api-key'], KEY);
-    assert.ok(!call.url.includes(KEY));
-    for (const secret of ['Ким', 'Цой', 'Сантехник', '707']) assert.ok(!call.body!.includes(secret), secret);
+    assert.deepEqual(ai.asked, [['Саша', 'Валя']]);
+    for (const secret of ['Ким', 'Цой', 'Сантехник', '707']) assert.ok(!ai.prompts[0].includes(secret), secret);
   });
 
-  test(`Gemini: не больше ${PASS_LIMITS.gemini} имён за запуск, по 25 в запросе`, async () => {
-    const { net, phone } = setup(Array.from({ length: 120 }, (_, i) => friend(`n${i}`, latinName(i))), { key: true });
-    await phone.launch(); // Genderize — 100, Gemini — те же 100
-    assert.deepEqual(net.geminiCalls.map((c) => geminiNames(c.body!).length), [25, 25, 25, 25]);
-    await phone.launch(); // Genderize — 20, Gemini — 20
-    assert.deepEqual(net.geminiCalls.map((c) => geminiNames(c.body!).length), [25, 25, 25, 25, 20]);
+  test(`облачный ИИ: не больше ${PASS_LIMITS.ai} имён за запуск, по ${AI_BATCH} в вопросе`, async () => {
+    const { net, ai, phone } = setup(Array.from({ length: 120 }, (_, i) => friend(`n${i}`, latinName(i))), { ai: true });
+    await phone.launch(); // Genderize — 100, облачный ИИ — те же 100
+    assert.deepEqual(ai.asked.map((n) => n.length), [25, 25, 25, 25]);
+    await phone.launch(); // Genderize — 20, облачный ИИ — 20
+    assert.deepEqual(ai.asked.map((n) => n.length), [25, 25, 25, 25, 20]);
     await phone.launch();
-    assert.equal(net.calls.length, 10 + 2 + 5, 'третий запуск — никого');
-    assert.equal(net.answered.gemini.size, 120);
-    assert.equal(net.maxAnswered('gemini'), 1);
+    assert.equal(net.calls.length + ai.asked.length, 10 + 2 + 5, 'третий запуск — никого');
+    assert.equal(ai.answered.size, 120);
+    assert.equal(ai.maxAnswered(), 1);
     assert.equal(net.maxAnswered('genderize'), 1);
-    assert.ok(phone.friends.every((f) => f.genderStage === 'gemini'));
+    assert.ok(phone.friends.every((f) => f.genderStage === 'ai'));
   });
 
-  test('Gemini: модель переименовали (404) — пробуем следующую', async () => {
-    const { net, phone } = setup([friend('k', 'Kai')], { key: true });
-    net.gemini.set('kai', 'm');
-    net.geminiByModel.set('gemini-flash-lite-latest', { status: 404, body: { error: { status: 'NOT_FOUND' } } });
+  test('облачный ИИ недоступен (нет ключей, все на паузе, нет сети) — никого не отмечаем, спросим в следующий раз', async () => {
+    const { net, ai, phone } = setup([friend('k', 'Kai')], { ai: true });
+    ai.mode = 'unavailable';
     await phone.launch();
-    assert.deepEqual(phone.state(), { k: ['m', 'gemini', null] });
-    assert.deepEqual(net.geminiCalls.map((c) => /models\/([^:]+)/.exec(c.url)![1]), ['gemini-flash-lite-latest', 'gemini-flash-latest']);
+    assert.deepEqual(phone.state(), { k: [null, null, 'genderize'] });
+    ai.mode = 'ok';
+    ai.answers.set('kai', 'm');
+    await phone.launch();
+    assert.deepEqual(phone.state(), { k: ['m', 'ai', null] });
+    assert.equal(net.calls.length, 1, 'Genderize при этом не переспрашиваем');
   });
 
-  test('Gemini: ни одной модели нет — пауза на неделю, никого не отмечаем', async () => {
-    const { net, phone } = setup([friend('k', 'Kai')], { key: true });
-    net.geminiReply = { status: 404 };
+  test('недоступен на первой пачке — остальные пачки в этот раз не спрашиваем', async () => {
+    const { ai, phone } = setup(Array.from({ length: 60 }, (_, i) => friend(`n${i}`, latinName(i))), { ai: true });
+    ai.mode = 'unavailable';
     await phone.launch();
-    assert.equal(phone.pause.gemini, T0 + BACKOFF_REFUSED);
+    assert.equal(ai.asked.length, 1);
+    assert.ok(phone.friends.every((f) => f.genderStage === 'genderize'));
+  });
+
+  test('сбой внутри модуля ИИ — как «недоступен», проход не падает', async () => {
+    const { ai, phone } = setup([friend('k', 'Kai')], { ai: true });
+    ai.mode = 'throw';
+    await phone.launch();
     assert.deepEqual(phone.state(), { k: [null, null, 'genderize'] });
   });
 
-  test('Gemini недоступен в стране — пауза на неделю; через неделю спросим снова', async () => {
-    const { net, phone } = setup([friend('k', 'Kai')], { key: true });
-    net.gemini.set('kai', 'm');
-    net.geminiReply = { status: 400, body: { error: { status: 'FAILED_PRECONDITION', message: 'User location is not supported for the API use.' } } };
+  test('облачный ИИ ответил не по делу — второй раз не спрашиваем, выбирает человек', async () => {
+    const { ai, phone } = setup([friend('k', 'Kai')], { ai: true });
+    ai.mode = 'unusable';
     await phone.launch();
-    assert.equal(phone.pause.gemini, T0 + BACKOFF_REFUSED);
-    net.geminiReply = null;
-    phone.now = T0 + 6 * DAY;
     await phone.launch();
-    assert.equal(net.geminiCalls.length, 1);
-    phone.now = T0 + 7 * DAY;
-    await phone.launch();
-    assert.deepEqual(phone.state(), { k: ['m', 'gemini', null] });
-    assert.equal(net.genderizeCalls.length, 1, 'Genderize при этом не переспрашиваем');
+    assert.deepEqual(phone.state(), { k: [null, null, 'ai'] });
+    assert.equal(ai.asked.length, 1);
   });
 
-  const geminiErrors: [string, Reply, number | undefined][] = [
-    ['лимит ключа (429) — сутки', { status: 429, body: { error: { status: 'RESOURCE_EXHAUSTED' } } }, BACKOFF_RATE_LIMIT],
-    ['неверный ключ (400) — неделя', { status: 400, body: { error: { status: 'INVALID_ARGUMENT', message: 'API key not valid' } } }, BACKOFF_REFUSED],
-    ['ключ отозван (403) — неделя', { status: 403, body: { error: { status: 'PERMISSION_DENIED' } } }, BACKOFF_REFUSED],
-    ['сбой сервиса (503) — час', { status: 503 }, BACKOFF_SERVER],
-    ['нет сети — без паузы', 'offline', undefined],
-  ];
-  for (const [title, reply, pause] of geminiErrors) {
-    test(`Gemini: ${title}, никого не отмечаем`, async () => {
-      const { net, phone } = setup([friend('k', 'Kai')], { key: true });
-      net.geminiReply = reply;
-      await phone.launch();
-      assert.equal(phone.pause.gemini, pause === undefined ? undefined : T0 + pause);
-      assert.deepEqual(phone.state(), { k: [null, null, 'genderize'] });
-    });
-  }
-
-  test('Gemini прислал непонятное — второй раз не спрашиваем, выбирает человек', async () => {
-    const { net, phone } = setup([friend('k', 'Kai')], { key: true });
-    net.geminiReply = { status: 200, body: { candidates: [{ content: { parts: [{ text: 'Извините, не могу' }] } }] } };
-    await phone.launch();
-    await phone.launch();
-    assert.deepEqual(phone.state(), { k: [null, null, 'gemini'] });
-    assert.equal(net.geminiCalls.length, 1);
-  });
-
-  test('без ключа Gemini и без ИИ телефона — после Genderize никуда не ходим, ждём', async () => {
+  test('без облачного ИИ и без ИИ телефона — после Genderize никуда не ходим, ждём', async () => {
     const { net, phone } = setup([friend('s', 'Саша')]);
     for (let i = 0; i < 3; i++) await phone.launch();
     assert.equal(net.calls.length, 1);
@@ -596,12 +579,33 @@ describe('ИИ: сначала телефона, потом Gemini', () => {
   });
 
   test('Genderize на паузе — к ИИ не перескакиваем: порядок ступеней не нарушаем', async () => {
-    const { net, device, phone } = setup([friend('k', 'Алуашка')], { key: true, device: true });
+    const { net, ai, device, phone } = setup([friend('k', 'Алуашка')], { ai: true, device: true });
     phone.backoff = JSON.stringify({ genderize: T0 + HOUR });
     await phone.launch();
-    assert.equal(net.calls.length, 0);
-    assert.equal(device.asked.length, 0);
+    assert.equal(net.calls.length + ai.asked.length + device.asked.length, 0);
     assert.deepEqual(phone.state(), { k: [null, null, 'names'] });
+  });
+
+  test('целиком: настоящий модуль ИИ — Gemini упёрся в лимит, ответил Groq, Gemini до сброса не трогаем', async () => {
+    const calls: { url: string; body: string }[] = [];
+    const aiFetch: AiFetch = async (url, init) => {
+      calls.push({ url, body: init.body ?? '' });
+      const reply = (status: number, body: unknown, h: Record<string, string> = {}) => ({ status, headers: { get: (n: string) => h[n.toLowerCase()] ?? null }, text: async () => JSON.stringify(body) });
+      if (url.includes('generativelanguage')) return reply(429, { error: { code: 429, status: 'RESOURCE_EXHAUSTED' } }, { 'retry-after': '3600' });
+      const prompt = JSON.parse(init.body!).messages.at(-1).content as string;
+      const names = prompt.split('\n').filter((l) => /^\d+: /.test(l)).map((l) => l.replace(/^\d+: /, ''));
+      const answers = names.map((n, i) => ({ i, g: n === 'Kai' ? 'm' : 'u' }));
+      return reply(200, { choices: [{ message: { content: `Вот: ${JSON.stringify({ answers })}` } }] });
+    };
+    let stored: string | null = null;
+    const realAi = createAi({ keys: { gemini: 'g', groq: 'q' }, fetch: aiFetch, now: () => T0, load: async () => (stored ? JSON.parse(stored) : null), save: async (st) => void (stored = JSON.stringify(st)), modelsPerProvider: 1 });
+    const net = new Net();
+    const phone = new Phone([friend('k', 'Kai'), friend('s', 'Саша Ким', { phone: '+7 707 111 22 33' })], { fetch: net.fetch, ai: realAi });
+    await phone.launch();
+    assert.deepEqual(phone.state(), { k: ['m', 'ai', null], s: [null, null, 'ai'] });
+    assert.deepEqual(calls.map((c) => new URL(c.url).hostname), ['generativelanguage.googleapis.com', 'api.groq.com']);
+    assert.ok(calls.every((c) => !/Ким|707/.test(c.body)), 'только имена');
+    assert.ok(JSON.parse(stored!).pauses['gemini/gemini-flash-lite-latest'].until === T0 + HOUR);
   });
 });
 
@@ -609,7 +613,7 @@ describe('ручной выбор главнее всего', () => {
   test('выбран вручную — ни одна ступень его не трогает, даже если база «не согласна»', async () => {
     const { net, device, phone } = setup(
       [friend('a', 'Саша', { gender: 'f', genderBy: 'manual' }), friend('b', 'Женя', { genderBy: 'manual' }), friend('c', 'Анна', { gender: 'm', genderBy: 'manual' })],
-      { key: true, device: true },
+      { ai: true, device: true },
     );
     for (let i = 0; i < 3; i++) await phone.launch();
     assert.equal(net.calls.length + device.asked.length, 0);
@@ -628,25 +632,25 @@ describe('ручной выбор главнее всего', () => {
     const f: GenderSubject = { id: 'a', name: 'Саша', phone: '', gender: 'm', genderBy: 'manual' };
     assert.equal(applyGenderUpdate(f, { id: 'a', gender: 'f', by: 'genderize' }, 'Саша'), f);
     const none: GenderSubject = { id: 'b', name: 'Женя', phone: '', genderBy: 'manual' };
-    assert.equal(applyGenderUpdate(none, { id: 'b', stage: 'gemini' }, 'Женя'), none);
+    assert.equal(applyGenderUpdate(none, { id: 'b', stage: 'ai' }, 'Женя'), none);
   });
 
   test('переименовали, пока шёл проход, — ответ про старое имя не применяется', () => {
     const f: GenderSubject = { id: 'a', name: 'Женя Петрова', phone: '', gender: 'f', genderBy: 'names' };
-    assert.equal(applyGenderUpdate(f, { id: 'a', gender: 'm', by: 'gemini' }, 'Женя'), f);
+    assert.equal(applyGenderUpdate(f, { id: 'a', gender: 'm', by: 'ai' }, 'Женя'), f);
     const g: GenderSubject = { id: 'b', name: 'Kai', phone: '', genderStage: 'names' };
-    assert.equal(applyGenderUpdate(g, { id: 'b', stage: 'gemini' }, 'Саша'), g, 'и ступень от старого имени — тоже');
+    assert.equal(applyGenderUpdate(g, { id: 'b', stage: 'ai' }, 'Саша'), g, 'и ступень от старого имени — тоже');
   });
 
   test('применение: пол — с источником и без ступени; ступень только растёт', () => {
     const f: GenderSubject = { id: 'a', name: 'Kai', phone: '', genderStage: 'genderize' };
-    assert.deepEqual(applyGenderUpdate(f, { id: 'a', gender: 'm', by: 'gemini' }, 'Kai'), { id: 'a', name: 'Kai', phone: '', gender: 'm', genderBy: 'gemini' });
+    assert.deepEqual(applyGenderUpdate(f, { id: 'a', gender: 'm', by: 'ai' }, 'Kai'), { id: 'a', name: 'Kai', phone: '', gender: 'm', genderBy: 'ai' });
     assert.equal(applyGenderUpdate(f, { id: 'a', stage: 'names' }, 'Kai'), f);
     assert.equal(applyGenderUpdate(f, { id: 'a', stage: 'genderize' }, 'Kai'), f);
-    assert.deepEqual(applyGenderUpdate(f, { id: 'a', stage: 'gemini' }, 'Kai').genderStage, 'gemini');
+    assert.deepEqual(applyGenderUpdate(f, { id: 'a', stage: 'ai' }, 'Kai').genderStage, 'ai');
     assert.equal(applyGenderUpdate(f, undefined, 'Kai'), f);
     const known: GenderSubject = { id: 'b', name: 'Kai', phone: '', gender: 'f', genderBy: 'genderize' };
-    assert.equal(applyGenderUpdate(known, { id: 'b', gender: 'm', by: 'gemini' }, 'Kai'), known, 'уже определённый не перезаписываем');
+    assert.equal(applyGenderUpdate(known, { id: 'b', gender: 'm', by: 'ai' }, 'Kai'), known, 'уже определённый не перезаписываем');
   });
 });
 
@@ -654,7 +658,7 @@ describe('сохранение друга', () => {
   test('новый друг: уверенное имя — сразу по базе; сомнительное — ждёт фонового прохода', () => {
     assert.deepEqual(pick(genderOnSave(undefined, friend('a', 'Аня'))), ['f', 'names', null]);
     assert.deepEqual(pick(genderOnSave(undefined, friend('b', 'Саша'))), [null, null, 'names']);
-    assert.deepEqual(pick(genderOnSave(undefined, friend('c', 'Саша', { gender: 'm', genderBy: 'gemini' }))), [null, null, 'names'], 'чужие поля из импорта не верим');
+    assert.deepEqual(pick(genderOnSave(undefined, friend('c', 'Саша', { gender: 'm', genderBy: 'ai' }))), [null, null, 'names'], 'чужие поля из импорта не верим');
   });
 
   test('имя то же — пол, найденный, пока была открыта форма, не теряется', () => {
@@ -666,15 +670,15 @@ describe('сохранение друга', () => {
   });
 
   test('имя то же — дошедшая ступень не откатывается', () => {
-    const stored = friend('a', 'Саша', { genderStage: 'gemini' });
-    assert.deepEqual(pick(genderOnSave(stored, { ...stored, notes: 'любит чай' })), [null, null, 'gemini']);
+    const stored = friend('a', 'Саша', { genderStage: 'ai' });
+    assert.deepEqual(pick(genderOnSave(stored, { ...stored, notes: 'любит чай' })), [null, null, 'ai']);
   });
 
   test('другое имя — всё, что знали, забываем и начинаем сначала', () => {
-    const stored = friend('a', 'Саша', { genderStage: 'gemini' });
+    const stored = friend('a', 'Саша', { genderStage: 'ai' });
     assert.deepEqual(pick(genderOnSave(stored, { ...stored, name: 'Саша Иванова' })), ['f', 'names', null]);
     assert.deepEqual(pick(genderOnSave(stored, { ...stored, name: 'Kai' })), [null, null, 'names']);
-    const found = friend('b', 'Kai', { gender: 'm', genderBy: 'gemini' });
+    const found = friend('b', 'Kai', { gender: 'm', genderBy: 'ai' });
     assert.deepEqual(pick(genderOnSave(found, { ...found, name: 'Robin' })), [null, null, 'names']);
   });
 
@@ -702,11 +706,17 @@ describe('хранение', () => {
     assert.deepEqual(load({ genderBy: 'genderize' }), [null, null, null], 'источник без пола');
     assert.deepEqual(load({ gender: 'x', genderBy: 'names' }), [null, null, null]);
     assert.deepEqual(load({ gender: 'f', genderBy: 'robot' }), [null, null, null]);
-    assert.deepEqual(load({ gender: 'f', genderBy: 'genderize', genderStage: 'gemini' }), ['f', 'genderize', null], 'ступень при поле не нужна');
+    assert.deepEqual(load({ gender: 'f', genderBy: 'genderize', genderStage: 'ai' }), ['f', 'genderize', null], 'ступень при поле не нужна');
     assert.deepEqual(load({ genderStage: 'device-ai' }), [null, null, 'device-ai']);
     assert.deepEqual(load({ genderStage: 'later' }), [null, null, null]);
     assert.deepEqual(load({ genderBy: 'manual', genderStage: 'genderize' }), [null, 'manual', null], '«Не указан» вручную');
     assert.deepEqual(load({ gender: 'm', genderBy: 'manual' }, 'Анна'), ['m', 'manual', null], 'ручной — даже если база не согласна');
+  });
+
+  test('старое «gemini» (когда облачным ИИ был только Gemini) читается как «ai»', () => {
+    const load = (extra: Record<string, unknown>) => pick(normalizeData({ friends: [{ ...friend('a', 'Kai'), ...extra }] }).friends[0]);
+    assert.deepEqual(load({ genderStage: 'gemini' }), [null, null, 'ai']);
+    assert.deepEqual(load({ gender: 'm', genderBy: 'gemini' }), ['m', 'ai', null]);
   });
 
   test('пол «по имени», с которым строгая база больше не согласна, — определяем заново', () => {
@@ -741,7 +751,7 @@ describe('фоновый запуск', () => {
   test('никого не нужно определять — даже паузы не читаем', async () => {
     let loads = 0;
     const sync = createGenderSync({ deps: { fetch: async () => assert.fail('сеть') }, load: async () => (loads++, {}), save: async () => {}, now: () => T0 });
-    assert.deepEqual(await sync.run([friend('a', 'Аня', { gender: 'f', genderBy: 'names' }), friend('b', 'Саша', { genderBy: 'manual' }), friend('c', 'Женя', { genderStage: 'gemini' })]), []);
+    assert.deepEqual(await sync.run([friend('a', 'Аня', { gender: 'f', genderBy: 'names' }), friend('b', 'Саша', { genderBy: 'manual' }), friend('c', 'Женя', { genderStage: 'ai' })]), []);
     assert.equal(loads, 0);
   });
 
@@ -767,7 +777,7 @@ describe('фоновый запуск', () => {
 
 describe('месяц жизни телефона', () => {
   test('каждый сервис спрашивает про каждое имя не больше одного раза; ручной выбор не трогается', async () => {
-    const { net, device, phone } = setup(
+    const { net, ai, device, phone } = setup(
       [
         friend('anna', 'Анна'),
         friend('sasha-f', 'Саша Иванова'),
@@ -778,10 +788,10 @@ describe('месяц жизни телефона', () => {
         friend('manual', 'Валя', { gender: 'f', genderBy: 'manual' }),
         friend('emoji', '🌸'),
       ],
-      { key: true, device: true },
+      { ai: true, device: true },
     );
     net.genderize.set('kai', 'm');
-    net.gemini.set('алуашка', 'f');
+    ai.answers.set('алуашка', 'f');
     device.state = 'unavailable';
 
     // 1. Открыли без интернета: только своя база.
@@ -795,7 +805,7 @@ describe('месяц жизни телефона', () => {
       alua: [null, null, 'names'],
       kai: [null, null, 'names'],
       manual: ['f', 'manual', null],
-      emoji: [null, null, 'gemini'], // отправлять нечего — сразу «выбери сам»
+      emoji: [null, null, 'ai'], // отправлять нечего — сразу «выбери сам»
     });
 
     // 2. Интернет есть, но лимит Genderize на сегодня кончился.
@@ -813,19 +823,19 @@ describe('месяц жизни телефона', () => {
     }
     assert.equal(net.calls.length, before);
 
-    // 4. На следующий день: Genderize знает Kai, остальных — Gemini (ИИ телефона нет).
+    // 4. На следующий день: Genderize знает Kai, остальных — облачный ИИ (ИИ телефона нет).
     net.genderizeReply = null;
     phone.now = pausedUntil;
     await phone.launch();
     assert.deepEqual(phone.state(), {
       anna: ['f', 'names', null],
       'sasha-f': ['f', 'names', null],
-      sasha: [null, null, 'gemini'],
-      zhenya: [null, null, 'gemini'],
-      alua: ['f', 'gemini', null],
+      sasha: [null, null, 'ai'],
+      zhenya: [null, null, 'ai'],
+      alua: ['f', 'ai', null],
       kai: ['m', 'genderize', null],
       manual: ['f', 'manual', null],
-      emoji: [null, null, 'gemini'],
+      emoji: [null, null, 'ai'],
     });
 
     // 5. Неделю открываем каждый день — ни одного запроса.
@@ -848,20 +858,20 @@ describe('месяц жизни телефона', () => {
       'sasha-f': ['f', 'names', null],
       sasha: ['m', 'manual', null],
       zhenya: ['f', 'names', null],
-      alua: ['f', 'gemini', null],
+      alua: ['f', 'ai', null],
       kai: ['m', 'genderize', null],
       manual: ['f', 'manual', null],
-      emoji: [null, null, 'gemini'],
+      emoji: [null, null, 'ai'],
       robin: ['m', 'device-ai', null],
     });
     assert.deepEqual(device.asked, ['Robin'], 'ИИ телефона спросили только про нового');
 
     assert.equal(net.maxAnswered('genderize'), 1);
-    assert.equal(net.maxAnswered('gemini'), 1);
-    const sentNames = [...net.genderizeCalls.flatMap((c) => genderizeNames(c.url)), ...net.geminiCalls.flatMap((c) => geminiNames(c.body!))];
+    assert.equal(ai.maxAnswered(), 1);
+    const sentNames = [...net.genderizeCalls.flatMap((c) => genderizeNames(c.url)), ...ai.asked.flat()];
     // Без сети и при лимите имена тоже уходили (ответа не было) — но наружу уходили только эти имена.
     assert.deepEqual([...new Set(sentNames)].sort(), ['Kai', 'Robin', 'Алуашка', 'Женя', 'Саша']);
-    const raw = net.calls.map((c) => decodeURIComponent(c.url) + (c.body ?? '')).join(' ');
+    const raw = [...net.calls.map((c) => decodeURIComponent(c.url)), ...ai.prompts].join(' ');
     for (const secret of ['Иванова', 'Ким', '999', '707', '🌸']) assert.ok(!raw.includes(secret), `«${secret}» не должно уходить`);
   });
 });

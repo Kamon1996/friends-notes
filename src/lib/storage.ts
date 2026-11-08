@@ -58,15 +58,19 @@ function normalizeFriend(v: unknown): Friend | null {
  * - пол «по имени», с которым своя база имён теперь не согласна (база стала строже), — тоже заново;
  * - ступень нужна, только пока пол не определён; «Не указан» вручную — это genderBy: 'manual' без пола.
  */
-const GENDER_SOURCES = ['manual', 'names', 'genderize', 'device-ai', 'gemini'];
-const GENDER_STAGES = ['names', 'genderize', 'device-ai', 'gemini'];
+const GENDER_SOURCES = ['manual', 'names', 'genderize', 'device-ai', 'ai'];
+const GENDER_STAGES = ['names', 'genderize', 'device-ai', 'ai'];
+/** Сборка, где облачным ИИ был только Gemini, писала «gemini». */
+const legacy = (v: unknown) => (v === 'gemini' ? 'ai' : v);
 
 function genderFields(v: Record<string, unknown>): Pick<Friend, 'gender' | 'genderBy' | 'genderStage'> {
   const gender = v.gender === 'f' || v.gender === 'm' ? v.gender : undefined;
-  const by = typeof v.genderBy === 'string' && GENDER_SOURCES.includes(v.genderBy) ? (v.genderBy as Friend['genderBy']) : undefined;
+  const rawBy = legacy(v.genderBy);
+  const rawStage = legacy(v.genderStage);
+  const by = typeof rawBy === 'string' && GENDER_SOURCES.includes(rawBy) ? (rawBy as Friend['genderBy']) : undefined;
   if (by === 'manual') return gender ? { gender, genderBy: by } : { genderBy: by };
   if (gender && by && (by !== 'names' || genderFromName(str(v.name)) === gender)) return { gender, genderBy: by };
-  if (!gender && typeof v.genderStage === 'string' && GENDER_STAGES.includes(v.genderStage)) return { genderStage: v.genderStage as Friend['genderStage'] };
+  if (!gender && typeof rawStage === 'string' && GENDER_STAGES.includes(rawStage)) return { genderStage: rawStage as Friend['genderStage'] };
   return {};
 }
 

@@ -14,6 +14,11 @@ export interface Release {
  */
 export const CHANGELOG: Release[] = [
   {
+    version: '1.27.0',
+    date: '2026-11-08',
+    items: ['Пол друзей определяется надёжнее: если один ИИ-сервис недоступен или упёрся в лимит, спрашиваем другой.'],
+  },
+  {
     version: '1.26.0',
     date: '2026-11-08',
     items: [
