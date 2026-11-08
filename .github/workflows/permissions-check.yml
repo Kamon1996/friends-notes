@@ -35,3 +35,16 @@ jobs:
           try "Черновик релиза" sh -c "gh api -X POST repos/$GH_REPO/releases -f tag_name=$N -f target_commitish=$GITHUB_SHA -F draft=true --jq .id > release.id"
           if [ -s release.id ]; then try "Удалить черновик" gh api -X DELETE "repos/$GH_REPO/releases/$(cat release.id)"; fi
           try "Релиз на существующий тег v1.24.0 (только чтение)" gh release view v1.24.0
+          # Опубликованный (не черновик) релиз и теги на старые коммиты: где именно GitHub отказывает.
+          git fetch -q --unshallow origin || true
+          for c in "$GITHUB_SHA" b7072cb cabe625 7c11706; do
+            sha=$(git rev-parse "$c^{commit}")
+            try "Тег через API на $c" gh api -X POST "repos/$GH_REPO/git/refs" -f ref="refs/tags/$N-$c" -f sha="$sha"
+            gh api -X DELETE "repos/$GH_REPO/git/refs/tags/$N-$c" >/dev/null 2>&1 || true
+            try "Опубликованный релиз на $c" sh -c "gh api -X POST repos/$GH_REPO/releases -f tag_name=$N-r-$c -f target_commitish=$sha -f name=check --jq .id > rel.id"
+            if [ -s rel.id ]; then gh api -X DELETE "repos/$GH_REPO/releases/$(cat rel.id)" >/dev/null 2>&1 || true; rm -f rel.id; fi
+            gh api -X DELETE "repos/$GH_REPO/git/refs/tags/$N-r-$c" >/dev/null 2>&1 || true
+          done
+          try "Опубликованный релиз с русским названием на текущий коммит" sh -c "gh api -X POST repos/$GH_REPO/releases -f tag_name=$N-ru -f target_commitish=$GITHUB_SHA -f name='Друзья проверка' -f body='Проверка' --jq .id > rel.id"
+          if [ -s rel.id ]; then gh api -X DELETE "repos/$GH_REPO/releases/$(cat rel.id)" >/dev/null 2>&1 || true; fi
+          gh api -X DELETE "repos/$GH_REPO/git/refs/tags/$N-ru" >/dev/null 2>&1 || true
