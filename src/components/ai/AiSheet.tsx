@@ -76,7 +76,6 @@ export function AiSheet({
           <Text style={[s.caption, { borderWidth: 1, borderColor: colors.hairline, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3 }]}>скоро</Text>
         </View>
       </View>
-      <Text style={[s.caption, { paddingHorizontal: 20, paddingTop: 10, lineHeight: 17 }]}>{words.privacy}</Text>
     </Sheet>
   );
 }
@@ -85,7 +84,6 @@ function greeting() {
   return {
     title: voice.say('menu.title') ?? 'Чем займёмся?',
     sub: voice.say('menu.sub') ?? 'Пройдусь по всем друзьям сама',
-    privacy: voice.say('menu.privacy.names') ?? 'Мне видны только имена — номера, даты и заметки остаются у тебя',
   };
 }
 
