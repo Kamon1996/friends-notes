@@ -146,7 +146,7 @@ export default function SettingsScreen() {
             <SwitchRow
               icon="calendar"
               label="Дни рождения в календаре телефона"
-              sub="Отдельный календарь «Друзья» в Samsung и Google Календаре на этом телефоне. Без напоминаний: о датах напомнит приложение."
+              sub="Отдельный календарь «Друзья» в Samsung и Google Календаре: дни рождения с возрастом на этот и два следующих года. Что телефон уже показывает из контактов или других календарей, не повторяется."
               value={!!settings.calendarSync}
               onChange={toggleCalendar}
             />
