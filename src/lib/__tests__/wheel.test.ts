@@ -4,7 +4,10 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
-import { WHEEL, WHEEL_STEP, revealAt, wheelAt, wheelDelta, wheelEnd, wheelPlace, wheelRows } from '../wheel';
+import { WHEEL, WHEEL_STEP, revealAt, wheelAt as wheelAtFull, wheelDelta, wheelEnd as wheelEndFull, wheelPlace, wheelRows } from '../wheel';
+
+const wheelAt = (t: number, doneAt: number, rows: number) => wheelAtFull(t, doneAt, rows, WHEEL.spin, WHEEL.delay, WHEEL.maxCruise);
+const wheelEnd = (doneAt: number, rows: number) => wheelEndFull(doneAt, rows, WHEEL.spin, WHEEL.delay, WHEEL.maxCruise);
 
 const near = (a: number, b: number, eps = 1e-6) => assert.ok(Math.abs(a - b) < eps, `${a} ≈ ${b}`);
 const half = WHEEL.spin / 2;

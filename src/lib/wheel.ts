@@ -50,7 +50,9 @@ function cruiseLaps(doneAt: number, tA: number, lap: number, maxCruise: number):
 }
 
 /** Ход колеса: где оно в момент `t` (в строках), если ответ пришёл в момент `doneAt` (не пришёл — бесконечность). */
-export function wheelAt(t: number, doneAt: number, rows: number, spin = WHEEL.spin, delay = WHEEL.delay, maxCruise = WHEEL.maxCruise): number {
+// Ворклеты получают все числа параметрами, без значений по умолчанию: плагин ворклетов не переносит на UI-поток
+// константы из выражений по умолчанию (`spin = WHEEL.spin`) — на телефоне это падение «Property 'WHEEL' doesn't exist».
+export function wheelAt(t: number, doneAt: number, rows: number, spin: number, delay: number, maxCruise: number): number {
   'worklet';
   if (rows <= 0 || t <= delay) return 0;
   const half = spin / 2;
@@ -72,7 +74,7 @@ export function wheelAt(t: number, doneAt: number, rows: number, spin = WHEEL.sp
 }
 
 /** Когда колесо остановится, с. */
-export function wheelEnd(doneAt: number, rows: number, spin = WHEEL.spin, delay = WHEEL.delay, maxCruise = WHEEL.maxCruise): number {
+export function wheelEnd(doneAt: number, rows: number, spin: number, delay: number, maxCruise: number): number {
   'worklet';
   const half = spin / 2;
   const tA = delay + half;
