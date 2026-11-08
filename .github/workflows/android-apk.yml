@@ -117,6 +117,30 @@ jobs:
             console.log("Telegram keys:", apiId && apiHash ? "set" : "MISSING", "· Sentry DSN:", dsn ? "set" : "MISSING", "· AI keys:", Object.entries(ai).map(([k, v]) => `${k} ${v ? "set" : "нет"}`).join(", "));
           '
 
+      # services.gradle.org иногда отвечает 504 или не успевает за 10 с — и сборка падает ещё до компиляции.
+      # Поэтому Gradle скачиваем заранее: с повторами и длинным таймаутом; сборка потом берёт его из ~/.gradle.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.gradle/wrapper
+          key: gradle-wrapper-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: gradle-wrapper-${{ runner.os }}-
+      - name: Warm up Gradle
+        run: |
+          # prebuild может дописать package.json и app.json — сохраняем их как есть, сборка должна взять исходные.
+          cp package.json "$RUNNER_TEMP/package.json.bak"; cp app.json "$RUNNER_TEMP/app.json.bak"
+          npx expo prebuild --platform android --no-install > /dev/null
+          cp "$RUNNER_TEMP/package.json.bak" package.json; cp "$RUNNER_TEMP/app.json.bak" app.json
+          sed -i 's/^networkTimeout=.*/networkTimeout=120000/' android/gradle/wrapper/gradle-wrapper.properties
+          grep distributionUrl android/gradle/wrapper/gradle-wrapper.properties
+          ok=""
+          for i in 1 2 3 4 5; do
+            if (cd android && ./gradlew --version --no-daemon -q > /dev/null); then ok=1; break; fi
+            echo "Gradle не скачался (попытка $i), ждём и пробуем ещё"; sleep $((i * 20))
+          done
+          # Папка android — только для прогрева: сборка делает свою, из app.json.
+          rm -rf android
+          [ -n "$ok" ] || { echo "::error::Не удалось скачать Gradle с services.gradle.org"; exit 1; }
+
       - name: Build on this machine
         env:
           # Собираем рабочую папку как есть (с подставленными ключами), а не последний коммит.
