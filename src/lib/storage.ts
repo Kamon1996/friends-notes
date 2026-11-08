@@ -1,4 +1,3 @@
-import { genderFromName } from './gender';
 import { DEFAULT_SETTINGS, EMPTY_DATA, type AppData, type Friend, type ImportantDate, type Reminder } from './types';
 
 /**
@@ -55,7 +54,6 @@ function normalizeFriend(v: unknown): Friend | null {
 /**
  * Пол, его источник и ступень — только допустимые и согласованные значения:
  * - пол без источника или источник «автоматически» без пола — не доверяем, определим заново;
- * - пол «по имени», с которым своя база имён теперь не согласна (база стала строже), — тоже заново;
  * - ступень нужна, только пока пол не определён; «Не указан» вручную — это genderBy: 'manual' без пола.
  */
 const GENDER_SOURCES = ['manual', 'names', 'genderize', 'device-ai', 'ai'];
@@ -69,7 +67,7 @@ function genderFields(v: Record<string, unknown>): Pick<Friend, 'gender' | 'gend
   const rawStage = legacy(v.genderStage);
   const by = typeof rawBy === 'string' && GENDER_SOURCES.includes(rawBy) ? (rawBy as Friend['genderBy']) : undefined;
   if (by === 'manual') return gender ? { gender, genderBy: by } : { genderBy: by };
-  if (gender && by && (by !== 'names' || genderFromName(str(v.name)) === gender)) return { gender, genderBy: by };
+  if (gender && by) return { gender, genderBy: by };
   if (!gender && typeof rawStage === 'string' && GENDER_STAGES.includes(rawStage)) return { genderStage: rawStage as Friend['genderStage'] };
   return {};
 }

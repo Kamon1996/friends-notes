@@ -110,14 +110,14 @@ const pickGender = ({ gender, genderBy, genderStage }: GenderFields): Omit<Gende
 /**
  * Пол при сохранении друга:
  * - выбран вручную — сохраняем как выбрали, и дальше автоматика его не трогает;
- * - имя то же — пол и ступень берём из сохранённого друга (фоновый проход мог определить пол, пока форма была открыта);
- * - новый друг или другое имя — всё, что знали о поле, сбрасываем и сразу пробуем свою базу имён; остальное доделает
- *   фоновый проход.
+ * - пол уже есть (определился сам) — оставляем как есть, даже если друга переименовали;
+ * - пола нет, имя то же — оставляем, до какой ступени дошли (фоновый проход мог продвинуться, пока была открыта форма);
+ * - пола нет, имя другое (или друг новый) — пробуем заново: сразу своя база имён, остальное доделает фоновый проход.
  */
 export function genderOnSave<T extends GenderFields>(prev: GenderFields | undefined, next: T): T {
   const { gender: _g, genderBy: _b, genderStage: _s, ...rest } = next;
   if (next.genderBy === 'manual') return { ...rest, ...(next.gender && { gender: next.gender }), genderBy: 'manual' } as T;
-  if (prev && prev.name === next.name) return { ...rest, ...pickGender(prev) } as T;
+  if (prev && (prev.gender || prev.genderBy === 'manual' || prev.name === next.name)) return { ...rest, ...pickGender(prev) } as T;
   const g = genderFromName(next.name);
   return (g ? { ...rest, gender: g, genderBy: 'names' } : { ...rest, genderStage: 'names' }) as T;
 }

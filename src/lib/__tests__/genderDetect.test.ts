@@ -629,6 +629,20 @@ describe('ручной выбор главнее всего', () => {
     assert.equal(net.calls.length, 0);
   });
 
+  test('не определился → переименовали → спрашиваем заново, один раз; определённый при переименовании не трогаем', async () => {
+    const { net, phone } = setup([friend('s', 'Саша'), friend('k', 'Алуашка')]);
+    net.genderize.set('алуашка', 'f');
+    net.genderize.set('kai', 'm');
+    await phone.launch();
+    assert.deepEqual(phone.state(), { s: [null, null, 'genderize'], k: ['f', 'genderize', null] });
+    phone.edit('s', (f) => ({ ...f, name: 'Kai' }));
+    phone.edit('k', (f) => ({ ...f, name: 'Саша' }));
+    await phone.launch();
+    await phone.launch();
+    assert.deepEqual(phone.state(), { s: ['m', 'genderize', null], k: ['f', 'genderize', null] });
+    assert.deepEqual(net.genderizeCalls.flatMap((c) => genderizeNames(c.url)).sort(), ['Kai', 'Алуашка', 'Саша']);
+  });
+
   test('выбрали вручную, пока шёл проход, — результат прохода не применяется', () => {
     const f: GenderSubject = { id: 'a', name: 'Саша', phone: '', gender: 'm', genderBy: 'manual' };
     assert.equal(applyGenderUpdate(f, { id: 'a', gender: 'f', by: 'genderize' }, 'Саша'), f);
@@ -675,12 +689,25 @@ describe('сохранение друга', () => {
     assert.deepEqual(pick(genderOnSave(stored, { ...stored, notes: 'любит чай' })), [null, null, 'ai']);
   });
 
-  test('другое имя — всё, что знали, забываем и начинаем сначала', () => {
+  test('пол не определился, а друга переименовали — пробуем заново по новому имени', () => {
     const stored = friend('a', 'Саша', { genderStage: 'ai' });
-    assert.deepEqual(pick(genderOnSave(stored, { ...stored, name: 'Саша Иванова' })), ['f', 'names', null]);
-    assert.deepEqual(pick(genderOnSave(stored, { ...stored, name: 'Kai' })), [null, null, 'names']);
+    assert.deepEqual(pick(genderOnSave(stored, { ...stored, name: 'Саша Иванова' })), ['f', 'names', null], 'база поняла сразу');
+    assert.deepEqual(pick(genderOnSave(stored, { ...stored, name: 'Kai' })), [null, null, 'names'], 'дальше — фоновый проход');
+    const waiting = friend('b', 'Женя', { genderStage: 'genderize' });
+    assert.deepEqual(pick(genderOnSave(waiting, { ...waiting, name: 'Женя Петров' })), ['m', 'names', null]);
+  });
+
+  test('пол уже определился — переименование его не трогает', () => {
     const found = friend('b', 'Kai', { gender: 'm', genderBy: 'ai' });
-    assert.deepEqual(pick(genderOnSave(found, { ...found, name: 'Robin' })), [null, null, 'names']);
+    assert.deepEqual(pick(genderOnSave(found, { ...found, name: 'Robin' })), ['m', 'ai', null]);
+    const byName = friend('c', 'Анна', { gender: 'f', genderBy: 'names' });
+    assert.deepEqual(pick(genderOnSave(byName, { ...byName, name: 'Саша' })), ['f', 'names', null], 'даже если новое имя неоднозначное');
+    assert.deepEqual(pick(genderOnSave(byName, { ...byName, name: 'Иван' })), ['f', 'names', null], 'и даже если база думает иначе');
+  });
+
+  test('«Не указан» вручную — переименование тоже не трогает', () => {
+    const none = friend('d', 'Саша', { genderBy: 'manual' });
+    assert.deepEqual(pick(genderOnSave(none, { ...friend('d', 'Саша Иванова') })), [null, 'manual', null]);
   });
 
   test('ручной выбор: сохраняется как выбран, ступень убирается; «Не указан» — тоже ручной', () => {
@@ -720,11 +747,9 @@ describe('хранение', () => {
     assert.deepEqual(load({ gender: 'm', genderBy: 'gemini' }), ['m', 'ai', null]);
   });
 
-  test('пол «по имени», с которым строгая база больше не согласна, — определяем заново', () => {
+  test('определённый пол после перезапуска остаётся, даже если имя потом сменили', () => {
     const load = (name: string, gender: string) => pick(normalizeData({ friends: [{ ...friend('a', name), gender, genderBy: 'names' }] }).friends[0]);
-    assert.deepEqual(load('Саша', 'm'), [null, null, null]);
-    assert.deepEqual(load('Женя Ким', 'f'), [null, null, null]);
-    assert.deepEqual(load('Анна', 'm'), [null, null, null]);
+    assert.deepEqual(load('Саша', 'm'), ['m', 'names', null]);
     assert.deepEqual(load('Анна', 'f'), ['f', 'names', null]);
   });
 });

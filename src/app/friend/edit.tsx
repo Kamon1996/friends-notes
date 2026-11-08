@@ -41,9 +41,10 @@ function FriendForm() {
   const [f, setF] = useState<Friend>(() => existing ?? blankFriend());
   const [addSocial, setAddSocial] = useState(false);
   const set = <K extends keyof Friend>(key: K, value: Friend[K]) => setF((prev) => ({ ...prev, [key]: value }));
-  // Пол: выбранный вручную — как есть; новое имя — сразу по своей базе (так же и сохранится); иначе — что определилось само.
+  // Пол: выбранный вручную или уже определённый — как есть, даже после переименования. Не определился и имя новое —
+  // сразу подсказка по своей базе (так же и сохранится), остальное доделает фоновый проход.
   const renamed = !existing || existing.name !== f.name.trim();
-  const shownGender = f.genderBy === 'manual' || !renamed ? f.gender : (genderFromName(f.name) ?? undefined);
+  const shownGender = f.genderBy === 'manual' || f.gender || !renamed ? f.gender : (genderFromName(f.name) ?? undefined);
   const genderNote = genderCaption(f, shownGender, renamed);
   const setGender = (g: Gender | undefined) => {
     if (!g && !shownGender && f.genderBy !== 'manual') return; // «Не указан» и так выбран — ничего не меняем
@@ -229,6 +230,7 @@ function FriendForm() {
 function genderCaption(f: Friend, shown: Gender | undefined, renamed: boolean): string | null {
   if (f.genderBy === 'manual') return null;
   if (shown) return 'Определено автоматически — можно поправить';
+  if (renamed && f.genderStage && f.genderStage !== 'names') return 'Попробую определить заново по новому имени';
   if (!renamed && f.genderStage && f.genderStage !== 'names') return 'Не удалось определить — выбери сам';
   return null;
 }

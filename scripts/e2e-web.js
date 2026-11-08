@@ -743,6 +743,22 @@ scenario('Пол в форме: «определено само» или «вы�
   assert.deepEqual(genderOf((await ui.data()).friends.find((f) => f.id === 's')), ['s', 'm', 'manual', null], 'фоновый проход не тронул ручной');
 }, { data: seed({ friends: [ANYA, F({ id: 's', name: 'Саша', genderStage: 'ai' }), F({ id: 'k', name: 'Алуашка', gender: 'f', genderBy: 'genderize' })] }) });
 
+scenario('Переименование: не определился — пробуем заново по новому имени; определённый пол остаётся', async ({ ui }) => {
+  await ui.go('/friend/edit?id=s');
+  await ui.see('Не удалось определить — выбери сам');
+  await ui.fill('Например, Аня', 'Саша Иванова');
+  await ui.see('Определено автоматически — можно поправить');
+  await ui.tap('Сохранить');
+  let data = await ui.waitData((x) => x.friends.find((f) => f.id === 's').name === 'Саша Иванова', 'не сохранилось');
+  assert.deepEqual(genderOf(data.friends.find((f) => f.id === 's')), ['s', 'f', 'names', null]);
+  await ui.go('/friend/edit?id=k');
+  await ui.fill('Например, Аня', 'Саша');
+  await ui.see('Определено автоматически — можно поправить');
+  await ui.tap('Сохранить');
+  data = await ui.waitData((x) => x.friends.find((f) => f.id === 'k').name === 'Саша', 'не сохранилось');
+  assert.deepEqual(genderOf(data.friends.find((f) => f.id === 'k')), ['k', 'f', 'genderize', null], 'определённый пол переименование не трогает');
+}, { data: seed({ friends: [ANYA, F({ id: 's', name: 'Саша', genderStage: 'ai' }), F({ id: 'k', name: 'Алуашка', gender: 'f', genderBy: 'genderize' })] }) });
+
 scenario('Новый друг: пол по имени сразу; сомнительное имя — в фон, один раз; «Не указан» вручную не перезаписывается', async ({ ui, page }) => {
   const asked = await genderizeStub(page);
   await ui.go('/friend/edit');
