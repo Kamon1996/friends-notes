@@ -37,7 +37,7 @@ export function buildIcs(data: AppData, now: Date = new Date()): string {
 
 /** Текст в iCalendar: обратный слэш, точка с запятой, запятая и перевод строки экранируются. */
 export function escapeText(text: string): string {
-  return text.replace(/\\/g, '\\\\').replace(/;/g, '\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+  return text.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
 }
 
 const encoder = new TextEncoder();

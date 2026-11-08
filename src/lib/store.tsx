@@ -38,6 +38,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<AppData>(EMPTY_DATA);
   const [ready, setReady] = useState(false);
   const dataRef = useRef(data);
+  /** Данные прочитаны и сохраняются: до этого синхронизировать нечего, иначе пустые данные сотрут календарь и уведомления. */
+  const liveRef = useRef(false);
   useEffect(() => {
     dataRef.current = data;
   }, [data]);
@@ -66,6 +68,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // Сохраняем и перепланируем уведомления после каждого изменения.
   useEffect(() => {
     if (!ready || !canPersist) return;
+    liveRef.current = true;
     AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(data)).catch((e) => console.warn('Не удалось сохранить', e));
     const t = setTimeout(() => syncNotifications(data), 400);
     // Календарь телефона обновляется реже: пересоздание событий тяжелее, чем расписание уведомлений.
@@ -79,7 +82,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // При возврате в приложение — пересчитываем окно уведомлений (их число ограничено).
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') {
+      if (state === 'active' && liveRef.current) {
         syncNotifications(dataRef.current);
         // Пока приложение было свёрнуто, события могли удалить прямо в календаре — проверим и вернём.
         markCalendarStale();

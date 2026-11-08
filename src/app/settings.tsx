@@ -1,16 +1,25 @@
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Linking, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { Alert, AppState, Linking, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { AccentDots } from '@/components/AccentPicker';
 import { DateField } from '@/components/DateField';
+import { Icon } from '@/components/Icon';
 import { Button, Card, Group, IconCircle, ListRow, SectionTitle, SwitchRow, useTheme } from '@/components/ui';
 import { calendarItems } from '@/lib/calendarPlan';
 import { APP_VERSION } from '@/lib/changelog';
 import { notify } from '@/lib/confirm';
 import { sendTestReport } from '@/lib/crashReports';
 import { loadEnrichment } from '@/lib/contacts';
-import { deviceCalendarAvailable, requestCalendarPermission } from '@/lib/deviceCalendar';
+import { calendarStatus, type CalendarSummary } from '@/lib/calendarSync';
+import {
+  calendarPermissionGranted,
+  calendarSummary,
+  deviceCalendarAvailable,
+  requestCalendarPermission,
+  subscribeCalendarSummary,
+  syncDeviceCalendar,
+} from '@/lib/deviceCalendar';
 import { applyEnrichment } from '@/lib/enrich';
 import { exportDates } from '@/lib/exportDates';
 import { notificationsAllowed, setupNotifications } from '@/lib/notifications';
@@ -62,19 +71,46 @@ export default function SettingsScreen() {
 
   const { settings } = data;
 
+  const [calendarAccess, setCalendarAccess] = useState<boolean | null>(null);
+  const [calendarInfo, setCalendarInfo] = useState<CalendarSummary | null>(null);
+  useEffect(() => {
+    if (!deviceCalendarAvailable) return;
+    calendarSummary().then(setCalendarInfo).catch(() => {});
+    // Доступ могли забрать в настройках телефона — проверяем при открытии и при возвращении в приложение.
+    const check = () => calendarPermissionGranted().then(setCalendarAccess).catch(() => {});
+    check();
+    const sub = AppState.addEventListener('change', (state) => state === 'active' && check());
+    const unsubscribe = subscribeCalendarSummary(setCalendarInfo);
+    return () => {
+      sub.remove();
+      unsubscribe();
+    };
+  }, []);
+  const calendarLine = calendarStatus(!!settings.calendarSync, calendarAccess, calendarInfo);
+
+  /** Запросить доступ; если система больше не спрашивает — предложить настройки телефона. */
+  const askCalendarAccess = async () => {
+    const res = await requestCalendarPermission();
+    setCalendarAccess(res.granted);
+    if (!res.granted && !res.canAskAgain) {
+      Alert.alert('Нет доступа к календарю', 'Разреши его в настройках телефона: Разрешения → Календарь.', [
+        { text: 'Отмена', style: 'cancel' },
+        { text: 'Открыть настройки', onPress: () => Linking.openSettings() },
+      ]);
+    }
+    return res.granted;
+  };
+
   const toggleCalendar = async (on: boolean) => {
     if (!on) {
       updateSettings({ calendarSync: false });
       return;
     }
-    if (await requestCalendarPermission()) {
-      updateSettings({ calendarSync: true });
-      return;
-    }
-    Alert.alert('Нет доступа к календарю', 'Разреши его в настройках телефона, и даты появятся в календаре.', [
-      { text: 'Отмена', style: 'cancel' },
-      { text: 'Открыть настройки', onPress: () => Linking.openSettings() },
-    ]);
+    if (await askCalendarAccess()) updateSettings({ calendarSync: true });
+  };
+
+  const fixCalendarAccess = async () => {
+    if (await askCalendarAccess()) syncDeviceCalendar(data);
   };
 
   const exportFile = async () => {
@@ -146,10 +182,29 @@ export default function SettingsScreen() {
             <SwitchRow
               icon="calendar"
               label="Дни рождения в календаре телефона"
-              sub="Отдельный календарь «Друзья» в Samsung и Google Календаре: дни рождения с возрастом на этот и два следующих года. Что телефон уже показывает из контактов или других календарей, не повторяется."
+              sub="Свой календарь «Друзья» в Samsung и Google Календаре: дни рождения с возрастом, без напоминаний."
               value={!!settings.calendarSync}
               onChange={toggleCalendar}
             />
+            {calendarLine && (
+              <View style={{ borderTopWidth: 1, borderTopColor: colors.separator, marginLeft: 48, paddingTop: 10, paddingBottom: 10, gap: 10 }}>
+                <View style={{ flexDirection: 'row', gap: 8, alignItems: 'flex-start' }} accessibilityLiveRegion="polite">
+                  <View style={{ marginTop: 1 }}>
+                    <Icon
+                      name={calendarLine.icon}
+                      size={16}
+                      color={calendarLine.tone === 'danger' ? colors.danger : calendarLine.tone === 'warn' ? colors.warn : calendarLine.icon === 'check' ? colors.success : colors.text3}
+                    />
+                  </View>
+                  <Text style={[s.muted, { flex: 1, lineHeight: 18 }, calendarLine.tone !== 'muted' && { color: calendarLine.tone === 'danger' ? colors.danger : colors.warn }]}>
+                    {calendarLine.text}
+                  </Text>
+                </View>
+                {calendarLine.needsAccess && (
+                  <Button title="Разрешить доступ" variant="secondary" onPress={fixCalendarAccess} style={{ alignSelf: 'flex-start', minHeight: 40, paddingVertical: 8 }} />
+                )}
+              </View>
+            )}
           </Card>
         )}
         <Group inset={62}>

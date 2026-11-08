@@ -36,7 +36,8 @@ export interface PlannedEvent {
   label: string;
 }
 
-const SIGNATURE = 'Из приложения «Друзья».';
+/** Подпись в описании каждого нашего события: по ней приложение отличает свои события от добавленных вручную. */
+export const CALENDAR_SIGNATURE = 'Из приложения «Друзья».';
 /** Високосный год для дат без года: от него считается повтор в файле .ics, и 29 февраля в нём существует. */
 export const BASE_YEAR = 2000;
 
@@ -52,7 +53,7 @@ export function calendarItems(data: AppData): CalendarItem[] {
       out.push({
         key: `b-${f.id}`,
         title: `🎂 ${f.name}`,
-        notes: known ? `Дата рождения: ${formatDate(f.birthday)}.\n${SIGNATURE}` : SIGNATURE,
+        notes: known ? `Дата рождения: ${formatDate(f.birthday)}.\n${CALENDAR_SIGNATURE}` : CALENDAR_SIGNATURE,
         date: known ? f.birthday : withBaseYear(f.birthday),
         yearly: true,
         leapDay: f.birthday.slice(5) === '02-29',
@@ -68,7 +69,7 @@ export function calendarItems(data: AppData): CalendarItem[] {
       out.push({
         key: `d-${d.id}`,
         title: `♥ ${d.title.trim()} · ${f.name}`,
-        notes: d.yearly && known ? `С ${parseISODate(d.date).getFullYear()} года.\n${SIGNATURE}` : SIGNATURE,
+        notes: d.yearly && known ? `С ${parseISODate(d.date).getFullYear()} года.\n${CALENDAR_SIGNATURE}` : CALENDAR_SIGNATURE,
         date: known || !d.yearly ? d.date : withBaseYear(d.date),
         yearly: d.yearly,
         leapDay: d.yearly && d.date.slice(5) === '02-29',
@@ -82,27 +83,32 @@ export function calendarItems(data: AppData): CalendarItem[] {
   return out;
 }
 
-/** Сколько лет показывать в календаре телефона: этот и два следующих. При каждом запуске окно сдвигается. */
-export const CALENDAR_YEARS = 3;
+/** Годы в календаре телефона: прошлый (чтобы недавние даты не пропадали сразу после Нового года), этот и два следующих. */
+export const CALENDAR_PAST_YEARS = 1;
+export const CALENDAR_FUTURE_YEARS = 2;
+
+export function calendarYears(today: ISODate): number[] {
+  const year = parseISODate(today).getFullYear();
+  const out: number[] = [];
+  for (let y = year - CALENDAR_PAST_YEARS; y <= year + CALENDAR_FUTURE_YEARS; y++) out.push(y);
+  return out;
+}
 
 /**
- * События для календаря телефона: каждая годовщина — отдельным событием на этот год и два следующих,
- * с возрастом или числом лет в названии («🎂 Аня Смирнова · 31 год»). 29 февраля в невисокосный год — 28-го.
- * Разовые важные даты попадают, только если они в этом окне.
+ * События для календаря телефона: каждая годовщина — отдельным событием на каждый год окна, с возрастом или числом
+ * лет в названии («🎂 Аня Смирнова · 31 год»). 29 февраля в невисокосный год — 28-го. Годовщины не раньше первого раза,
+ * разовые важные даты — только если попадают в окно.
  */
-export function planCalendarEvents(data: AppData, today: ISODate, years = CALENDAR_YEARS): PlannedEvent[] {
-  const first = parseISODate(today).getFullYear();
-  const last = first + years - 1;
+export function planCalendarEvents(data: AppData, today: ISODate, years = calendarYears(today)): PlannedEvent[] {
   const out: PlannedEvent[] = [];
   for (const item of calendarItems(data)) {
     const kind = item.key.startsWith('b-') ? 'birthday' : 'date';
     const base = { notes: item.notes, yearly: false, friendId: item.friendId, name: item.name, label: item.label, kind } as const;
     if (!item.yearly) {
-      const y = parseISODate(item.date).getFullYear();
-      if (y >= first && y <= last) out.push({ ...base, key: item.key, title: item.title, date: item.date });
+      if (years.includes(parseISODate(item.date).getFullYear())) out.push({ ...base, key: item.key, title: item.title, date: item.date });
       continue;
     }
-    for (let y = first; y <= last; y++) {
+    for (const y of years) {
       if (item.startYear && y < item.startYear) continue;
       const date = sameDayInYear(item.date, y);
       const n = item.startYear ? ageOn(`${item.startYear}${item.date.slice(4)}`, date) : 0;
@@ -133,19 +139,21 @@ export function titleMentions(title: string, phrase: string): boolean {
   return parts.length > 0 && parts.every((w) => inTitle.some((t) => sameWord(w, t)));
 }
 
-const BIRTHDAY_TITLE = /рожд|(^|[^\p{L}])др([^\p{L}]|$)|birthday|b-?day|🎂/iu;
+/** «День рождения», «ДР», «Д.Р.», «днюха», «именины», «день народження», birthday, bday, 🎂. */
+const BIRTHDAY_TITLE = /рожд|народж|нарадж|днюх|именин|(^|[^\p{L}])д\.?\s?р\.?(?=[^\p{L}]|$)|д\/р|birthday|b-?day|hbd|🎂/iu;
 
 /**
  * То же ли это событие, что и наше (дата уже совпала). День рождения: название — просто имя друга («Аня Смирнова»,
- * так подписывает события календарь «Дни рождения»), или имя вместе со словами «день рождения» («ДР Ани»).
- * Важная дата: имя и название даты («Годовщина свадьбы Ани» для «Свадьба»). «Ужин с Аней» в её день рождения — не дубль.
+ * так подписывает события календарь «Дни рождения»), или его имя либо фамилия вместе со словами «день рождения»
+ * («ДР Ани»). Важная дата: имя и название даты («Годовщина свадьбы Ани» для «Свадьба»).
+ * «Ужин с Аней» в её день рождения — не дубль: лишнее событие лучше потерянного дня рождения.
  */
 export function sameEvent(e: Pick<PlannedEvent, 'kind' | 'name' | 'label'>, otherTitle: string): boolean {
   const nameParts = words(e.name).filter((w) => w.length >= 2);
   if (!nameParts.length) return false;
   const inTitle = words(otherTitle);
   if (e.kind === 'birthday' && inTitle.length && inTitle.every((t) => nameParts.some((w) => sameWord(w, t)))) return true;
-  if (!titleMentions(otherTitle, nameParts[0])) return false;
+  if (!nameParts.some((w) => inTitle.some((t) => sameWord(w, t)))) return false;
   return e.kind === 'birthday' ? BIRTHDAY_TITLE.test(otherTitle) : titleMentions(otherTitle, e.label);
 }
 
@@ -157,20 +165,30 @@ export interface ContactBirthday {
   day: number;
 }
 
-const nameKey = (n: string) => n.trim().toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, ' ');
+/** Имя без учёта регистра, «ё» и порядка слов: «Смирнова Аня» — тот же человек, что «аня смирнова». */
+const nameKey = (n: string) => words(n).sort().join(' ');
+
+export interface CalendarPlanSplit {
+  /** Что положить в календарь. */
+  keep: PlannedEvent[];
+  /** Дни рождения, записанные у этого человека в контактах: календарь телефона покажет их сам. */
+  fromContacts: PlannedEvent[];
+  /** Такие же события уже есть в другом календаре. */
+  fromOthers: PlannedEvent[];
+}
 
 /**
- * Убирает события, которые телефон и так покажет: дни рождения друзей, у которых в контактах записан тот же день
- * (человек узнаётся по номеру или полному имени), и любые даты, если в другом календаре в тот же день уже есть
- * такое событие. Сомнительное совпадение не считаем дублем: лишнее событие лучше потерянного дня рождения.
+ * Делит события на те, что нужно добавить, и те, что телефон и так покажет: дни рождения друзей, у которых в контактах
+ * записан тот же день (человек узнаётся по номеру или полному имени), и события, которые в тот же день уже есть
+ * в другом календаре. Два одинаковых события у двух записей одного человека в приложении тоже сливаются в одно.
  */
-export function withoutDuplicates(
+export function splitDuplicates(
   planned: PlannedEvent[],
   data: AppData,
   others: OtherEvent[],
   contacts: ContactBirthday[],
   phoneKey: (phone: string) => string,
-): PlannedEvent[] {
+): CalendarPlanSplit {
   const inContacts = new Set<string>();
   for (const f of data.friends) {
     if (!f.birthday) continue;
@@ -184,10 +202,18 @@ export function withoutDuplicates(
   }
   const titlesByDate = new Map<ISODate, string[]>();
   for (const o of others) titlesByDate.set(o.date, [...(titlesByDate.get(o.date) ?? []), o.title]);
-  return planned.filter((e) => {
-    if (e.kind === 'birthday' && inContacts.has(e.friendId)) return false;
-    return !(titlesByDate.get(e.date) ?? []).some((t) => sameEvent(e, t));
-  });
+
+  const out: CalendarPlanSplit = { keep: [], fromContacts: [], fromOthers: [] };
+  const seen = new Set<string>();
+  for (const e of planned) {
+    if (e.kind === 'birthday' && inContacts.has(e.friendId)) out.fromContacts.push(e);
+    else if ((titlesByDate.get(e.date) ?? []).some((t) => sameEvent(e, t))) out.fromOthers.push(e);
+    else if (!seen.has(`${e.date}|${e.title}`)) {
+      seen.add(`${e.date}|${e.title}`);
+      out.keep.push(e);
+    }
+  }
+  return out;
 }
 
 /** Что сохранено о событии в календаре: его id и «подпись» содержимого, чтобы заметить изменения. */
