@@ -11,7 +11,7 @@ import type { Friend } from '../types';
 const near = (a: number, b: number, eps = 1e-6) => assert.ok(Math.abs(a - b) < eps, `${a} ≈ ${b}`);
 const LAP = 4200;
 const PULL = 26;
-const bent = (d: number) => bendPlace(d, 1, BEND.radius, 900);
+const bent = (d: number) => bendPlace(d, 1, 600, 900);
 
 describe('ход', () => {
   test('сначала стоит, потом оттягивается вниз', () => {
@@ -68,7 +68,7 @@ describe('место в списке', () => {
     for (const y of [0, 34, 99, 799]) assert.equal(wrapPlace(y, 0, 1000, 200), y);
   });
   test('ровный список — без наклона и масштаба', () => {
-    const p = bendPlace(130, 0, BEND.radius, 900);
+    const p = bendPlace(130, 0, 600, 900);
     assert.equal(p.y, 130);
     assert.equal(p.angle, 0);
     assert.equal(p.scale, 1);
@@ -143,6 +143,16 @@ describe('геометрия', () => {
     assert.equal(runGeometry(items, 34, 65, 700).bandTop, g.y[6]);
     const few = runGeometry([L, R(), R(true)], 34, 65, 400);
     assert.equal(few.bandTop, few.y[2]);
+  });
+  test('радиус — от высоты списка: крайняя строка наклонена одинаково на любом экране', () => {
+    const rows = Array.from({ length: 60 }, (_, i) => R(i === 59));
+    for (const viewH of [400, 520, 900, 1400]) {
+      const g = runGeometry(rows, 34, 65, viewH);
+      const edge = bendPlace(viewH / 2, 1, g.radius, 900);
+      near(Math.abs(edge.angle), BEND.edgeAngle, 1e-6);
+      assert.ok(g.radius >= BEND.minRadius);
+    }
+    assert.equal(runGeometry(rows, 34, 65, 100).radius, BEND.minRadius, 'на крошечном экране — не меньше минимума');
   });
   test('круг — весь список, но не меньше экрана: короткий список уходит целиком и возвращается снизу', () => {
     const long = Array.from({ length: 40 }, (_, i) => R(i === 39));

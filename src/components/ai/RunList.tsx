@@ -236,7 +236,7 @@ const RunEntry = memo(function RunEntry({
   const { colors, fonts, scheme } = useTheme();
   const y = geo.y[index] ?? 0;
   const h = geo.h[index] ?? 0;
-  const { lap, mid, row } = geo;
+  const { lap, mid, row, radius } = geo;
   const above = BEND.above * row;
   const isRow = item.kind === 'row';
   // Карточка группы гаснет, пока список изогнут: строки едут по одной. Цвета — здесь, на UI-потоке только числа.
@@ -256,7 +256,7 @@ const RunEntry = memo(function RunEntry({
           }
         : {};
     if (!visible) return { opacity: 0, transform: OFF, ...colorsNow };
-    const b = bendPlace(p + h / 2 - mid, e, BEND.radius, PERSPECTIVE);
+    const b = bendPlace(p + h / 2 - mid, e, radius, PERSPECTIVE);
     const ty = b.y - h / 2;
     return {
       opacity: 1,

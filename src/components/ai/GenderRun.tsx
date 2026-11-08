@@ -334,7 +334,7 @@ export function GenderRun({ listTop, onClose }: { listTop: number; onClose: () =
           overflow: 'hidden',
           backgroundColor: ready ? colors.bg : 'transparent',
         }}
-        onLayout={(e) => setViewH(e.nativeEvent.layout.height || screenH - listTop)}
+        onLayout={(e) => setViewH((v) => v || e.nativeEvent.layout.height || screenH - listTop)} // первый замер — на весь ход
       >
         {firstFriend?.kind === 'row' && !sizes && (
           <RunProbe friend={firstFriend.friend} today={today} zodiac={zodiacShown(data.settings)} onMeasure={(label, row) => setSizes({ label, row })} />
