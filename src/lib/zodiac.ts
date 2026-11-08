@@ -1,5 +1,5 @@
 import { accentById, type Scheme } from './theme';
-import type { AccentId, ISODate } from './types';
+import type { AccentId, ISODate, Settings } from './types';
 
 /**
  * Знак зодиака по дню рождения (тропический зодиак, общепринятые границы). Год не нужен — знак зависит только
@@ -80,3 +80,6 @@ export function zodiacColors(element: ZodiacElement, scheme: Scheme): { icon: st
   const a = accentById(ELEMENT_ACCENT[element])[scheme];
   return { icon: a.accent, text: a.accentText, bg: a.soft };
 }
+
+/** Показывать ли знаки: по умолчанию да, выключается в настройках. */
+export const zodiacShown = (settings: Pick<Settings, 'showZodiac'>) => settings.showZodiac !== false;

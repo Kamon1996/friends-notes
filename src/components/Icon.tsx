@@ -3,6 +3,7 @@ import Svg, { Circle, Path, Rect } from 'react-native-svg';
 
 export type IconName =
   | 'archive'
+  | 'stars'
   | 'calendar'
   | 'people'
   | 'person'
@@ -220,6 +221,15 @@ const PATHS: Record<IconName, ReactNode> = {
     <>
       <Rect x={9} y={9} width={11} height={11} rx={2} />
       <Path d="M5 15V5a1 1 0 0 1 1-1h10" />
+    </>
+  ),
+  stars: (
+    <>
+      <Path d="M5.5 17.5L9 9.5l6 3 3.5-7" strokeWidth={1.2} />
+      <Circle cx={5.5} cy={17.5} r={1.7} />
+      <Circle cx={9} cy={9.5} r={1.7} />
+      <Circle cx={15} cy={12.5} r={1.7} />
+      <Circle cx={18.5} cy={5.5} r={1.7} />
     </>
   ),
   archive: (

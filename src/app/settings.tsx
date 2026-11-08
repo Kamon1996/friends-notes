@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Alert, AppState, Linking, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { Alert, AppState, Linking, Platform, Pressable, ScrollView, Switch, Text, View } from 'react-native';
 
 import { AccentDots } from '@/components/AccentPicker';
 import { DateField } from '@/components/DateField';
@@ -27,6 +27,7 @@ import { exportDates } from '@/lib/exportDates';
 import { notificationsAllowed, setupNotifications } from '@/lib/notifications';
 import { daysBetween, formatDate, toISODate, todayISO } from '@/lib/dates';
 import { useStore } from '@/lib/store';
+import { zodiacShown } from '@/lib/zodiac';
 import { accentById } from '@/lib/theme';
 import type { ThemeMode } from '@/lib/types';
 
@@ -238,6 +239,22 @@ export default function SettingsScreen() {
             trailing={<AccentDots light={settings.accentLight} dark={settings.accentDark} />}
             chevron
             onPress={() => router.push('/appearance')}
+          />
+          <ListRow
+            leading={<IconCircle icon="stars" />}
+            title="Знаки зодиака"
+            subtitle="В карточке, в списке и в «Сегодня»"
+            trailing={
+              <Switch
+                value={zodiacShown(settings)}
+                onValueChange={(on) => updateSettings({ showZodiac: on })}
+                trackColor={{ true: colors.accent, false: colors.checkbox }}
+                thumbColor="#fff"
+                accessibilityLabel="Показывать знаки зодиака"
+                {...({ activeThumbColor: '#fff' } as object)}
+              />
+            }
+            onPress={() => updateSettings({ showZodiac: !zodiacShown(settings) })}
           />
         </Group>
       </View>

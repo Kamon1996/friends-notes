@@ -49,3 +49,15 @@ export function ZodiacChip({ birthday }: { birthday: string | null | undefined }
     </View>
   );
 }
+
+/** Маленький знак после даты в списках — нейтральным цветом, чтобы список не пестрел. */
+export function ZodiacMark({ birthday, color, size = 12 }: { birthday: string | null | undefined; color: string; size?: number }) {
+  const sign = zodiacSign(birthday);
+  if (!sign) return null;
+  return (
+    <View accessible accessibilityLabel={`Знак зодиака: ${sign.name}`}>
+      <ZodiacGlyph sign={sign.id} size={size} color={color} strokeWidth={2.2} />
+    </View>
+  );
+}
+

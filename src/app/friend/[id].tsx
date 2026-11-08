@@ -13,6 +13,7 @@ import { PREF_FIELDS, PrefSheet, type PrefField } from '@/components/PrefSheet';
 import { Button, Empty, Group, IconButton, IconCircle, ListRow, SectionTitle, Tag, useTheme } from '@/components/ui';
 import { ageOn, daysBetween, formatDate, hasYear, nextAnniversary, plural, relativeDay, todayISO } from '@/lib/dates';
 import { mergeLinks } from '@/lib/socials';
+import { zodiacShown } from '@/lib/zodiac';
 import { useFriend, useStore } from '@/lib/store';
 
 export default function FriendScreen() {
@@ -86,7 +87,7 @@ export default function FriendScreen() {
               ) : (
                 <Tag text={relativeDay(nextBirthday, today)} tone={diff !== null && diff <= 7 ? 'accent' : 'neutral'} />
               )}
-              <ZodiacChip birthday={friend.birthday} />
+              {zodiacShown(data.settings) && <ZodiacChip birthday={friend.birthday} />}
             </View>
           </>
         )}

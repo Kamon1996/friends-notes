@@ -198,6 +198,22 @@ scenario('Карточка: знак зодиака чипом рядом с о�
   await ui.notSee('Знак зодиака', { label: true });
 }, { data: seed({ friends: [ANYA, IGOR, MAMA, F({ id: 'x', name: 'Без даты' })] }) });
 
+scenario('Знаки зодиака: маленький знак в списке и в «Сегодня»; переключатель в настройках прячет их везде', async ({ ui }) => {
+  await ui.go('/friends');
+  await ui.see('Знак зодиака: Рак', { label: true }); // Мама, 20 июля
+  await ui.go('/');
+  await ui.see('Знак зодиака: Близнецы', { label: true }); // у Ани день рождения сегодня
+  await ui.see('День рождения ·');
+  await ui.go('/settings');
+  await ui.see('Знаки зодиака');
+  await ui.tap('Показывать знаки зодиака');
+  await ui.waitData((x) => x.settings.showZodiac === false, 'переключатель не сохранился');
+  for (const path of ['/friends', '/', '/friend/c']) {
+    await ui.go(path);
+    await ui.notSee('Знак зодиака', { label: true });
+  }
+});
+
 scenario('Карточка: звезда поднимает друга в «Избранные»', async ({ ui, page }) => {
   await ui.go('/friends');
   await ui.tap('Мама');

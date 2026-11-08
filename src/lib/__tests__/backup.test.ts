@@ -180,8 +180,8 @@ describe('восстановление: чужие и испорченные ф�
 describe('настройки из копии', () => {
   test('только известные поля и допустимые значения', () => {
     assert.deepEqual(
-      sanitizeSettings({ theme: 'neon', accentLight: 'gold', accentDark: 'plum', eventTime: '25:00', eventDayBefore: 'да', crashReports: false, calendarSync: true, evil: '<script>' }),
-      { ...DEFAULT_SETTINGS, accentDark: 'plum', crashReports: false, calendarSync: true },
+      sanitizeSettings({ theme: 'neon', accentLight: 'gold', accentDark: 'plum', eventTime: '25:00', eventDayBefore: 'да', crashReports: false, calendarSync: true, showZodiac: false, evil: '<script>' }),
+      { ...DEFAULT_SETTINGS, accentDark: 'plum', crashReports: false, calendarSync: true, showZodiac: false },
     );
     assert.deepEqual(sanitizeSettings(null), DEFAULT_SETTINGS);
     assert.equal(sanitizeSettings({ eventTime: '07:05' }).eventTime, '07:05');

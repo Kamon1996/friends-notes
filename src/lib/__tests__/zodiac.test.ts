@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { ACCENTS } from '../theme';
-import { ELEMENT_ACCENT, ELEMENT_NAME, ZODIAC, zodiacColors, zodiacRange, zodiacSign } from '../zodiac';
+import { ELEMENT_ACCENT, ELEMENT_NAME, ZODIAC, zodiacColors, zodiacRange, zodiacShown, zodiacSign } from '../zodiac';
 
 const name = (d: string | null) => zodiacSign(d)?.name ?? null;
 
@@ -84,5 +84,11 @@ test('текст чипа читается на его фоне: контрас�
       assert.ok(contrast(c.text, c.bg) >= 4.5, `${el}/${scheme}: ${contrast(c.text, c.bg).toFixed(2)}`);
     }
   }
+});
+
+test('знаки показываются по умолчанию и прячутся только явным «нет»', () => {
+  assert.equal(zodiacShown({}), true);
+  assert.equal(zodiacShown({ showZodiac: true }), true);
+  assert.equal(zodiacShown({ showZodiac: false }), false);
 });
 

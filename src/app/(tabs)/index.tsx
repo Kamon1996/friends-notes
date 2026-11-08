@@ -12,6 +12,7 @@ import { daysBetween, formatDateLong, formatDayShort, plural, relativeDay, today
 import { upcomingItems, type UpcomingItem } from '@/lib/events';
 import { useStore } from '@/lib/store';
 import type { Friend } from '@/lib/types';
+import { zodiacShown } from '@/lib/zodiac';
 
 /** Сколько просроченных показывать на ленте; остальные — во вкладке «Напоминания». */
 const OVERDUE_LIMIT = 5;
@@ -129,7 +130,7 @@ export default function UpcomingScreen() {
             case 'today':
               return (
                 <View style={{ paddingHorizontal: 20, paddingBottom: 8 }}>
-                  <TodayCard friend={row.friend} events={row.events} />
+                  <TodayCard friend={row.friend} events={row.events} zodiac={zodiacShown(data.settings)} />
                 </View>
               );
             case 'todayRow':

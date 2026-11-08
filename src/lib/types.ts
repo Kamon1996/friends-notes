@@ -107,6 +107,8 @@ export interface Settings {
   calendarSync?: boolean;
   /** Когда последний раз сохраняли резервную копию в файл (ISO). */
   lastBackupAt?: string;
+  /** Показывать знаки зодиака (карточка друга, список, «Сегодня»). Нет значения — показывать. */
+  showZodiac?: boolean;
 }
 
 export interface AppData {

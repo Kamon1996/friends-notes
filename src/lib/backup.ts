@@ -92,6 +92,7 @@ export function sanitizeSettings(raw: unknown): Settings {
     accentDark: accent(s.accentDark, DEFAULT_SETTINGS.accentDark),
     crashReports: typeof s.crashReports === 'boolean' ? s.crashReports : DEFAULT_SETTINGS.crashReports,
     ...(typeof s.calendarSync === 'boolean' ? { calendarSync: s.calendarSync } : {}),
+    ...(typeof s.showZodiac === 'boolean' ? { showZodiac: s.showZodiac } : {}),
   };
 }
 

@@ -7,6 +7,7 @@ import { Avatar } from '@/components/Avatar';
 import { Icon } from '@/components/Icon';
 import { SelectionBar } from '@/components/SelectionBar';
 import { TelegramImportCard } from '@/components/TelegramImportCard';
+import { ZodiacMark } from '@/components/ZodiacGlyph';
 import { Button, Chip, Empty, Fab, GroupedRow, IconButton, ListRow, ScreenHeader, SearchField, Tag, useTheme } from '@/components/ui';
 import { confirm } from '@/lib/confirm';
 import { ageOn, daysBetween, formatDate, hasYear, nextAnniversary, plural, relativeDay, todayISO } from '@/lib/dates';
@@ -14,6 +15,7 @@ import { buildFriendList, type FriendSort } from '@/lib/friendList';
 import { useStore } from '@/lib/store';
 import { telegramAvailable } from '@/lib/telegramClient';
 import type { Friend } from '@/lib/types';
+import { zodiacShown } from '@/lib/zodiac';
 
 export default function FriendsScreen() {
   const { data, deleteFriends, updateFriends } = useStore();
@@ -114,6 +116,7 @@ export default function FriendsScreen() {
                     today={today}
                     selected={selected.has(item.friend.id)}
                     selecting={selecting}
+                    zodiac={zodiacShown(data.settings)}
                     onPress={selecting ? () => toggle(item.friend.id) : () => router.push(`/friend/${item.friend.id}`)}
                     onLongPress={() => toggle(item.friend.id)}
                   />
@@ -190,11 +193,14 @@ function FriendRow({
   today,
   selected,
   selecting,
+  zodiac,
   onPress,
   onLongPress,
 }: {
   friend: Friend;
   today: string;
+  /** Показывать маленький знак зодиака после даты. */
+  zodiac: boolean;
   selected: boolean;
   selecting: boolean;
   onPress: () => void;
@@ -237,7 +243,14 @@ function FriendRow({
         </View>
       }
       title={<Text style={s.name} numberOfLines={1}>{friend.name}</Text>}
-      subtitle={<Text style={[s.muted, { fontVariant: ['tabular-nums'] }]} numberOfLines={1}>{sub}</Text>}
+      subtitle={
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+          <Text style={[s.muted, { fontVariant: ['tabular-nums'], flexShrink: 1 }]} numberOfLines={1}>
+            {sub}
+          </Text>
+          {zodiac && friend.birthday ? <ZodiacMark birthday={friend.birthday} color={colors.text3} /> : null}
+        </View>
+      }
       trailing={
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           {friend.muted && <Icon name="bellOff" size={16} color={colors.text3} />}

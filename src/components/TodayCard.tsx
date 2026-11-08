@@ -3,9 +3,11 @@ import { Pressable, Text, View } from 'react-native';
 
 import { plural } from '@/lib/dates';
 import type { Friend } from '@/lib/types';
+import { zodiacSign } from '@/lib/zodiac';
 import { Avatar } from './Avatar';
 import { contactActions, openExternal } from './ContactButtons';
 import { Icon } from './Icon';
+import { ZodiacGlyph } from './ZodiacGlyph';
 import { useTheme } from './ui';
 
 export interface TodayEvent {
@@ -22,7 +24,7 @@ const yearsText = (n: number) => `${n} ${plural(n, 'год', 'года', 'лет
  * Карточка «Сегодня»: тёплая подложка, имя серифом и крупная цифра возраста —
  * единственное украшение на экране. Все сегодняшние события человека собраны в одной карточке.
  */
-export function TodayCard({ friend, events }: { friend: Friend; events: TodayEvent[] }) {
+export function TodayCard({ friend, events, zodiac = true }: { friend: Friend; events: TodayEvent[]; zodiac?: boolean }) {
   const { colors, fonts } = useTheme();
   const actions = contactActions(friend);
   const call = actions.find((a) => a.key === 'call');
@@ -49,11 +51,22 @@ export function TodayCard({ friend, events }: { friend: Friend; events: TodayEve
           <Text style={{ fontFamily: fonts.display, fontSize: 20, lineHeight: 24, color: colors.text }} numberOfLines={2}>
             {friend.name}
           </Text>
-          {lines.map((line, i) => (
-            <Text key={i} style={{ fontFamily: fonts.body, fontSize: 13, lineHeight: 18, color: colors.text2 }} numberOfLines={1}>
-              {line}
-            </Text>
-          ))}
+          {lines.map((line, i) => {
+            const sign = zodiac && events[i].kind === 'birthday' ? zodiacSign(friend.birthday) : null;
+            return (
+              <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                <Text style={{ fontFamily: fonts.body, fontSize: 13, lineHeight: 18, color: colors.text2, flexShrink: 1 }} numberOfLines={1}>
+                  {sign ? `${line} · ` : line}
+                </Text>
+                {sign && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }} accessible accessibilityLabel={`Знак зодиака: ${sign.name}`}>
+                    <ZodiacGlyph sign={sign.id} size={12} color={colors.text2} strokeWidth={2.2} />
+                    <Text style={{ fontFamily: fonts.body, fontSize: 13, lineHeight: 18, color: colors.text2 }}>{sign.name}</Text>
+                  </View>
+                )}
+              </View>
+            );
+          })}
         </View>
         {big ? (
           <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 3 }}>
