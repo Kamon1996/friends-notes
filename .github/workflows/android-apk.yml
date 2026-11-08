@@ -163,10 +163,12 @@ jobs:
           if [ "$BUNDLE" = "true" ]; then FILE="friends-notes-$VERSION.aab"; cp friends-notes.aab "$FILE"; else FILE="friends-notes-$VERSION.apk"; cp friends-notes.apk "$FILE"; fi
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             # Через gh api, а не gh release create: при отказе GitHub показывает полный ответ, а не одну строку.
-            # GitHub иногда отвечает 403 «Resource not accessible by integration» без видимой причины — пробуем трижды.
+            # Тег — на текущую вершину ветки, а не на коммит сборки: пока шла сборка, в ветку могли прийти коммиты
+            # с изменёнными workflow, и тогда робот Actions не может поставить тег на старый коммит (403 «Resource not
+            # accessible by integration» — GitHub считает это изменением workflow). Коммит сборки — в описании релиза.
             create_release() {
               gh api -X POST "repos/$GITHUB_REPOSITORY/releases" \
-                -f tag_name="$TAG" -f target_commitish="$GITHUB_SHA" -f name="Друзья $VERSION" \
+                -f tag_name="$TAG" -f target_commitish="$GITHUB_REF_NAME" -f name="Друзья $VERSION" \
                 -f body="APK собран в GitHub Actions из коммита $GITHUB_SHA. Подпись та же, что у сборок EAS: ставится поверх прошлой версии." >release.log 2>&1
             }
             created=false
@@ -189,7 +191,7 @@ jobs:
                 cat release.log
                 echo '```'
                 echo ""
-                echo "Что проверить: Settings → Rules → Rulesets (правило на теги мешает роботу Actions создать тег) и Settings → Actions → General → Workflow permissions («Read and write permissions»)."
+                echo "Опубликовать без пересборки: коммит со словами «[publish $GITHUB_RUN_ID]» в первой строке (workflow «Publish APK»)."
               } >> "$GITHUB_STEP_SUMMARY"
               echo "::error::Не удалось создать релиз $TAG, сборка сохранена артефактом: $ARTIFACT_URL"
               exit 1

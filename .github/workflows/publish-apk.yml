@@ -52,8 +52,10 @@ jobs:
           cp built/friends-notes.apk "$FILE"
           echo "Запуск $RUN_ID → коммит $SHA → версия $VERSION"
           if ! gh release view "$TAG" >/dev/null 2>&1; then
+            # Тег — на вершину ветки: на старый коммит робот Actions тег поставить не может, если после него менялись
+            # файлы workflow (403). Коммит сборки — в описании.
             gh api -X POST "repos/$GH_REPO/releases" \
-              -f tag_name="$TAG" -f target_commitish="$SHA" -f name="Друзья $VERSION" \
+              -f tag_name="$TAG" -f target_commitish="$GITHUB_REF_NAME" -f name="Друзья $VERSION" \
               -f body="APK собран в GitHub Actions (запуск $RUN_ID) из коммита $SHA. Подпись та же, что у сборок EAS: ставится поверх прошлой версии." >/dev/null
           fi
           gh release upload "$TAG" "$FILE" --clobber
