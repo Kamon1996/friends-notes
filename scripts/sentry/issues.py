@@ -12,6 +12,7 @@ list печатает для каждой проблемы: статус, заг
 коммитом и версией: если ошибка повторится в новой версии, Sentry сам вернёт её в открытые (regression).
 В GitHub Actions всё пишется и в итог запуска.
 """
+from datetime import datetime, timedelta, timezone
 import argparse, json, os, sys, urllib.error, urllib.parse, urllib.request
 
 ORG, PROJECT = 'testorg-oz', 'friends-notes'
@@ -92,7 +93,11 @@ def list_issues(a):
     if a.issue:
         issues = [get(f'/organizations/{ORG}/issues/{a.issue}/')]
     else:
-        issues = get(f'/projects/{ORG}/{PROJECT}/issues/', {'query': a.query, 'statsPeriod': f'{a.days}d', 'limit': a.limit, 'sort': 'date'})
+        # Sentry принимает только периоды 24h и 14d (иначе 400); точнее отсекаем сами по lastSeen.
+        period = '24h' if a.days <= 1 else '14d'
+        issues = get(f'/projects/{ORG}/{PROJECT}/issues/', {'query': a.query, 'statsPeriod': period, 'limit': a.limit, 'sort': 'date'})
+        since = (datetime.now(timezone.utc) - timedelta(days=a.days)).strftime('%Y-%m-%dT%H:%M:%S')
+        issues = [it for it in issues if (it.get('lastSeen') or '') >= since]
     md = [f'# Sentry · {PROJECT}: {len(issues)} проблем ({a.query if not a.issue else a.issue}, {a.days} дн.)', '']
     for it in issues:
         st = STATUS.get(it.get('status'), it.get('status'))
