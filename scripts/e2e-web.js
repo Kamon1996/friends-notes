@@ -631,9 +631,9 @@ scenario('Календарь: выгрузка всех дат в файл .ics'
   await ui.go('/settings');
   await ui.see('Календарь');
   // Свой календарь телефона есть только в Android-приложении: в браузере переключателя нет.
-  await ui.notSee('Дни рождения в календаре телефона');
+  await ui.notSee('Дни рождения в календаре');
   const download = page.waitForEvent('download', { timeout: 5000 });
-  await ui.tap('Выгрузить даты в файл');
+  await ui.tap('Выгрузить даты');
   const file = await download;
   assert.equal(file.suggestedFilename(), 'druzya-dni-rozhdeniya.ics');
   const text = require('fs').readFileSync(await file.path(), 'utf8');
@@ -642,7 +642,7 @@ scenario('Календарь: выгрузка всех дат в файл .ics'
 
 scenario('Календарь: без дат выгружать нечего', async ({ ui }) => {
   await ui.go('/settings');
-  await ui.tap('Выгрузить даты в файл');
+  await ui.tap('Выгрузить даты');
   await ui.pause(400);
   assert.match(ui.dialogs.join('\n'), /Пока нечего выгружать/);
 }, { data: seed({ friends: [F({ id: 'x', name: 'Маша' })], reminders: [] }) });

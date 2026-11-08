@@ -297,7 +297,7 @@ describe('изменения в приложении', () => {
   test('всё стёрли из приложения — календарь пустой, но остаётся', async () => {
     await p.sync(appData([]));
     assert.deepEqual([p.android.ours().length, p.android.evs.length], [1, 0]);
-    assert.deepEqual(calendarStatus(true, true, p.summaries.at(-1)!)?.text, 'Пока нечего добавить: нет дней рождения и важных дат.');
+    assert.deepEqual(calendarStatus(true, true, p.summaries.at(-1)!), { title: 'Пока пусто', sub: 'Нет дней рождения и важных дат', tone: 'muted', icon: 'check' });
   });
 });
 
@@ -335,7 +335,7 @@ describe('что пользователь делает в самом кален�
     }
     assert.deepEqual(p.android.titles(), anyaTitles);
     assert.equal(p.summaries.at(-1)?.hidden, true);
-    assert.match(calendarStatus(true, true, p.summaries.at(-1)!)!.text, /скрыт/);
+    assert.equal(calendarStatus(true, true, p.summaries.at(-1)!)!.title, 'Календарь скрыт');
     p.android.ours()[0].isVisible = true;
     p.engine.markStale();
     await p.sync(appData([ANYA, IGOR]));
@@ -412,10 +412,10 @@ describe('без дублей с тем, что уже есть в телефо�
     p.contacts = [{ name: 'Анюта', phones: ['89991234567'], month: 11, day: 7 }];
     await p.sync(appData([ANYA, IGOR]));
     assert.deepEqual(p.android.titles(), igorTitles);
-    assert.deepEqual(p.summaries.at(-1), { events: 4, fromContacts: 1, fromOthers: 0, hidden: false });
-    assert.equal(
-      calendarStatus(true, true, p.summaries.at(-1)!)?.text,
-      'В календаре 4 события. Не повторяем: 1 день рождения уже в контактах.',
+    assert.deepEqual(p.summaries.at(-1), { events: 4, fromContacts: 4, fromOthers: 0, hidden: false }, 'четыре года Ани не добавлены');
+    assert.deepEqual(
+      [calendarStatus(true, true, p.summaries.at(-1)!)?.title, calendarStatus(true, true, p.summaries.at(-1)!)?.sub],
+      ['4 события', '4 уже были в телефоне — не повторяем'],
     );
   });
 
@@ -450,7 +450,7 @@ describe('без дублей с тем, что уже есть в телефо�
     await p.sync(appData([ANYA, IGOR]));
     assert.deepEqual(p.android.titles(), igorTitles);
     assert.equal(p.summaries.at(-1)?.fromOthers, 4);
-    assert.match(calendarStatus(true, true, p.summaries.at(-1)!)!.text, /Не повторяем: 4 события — в других календарях\.$/);
+    assert.equal(calendarStatus(true, true, p.summaries.at(-1)!)!.sub, '4 уже были в телефоне — не повторяем');
   });
 
   test('наш же файл .ics, загруженный в Google Календарь, не дублируется', async () => {
@@ -544,25 +544,35 @@ describe('даты событий и окно', () => {
 describe('строка состояния в настройках', () => {
   const summary = (patch: Partial<CalendarSummary> = {}): CalendarSummary => ({ events: 21, fromContacts: 0, fromOthers: 0, hidden: false, ...patch });
 
-  test('выключено — ничего; нет доступа — красная строка с кнопкой; ещё не синхронизировали — «заполняю»', () => {
+  test('выключено — ничего; нет доступа — красная строка и футер; ещё не синхронизировали — «заполняю»', () => {
     assert.equal(calendarStatus(false, false, null), null);
-    assert.deepEqual(calendarStatus(true, false, summary()), { text: 'Нет доступа к календарю: даты в нём не обновляются.', tone: 'danger', icon: 'warning', needsAccess: true });
-    assert.deepEqual(calendarStatus(true, true, null), { text: 'Заполняю календарь…', tone: 'muted', icon: 'refresh' });
-    assert.deepEqual(calendarStatus(true, null, null), { text: 'Заполняю календарь…', tone: 'muted', icon: 'refresh' }, 'пока доступ проверяется');
+    assert.deepEqual(calendarStatus(true, false, summary()), { title: 'Нет доступа', sub: 'Даты не обновляются', tone: 'danger', icon: 'warning', needsAccess: true });
+    assert.deepEqual(calendarStatus(true, true, null), { title: 'Заполняю календарь…', tone: 'muted', icon: 'refresh' });
+    assert.deepEqual(calendarStatus(true, null, null), { title: 'Заполняю календарь…', tone: 'muted', icon: 'refresh' }, 'пока доступ проверяется');
   });
 
-  test('числа склоняются', () => {
-    assert.equal(calendarStatus(true, true, summary())!.text, 'В календаре 21 событие.');
-    assert.equal(
-      calendarStatus(true, true, summary({ events: 5, fromContacts: 2, fromOthers: 1 }))!.text,
-      'В календаре 5 событий. Не повторяем: 2 дня рождения уже в контактах, 1 событие — в других календарях.',
-    );
-    assert.match(calendarStatus(true, true, summary({ fromOthers: 5 }))!.text, /Не повторяем: 5 событий — в других/);
-  });
-
-  test('скрытый календарь — предупреждение', () => {
-    assert.deepEqual([calendarStatus(true, true, summary({ hidden: true }))!.tone, calendarStatus(true, true, summary({ hidden: true }))!.icon], ['warn', 'warning']);
+  test('коротко: число событий и сколько не повторили; числа склоняются', () => {
+    const line = (patch: Partial<CalendarSummary>) => {
+      const st = calendarStatus(true, true, summary(patch))!;
+      return [st.title, st.sub];
+    };
+    assert.deepEqual(line({}), ['21 событие', undefined]);
+    assert.deepEqual(line({ events: 5, fromContacts: 4, fromOthers: 3 }), ['5 событий', '7 уже были в телефоне — не повторяем']);
+    assert.deepEqual(line({ events: 2, fromOthers: 1 }), ['2 события', '1 уже было в телефоне — не повторяем']);
+    assert.deepEqual(line({ events: 0, fromContacts: 21 }), ['0 событий', '21 уже было в телефоне — не повторяем'], 'всё уже есть в телефоне');
     assert.equal(calendarStatus(true, true, summary())!.icon, 'check');
+  });
+
+  test('скрытый календарь — предупреждение с подсказкой, где включить', () => {
+    assert.deepEqual(calendarStatus(true, true, summary({ hidden: true })), { title: 'Календарь скрыт', sub: 'Включи «Друзья» в Samsung Календаре', tone: 'warn', icon: 'warning' });
+  });
+
+  test('все тексты строки короткие — помещаются в две строки на узком экране', () => {
+    const all = [calendarStatus(true, false, summary()), calendarStatus(true, true, null), calendarStatus(true, true, summary({ hidden: true })), calendarStatus(true, true, summary({ events: 1288, fromContacts: 120, fromOthers: 33 }))];
+    for (const st of all) {
+      assert.ok(st!.title.length <= 24, st!.title);
+      assert.ok((st!.sub ?? '').length <= 40, st!.sub ?? '');
+    }
   });
 });
 

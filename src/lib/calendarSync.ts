@@ -64,7 +64,7 @@ export interface CalendarPort {
 export interface CalendarSummary {
   /** Событий в календаре «Друзья». */
   events: number;
-  /** Друзей, чьи дни рождения уже есть в контактах. */
+  /** Событий-дней рождения, которые уже есть в контактах. */
   fromContacts: number;
   /** Событий, которые уже есть в других календарях. */
   fromOthers: number;
@@ -212,7 +212,7 @@ export function createCalendarSync(deps: CalendarSyncDeps) {
       // Даже если запись оборвалась, сохраняем то, что успели: при следующем запуске досоздадим остальное без дублей.
       const summary: CalendarSummary = {
         events: Object.keys(next).length,
-        fromContacts: new Set(split.fromContacts.map((e) => e.friendId)).size,
+        fromContacts: split.fromContacts.length,
         fromOthers: split.fromOthers.length,
         hidden,
       };
@@ -234,25 +234,27 @@ export function createCalendarSync(deps: CalendarSyncDeps) {
   };
 }
 
-/** Строка состояния под переключателем в настройках. */
+/** Строка состояния под переключателем в настройках: заголовок и короткое пояснение. */
 export interface CalendarStatus {
-  text: string;
+  title: string;
+  sub?: string;
   tone: 'muted' | 'warn' | 'danger';
   icon: 'check' | 'refresh' | 'warning';
-  /** Кнопка «Разрешить доступ». */
+  /** Футер «Разрешить доступ». */
   needsAccess?: boolean;
 }
 
 export function calendarStatus(on: boolean, access: boolean | null, summary: CalendarSummary | null): CalendarStatus | null {
   if (!on) return null;
-  if (access === false) return { text: 'Нет доступа к календарю: даты в нём не обновляются.', tone: 'danger', icon: 'warning', needsAccess: true };
-  if (!summary) return { text: 'Заполняю календарь…', tone: 'muted', icon: 'refresh' };
-  if (summary.hidden) return { text: 'Календарь «Друзья» скрыт. Включи его в списке календарей Samsung или Google Календаря.', tone: 'warn', icon: 'warning' };
-  const parts = [summary.events ? `В календаре ${summary.events} ${plural(summary.events, 'событие', 'события', 'событий')}.` : 'Пока нечего добавить: нет дней рождения и важных дат.'];
-  const skipped = [
-    summary.fromContacts && `${summary.fromContacts} ${plural(summary.fromContacts, 'день рождения', 'дня рождения', 'дней рождения')} уже в контактах`,
-    summary.fromOthers && `${summary.fromOthers} ${plural(summary.fromOthers, 'событие', 'события', 'событий')} — в других календарях`,
-  ].filter(Boolean);
-  if (skipped.length) parts.push(`Не повторяем: ${skipped.join(', ')}.`);
-  return { text: parts.join(' '), tone: 'muted', icon: 'check' };
+  if (access === false) return { title: 'Нет доступа', sub: 'Даты не обновляются', tone: 'danger', icon: 'warning', needsAccess: true };
+  if (!summary) return { title: 'Заполняю календарь…', tone: 'muted', icon: 'refresh' };
+  if (summary.hidden) return { title: 'Календарь скрыт', sub: 'Включи «Друзья» в Samsung Календаре', tone: 'warn', icon: 'warning' };
+  if (!summary.events && !summary.fromContacts && !summary.fromOthers) return { title: 'Пока пусто', sub: 'Нет дней рождения и важных дат', tone: 'muted', icon: 'check' };
+  const skipped = summary.fromContacts + summary.fromOthers;
+  return {
+    title: `${summary.events} ${plural(summary.events, 'событие', 'события', 'событий')}`,
+    sub: skipped ? `${skipped} уже ${plural(skipped, 'было', 'были', 'были')} в телефоне — не повторяем` : undefined,
+    tone: 'muted',
+    icon: 'check',
+  };
 }

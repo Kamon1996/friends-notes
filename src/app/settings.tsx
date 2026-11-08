@@ -181,27 +181,33 @@ export default function SettingsScreen() {
           <Card style={{ paddingVertical: 4 }}>
             <SwitchRow
               icon="calendar"
-              label="Дни рождения в календаре телефона"
-              sub="Свой календарь «Друзья» в Samsung и Google Календаре: дни рождения с возрастом, без напоминаний."
+              label="Дни рождения в календаре"
+              sub="Samsung и Google, с возрастом"
               value={!!settings.calendarSync}
               onChange={toggleCalendar}
             />
             {calendarLine && (
-              <View
-                style={{ flexDirection: 'row', gap: 8, alignItems: 'flex-start', borderTopWidth: 1, borderTopColor: colors.separator, paddingVertical: 10 }}
-                accessibilityLiveRegion="polite"
-              >
-                <View style={{ marginTop: 1 }}>
-                  <Icon
-                    name={calendarLine.icon}
-                    size={16}
-                    color={calendarLine.tone === 'danger' ? colors.danger : calendarLine.tone === 'warn' ? colors.warn : calendarLine.icon === 'check' ? colors.success : colors.text3}
-                  />
+              <>
+                {/* Разделитель — от колонки текста до края карточки, как между строками списка. */}
+                <View style={{ height: 1, backgroundColor: colors.separator, marginLeft: 48, marginRight: -14 }} />
+                <View style={{ flexDirection: 'row', gap: 12, alignItems: 'flex-start', paddingVertical: 10 }} accessibilityLiveRegion="polite">
+                  {/* Значок — по центру колонки иконок, под значком календаря. */}
+                  <View style={{ width: 36, alignItems: 'center', paddingTop: 2 }}>
+                    <Icon
+                      name={calendarLine.icon}
+                      size={18}
+                      strokeWidth={2}
+                      color={calendarLine.tone === 'danger' ? colors.danger : calendarLine.tone === 'warn' ? colors.warn : calendarLine.icon === 'check' ? colors.success : colors.text3}
+                    />
+                  </View>
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text style={[s.body, { fontSize: 15 }, calendarLine.tone !== 'muted' && { color: calendarLine.tone === 'danger' ? colors.danger : colors.warn }]}>
+                      {calendarLine.title}
+                    </Text>
+                    {calendarLine.sub && <Text style={s.muted}>{calendarLine.sub}</Text>}
+                  </View>
                 </View>
-                <Text style={[s.muted, { flex: 1, lineHeight: 18 }, calendarLine.tone !== 'muted' && { color: calendarLine.tone === 'danger' ? colors.danger : colors.warn }]}>
-                  {calendarLine.text}
-                </Text>
-              </View>
+              </>
             )}
             {calendarLine?.needsAccess && (
               // Действие карточки — её футер: на всю ширину, с линией сверху, как кнопка внизу диалога.
@@ -227,7 +233,7 @@ export default function SettingsScreen() {
           </Card>
         )}
         <Group inset={62}>
-          <ListRow leading={<IconCircle icon="share" />} title="Выгрузить даты в файл" subtitle="Файл .ics для Google Календаря на сайте и других устройств" chevron onPress={exportFile} />
+          <ListRow leading={<IconCircle icon="share" />} title="Выгрузить даты" subtitle="Файл .ics для любого календаря" chevron onPress={exportFile} />
         </Group>
       </View>
 
