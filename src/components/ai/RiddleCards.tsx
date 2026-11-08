@@ -165,7 +165,9 @@ export function RiddleCards({
 
   return (
     <Sheet visible={visible} onClose={onClose} style={{ paddingTop: 10, paddingBottom: insets.bottom + 20 }}>
-      <GestureHandlerRootView>
+      {/* Без своего стиля корень жестов берёт flex: 1 и в шторке, высота которой — по содержимому, на Android схлопывается в ноль:
+          карточки вываливаются за низ экрана. Высота — по содержимому. */}
+      <GestureHandlerRootView style={{ flexGrow: 0, flexShrink: 0 }}>
         <SheetHandle />
         <View style={{ flexDirection: 'row', alignItems: 'baseline', paddingHorizontal: 24, paddingTop: 14, paddingBottom: 14 }}>
           <Text style={[s.h2, { flex: 1, fontSize: 24, lineHeight: 30 }]}>{title}</Text>
