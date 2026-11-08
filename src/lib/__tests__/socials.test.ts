@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { NETWORKS, extractLinks, isWebUrl, linkFromInput, linkSubtitle, linkTitle, mergeLinks, parseSocialInput, searchNetworks, siteLabel } from '../socials';
+import { NETWORKS, isWebUrl, linkFromInput, linkSubtitle, linkTitle, mergeLinks, parseSocialInput, searchNetworks, siteLabel } from '../socials';
 
 const ids = () => {
   let n = 0;
@@ -53,18 +53,6 @@ test('из ника и сети собирается адрес по шабло�
   assert.deepEqual([site?.network, linkTitle(site!), site?.label, linkSubtitle(site!)], ['site', 'kattysings.ru', 'kattysings.ru', 'kattysings.ru']);
   assert.equal(linkFromInput({ kind: 'handle', handle: 'x' }, null, next()), null, 'ник без сети — ещё не ссылка');
   assert.equal(siteLabel('https://www.example.org/path'), 'example.org');
-});
-
-test('«О себе» из Telegram: ссылки в соцсети, остаток в заметки', () => {
-  const bio = 'https://band.link/9OzXo 🎙️https://www.tiktok.com/@shameless66613😍 youtube.com/@ShameleSs66613 🎥 behance.net/47935d51📸';
-  const { links, rest } = extractLinks(bio, ids());
-  assert.deepEqual(links.map((l) => `${l.network}:${l.handle ?? l.label}`), ['bandlink:9OzXo', 'tiktok:shameless66613', 'youtube:ShameleSs66613', 'behance:47935d51']);
-  assert.equal(rest, '', 'одни эмодзи в заметки не пишем');
-  const r2 = extractLinks('певица, Москва. канал @kattysings и inst instagram.com/katty.sh', ids());
-  assert.deepEqual(r2.links.map((l) => `${l.network}:${l.handle}`), ['telegram:kattysings', 'instagram:katty.sh'], 'в порядке появления в тексте');
-  assert.equal(r2.rest, 'певица, Москва. канал и inst');
-  const r3 = extractLinks('пишите на mail@example.com, т.е. не сюда', ids());
-  assert.deepEqual(r3.links, [], 'почта и «т.е.» — не ссылки');
 });
 
 test('дубликаты схлопываются, ручные важнее импортированных', () => {

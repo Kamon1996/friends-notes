@@ -10,7 +10,11 @@ import type { ProviderId } from './types';
  *   Gemini Flash-Lite на испытании 8 ноября 2026 — 100 из 100 за 2 секунды; OpenRouter — запасной (бесплатные модели
  *   разных компаний, 50 запросов в день). Hugging Face бесплатных кредитов не даёт (402 «купите кредиты»), поэтому
  *   в задачу не входит — код сервиса оставлен на будущее.
+ *
+ * notes — соцсети и подсказки для карточки из заметок и «О себе» (src/lib/notesAi.ts): длинные тексты и строгий
+ *   JSON — Gemini первым, OpenRouter — запасной.
  */
 export const TASK_PROVIDERS = {
   gender: ['gemini', 'openrouter'],
+  notes: ['gemini', 'openrouter'],
 } satisfies Record<string, ProviderId[]>;

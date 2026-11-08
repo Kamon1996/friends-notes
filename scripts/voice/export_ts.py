@@ -1,6 +1,7 @@
-# Экспорт одобренных фраз из разбора (страница «Голос Рейчел», её отметки выгружаются в <db-dir>/reviews/*.json) в src/lib/voice/phrases.ts.
+# Экспорт одобренных фраз (и черновиков, которые ещё не разобраны) из разбора (страница «Голос Рейчел», её отметки выгружаются в <db-dir>/reviews/*.json) в src/lib/voice/phrases.ts.
 #   {n} — число друзей, {друг} — «друг/друга/друзей» по {n}; {k} — число загадок/новых, {человек}, {загадка}, {новым другом}, {идея} — по {k};
-#   {k_instr} — «двумя/тремя/четырьмя»; {K_coll} — «Двое/Трое/Четверо»; {name} — имя друга.
+#   {k_instr} — «двумя/тремя/четырьмя»; {K_coll} — «Двое/Трое/Четверо»; {name} — имя друга;
+#   {соцсеть} — «соцсеть/соцсети/соцсетей» по {n}; {друга} — «у 1 друга / у 5 друзей» по {k}.
 # python3 export_ts.py <db-dir> <out.ts>
 import glob, json, os, re, sys
 
@@ -44,7 +45,8 @@ def template(text):
 rows = []
 for p in bank['phrases']:
     r = rev.get(p['id'], {})
-    if r.get('status') != 'ok':
+    # Черновик (draft) идёт в приложение, пока его не разобрали; отклонённый — нет.
+    if r.get('status') != 'ok' and not (p.get('draft') and r.get('status') in (None, 'pending')):
         continue
     sit = p['sit']
     if sit.startswith('gifts.'):

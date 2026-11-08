@@ -37,27 +37,18 @@ test('каждый @username становится ссылкой на Telegram',
   );
 });
 
-test('«О себе»: ссылки и ники уходят в соцсети без дублей своего @username, текст — в заметку', () => {
-  const c = tgToRawContact(person({ usernames: ['anya'], bio: 'Фотограф. inst: anya.photo, vk.com/anya_s, @anya' }));
+test('«О себе» целиком становится заметкой — соцсети из него потом достаёт ИИ; свой @username — ссылка сразу', () => {
+  const c = tgToRawContact(person({ usernames: ['anya'], bio: '  Фотограф. inst: anya.photo, vk.com/anya_s, @anya ' }));
   assert.deepEqual(
     c.socials?.map((s) => `${s.network}:${s.handle}`),
-    ['telegram:anya', 'instagram:anya.photo', 'vk:anya_s'],
+    ['telegram:anya'],
   );
-  assert.match(c.note ?? '', /^О себе: Фотограф\./);
+  assert.equal(c.note, 'О себе: Фотограф. inst: anya.photo, vk.com/anya_s, @anya');
 });
 
 test('«О себе» без ссылок целиком становится заметкой, пустое — ничего не добавляет', () => {
   assert.equal(tgToRawContact(person({ bio: 'Люблю горы' })).note, 'О себе: Люблю горы');
   assert.equal(tgToRawContact(person({ bio: '' })).note, '');
-});
-
-test('после вырезанных ссылок в заметке не остаются висячие разделители', () => {
-  const c = tgToRawContact(person({ bio: 'Фотограф. inst: anya.photo · vk.com/anya_s' }));
-  assert.equal(c.note, 'О себе: Фотограф.');
-  const middle = tgToRawContact(person({ bio: 'Фотограф · inst: anya.photo · vk.com/anya_s · Москва' }));
-  assert.equal(middle.note, 'О себе: Фотограф · Москва');
-  const lines = tgToRawContact(person({ bio: 'Пою и рисую\n📸 inst: anya.photo\nМосква, Питер' }));
-  assert.equal(lines.note, 'О себе: Пою и рисую\nМосква, Питер');
 });
 
 test('ожидание от Telegram и понятные тексты ошибок', () => {

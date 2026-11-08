@@ -795,6 +795,20 @@ scenario('ИИ: всё определилось — «Готово» и сам �
   assert.equal((await ui.data()).friends.find((f) => f.id === 's').gender, undefined, '«оставить так» ничего не меняет');
 }, { data: seed({ friends: [ANYA, IGOR, F({ id: 's', name: 'Саша', genderStage: 'ai' })] }) });
 
+scenario('ИИ: «Соцсети из заметок» — счётчик заметок; без магии в сборке честно говорит, что не вышло, заметки не трогает', async ({ ui }) => {
+  await ui.go('/friends');
+  await ui.tap('ИИ для друзей');
+  await ui.see('Соцсети из заметок');
+  await ui.see('И подсказки к подаркам · 2 заметки');
+  await ui.tap('Соцсети из заметок — поехали');
+  const fail = /Не получилось дочитать|Магия на перерыве/;
+  for (let k = 0; k < 25 && !fail.test(await ui.text()); k++) await ui.pause(200);
+  assert.match(await ui.text(), fail);
+  const data = await ui.data();
+  assert.equal(data.friends.find((f) => f.id === 'n').notes, 'О себе: Фотограф. inst: anya.photo', 'заметка на месте');
+  assert.equal(data.friends.find((f) => f.id === 'n').socials, undefined);
+}, { data: seed({ friends: [F({ id: 'n', name: 'Аня', notes: 'О себе: Фотограф. inst: anya.photo', notesQueue: true }), F({ id: 'm', name: 'Маша', notes: 'Любит пионы' }), F({ id: 'e', name: 'Без заметок' })] }) });
+
 scenario('ИИ: без друзей значка нет', async ({ ui }) => {
   await ui.go('/friends');
   await ui.see('Пока никого');

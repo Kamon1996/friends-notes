@@ -11,6 +11,8 @@ import { EMPTY_DATA, type AppData, type Friend, type Reminder, type Settings } f
 import { genderOnSave } from './gender';
 import { applyGenderUpdate, genderPending } from './genderDetect';
 import { genderSync } from './genderRun';
+import { ai } from './ai';
+import { applyNotesUpdate, notesPass, notesPending, notesSummary, type NotesSummary } from './notesAi';
 
 const STORAGE_KEY = 'friends-notes/data/v1';
 
@@ -42,6 +44,15 @@ interface Store {
   /** Сколько друзей фоновый проход только что определил — для тихого тоста; 0 — нечего сказать. */
   genderNews: number;
   clearGenderNews: () => void;
+  /**
+   * Разобрать заметки силами ИИ: соцсети, подсказки для карточки, заметка без ссылок (src/lib/notesAi.ts).
+   * 'all' — все неразобранные (меню магии), 'queued' — только из импорта Telegram (это делается и само, в фоне).
+   */
+  readNotes: (mode?: 'queued' | 'all') => Promise<NotesSummary>;
+  notesBusy: boolean;
+  /** Итог фонового разбора после импорта — для тихого тоста; null — нечего сказать. */
+  notesNews: NotesSummary | null;
+  clearNotesNews: () => void;
 }
 
 const StoreContext = createContext<Store | null>(null);
@@ -142,6 +153,49 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return () => clearTimeout(t);
   }, [freshGenders, ready, canPersist, syncGenders]);
 
+  // Заметки: соцсети и подсказки силами ИИ. В фоне — только друзья из импорта Telegram (их «О себе» мы и так
+  // собирались разобрать); остальных — когда попросят из меню магии.
+  const [notesBusy, setNotesBusy] = useState(false);
+  const [notesNews, setNotesNews] = useState<NotesSummary | null>(null);
+  const clearNotesNews = useCallback(() => setNotesNews(null), []);
+  const notesRunRef = useRef<Promise<NotesSummary> | null>(null);
+  const readNotes = useCallback(async (mode: 'queued' | 'all' = 'all'): Promise<NotesSummary> => {
+    // Проход уже идёт: фоновому хватит его, а из меню — дождёмся и разберём остальных.
+    if (notesRunRef.current) {
+      const current = notesRunRef.current;
+      if (mode === 'queued') return current;
+      await current.catch(() => null);
+    }
+    const friends = dataRef.current.friends;
+    if (!liveRef.current || !friends.some((f) => notesPending(f, mode))) {
+      return { status: 'nothing', friends: 0, withLinks: 0, links: 0, facts: 0, cleaned: 0, left: 0 };
+    }
+    setNotesBusy(true);
+    const run = (async () => {
+      const r = await notesPass(friends, ai, { mode, idFor: newId });
+      if (r.updates.length) {
+        const byId = new Map(r.updates.map((u) => [u.id, u]));
+        setData((d) => ({ ...d, friends: d.friends.map((f) => applyNotesUpdate(f, byId.get(f.id))) }));
+      }
+      return notesSummary(friends, r, mode);
+    })().finally(() => {
+      notesRunRef.current = null;
+      setNotesBusy(false);
+    });
+    notesRunRef.current = run;
+    return run;
+  }, []);
+  const queuedNotes = useMemo(() => data.friends.filter((f) => notesPending(f, 'queued')).length, [data.friends]);
+  useEffect(() => {
+    if (!ready || !canPersist || !queuedNotes) return;
+    const t = setTimeout(() => {
+      void readNotes('queued').then((sum) => {
+        if (sum.status === 'done' && sum.friends) setNotesNews(sum);
+      });
+    }, 3000);
+    return () => clearTimeout(t);
+  }, [queuedNotes, ready, canPersist, readNotes]);
+
   // При возврате в приложение — пересчитываем окно уведомлений (их число ограничено).
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
@@ -151,10 +205,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         markCalendarStale();
         syncDeviceCalendar(dataRef.current);
         syncGenders();
+        void readNotes('queued').then((sum) => {
+          if (sum.status === 'done' && sum.friends) setNotesNews(sum);
+        });
       }
     });
     return () => sub.remove();
-  }, [syncGenders]);
+  }, [syncGenders, readNotes]);
 
   const saveFriend = useCallback((input: Friend) => {
     setData((d) => {
@@ -254,8 +311,35 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       genderNews,
       clearGenderNews,
       genderBusy,
+      readNotes,
+      notesBusy,
+      notesNews,
+      clearNotesNews,
     }),
-    [ready, data, saveFriend, addFriends, updateFriends, deleteFriend, deleteFriends, saveReminder, deleteReminder, deleteReminders, toggleReminderDone, setRemindersDone, updateSettings, replaceData, detectGenders, genderBusy, genderNews, clearGenderNews],
+    [
+      ready,
+      data,
+      saveFriend,
+      addFriends,
+      updateFriends,
+      deleteFriend,
+      deleteFriends,
+      saveReminder,
+      deleteReminder,
+      deleteReminders,
+      toggleReminderDone,
+      setRemindersDone,
+      updateSettings,
+      replaceData,
+      detectGenders,
+      genderBusy,
+      genderNews,
+      clearGenderNews,
+      readNotes,
+      notesBusy,
+      notesNews,
+      clearNotesNews,
+    ],
   );
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

@@ -21,8 +21,8 @@ export interface SocialLink {
   handle?: string;
   /** Подпись чипа «Сайт»: домен или своё название. */
   label?: string;
-  /** Откуда: из «О себе» Telegram, из контактов телефона или вручную. */
-  source?: 'tg' | 'contacts' | 'manual';
+  /** Откуда: Telegram (@username), контакты телефона, вручную или из заметок и «О себе» (разобрал ИИ). */
+  source?: 'tg' | 'contacts' | 'manual' | 'notes';
 }
 
 export interface Friend {
@@ -59,6 +59,10 @@ export interface Friend {
   genderStage?: 'names' | 'genderize' | 'device-ai' | 'ai';
   /** Соцсети и сайты человека. */
   socials?: SocialLink[];
+  /** Отпечаток заметки, которую ИИ уже разобрал (соцсети и подсказки, src/lib/notesAi.ts): тот же текст второй раз не отправляем. */
+  notesSeen?: string;
+  /** Разобрать заметку в фоне — так помечаются друзья из импорта Telegram с «О себе». */
+  notesQueue?: boolean;
 }
 
 export type RepeatUnit = 'day' | 'week' | 'month' | 'year';

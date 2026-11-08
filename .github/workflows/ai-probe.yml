@@ -1,0 +1,36 @@
+name: AI probe
+
+# Проба ИИ-задачи на настоящих моделях: тот же вопрос, что в приложении, на трудных примерах; итог — в сводке
+# запуска, подробности — в логе. Сейчас — «соцсети и подсказки из заметок» (scripts/ai-bench/notes.ts).
+# Запуск: коммитом со словом «[probe]» в первой строке или вручную (Actions → AI probe → Run workflow).
+# Ключи — те же секреты, что для сборки: GEMINI_API_KEY, OPENROUTER_API_KEY.
+on:
+  workflow_dispatch:
+    inputs:
+      openrouter:
+        description: 'Сколько моделей OpenRouter (лучшие по тир-листу)'
+        default: '6'
+  push:
+    branches: [main, claude/mobile-project-creation-pgqs46]
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[probe]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Probe notes task
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          PROBE_OPENROUTER: ${{ github.event.inputs.openrouter || '6' }}
+        run: npx tsx scripts/ai-bench/notes.ts

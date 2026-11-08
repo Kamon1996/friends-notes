@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { NETWORKS, extractLinks, linkFromInput, networkById, parseSocialInput, searchNetworks } from '../socials';
+import { NETWORKS, linkFromInput, networkById, parseSocialInput, searchNetworks } from '../socials';
 
 const ids = () => {
   let n = 0;
@@ -135,75 +135,6 @@ test('посты, видео и служебные страницы — ссыл
     assert.equal(p.kind, 'link', url);
     if (p.kind === 'link') assert.equal(p.handle, null, url);
   }
-});
-
-test('«О себе»: подписи «tg: ник», «tg - @ник», «telegram — ник» и сокращения других сетей', () => {
-  const cases: [string, string[], string?][] = [
-    ['tg: test', ['telegram:test']],
-    ['tg: @test', ['telegram:test']],
-    ['tg - test', ['telegram:test']],
-    ['tg — @test', ['telegram:test']],
-    ['telegram - test', ['telegram:test']],
-    ['Telegram: @Test_1', ['telegram:Test_1']],
-    ['тг: test', ['telegram:test']],
-    ['телега @test', ['telegram:test']],
-    ['TG:test', ['telegram:test']],
-    ['inst: katty.sh', ['instagram:katty.sh']],
-    ['insta - @katty', ['instagram:katty']],
-    ['ig: katty', ['instagram:katty']],
-    ['инста: katty', ['instagram:katty']],
-    ['Инстаграм — katty', ['instagram:katty']],
-    ['vk: id123', ['vk:id123']],
-    ['вк - katty', ['vk:katty']],
-    ['tt: @katty', ['tiktok:katty']],
-    ['тикток: katty', ['tiktok:katty']],
-    ['yt: katty', ['youtube:katty']],
-    ['ютуб - katty', ['youtube:katty']],
-    ['fb: katty', ['facebook:katty']],
-    ['twitter: katty', ['x:katty']],
-    ['x: katty', ['x:katty']],
-    ['ds: katty', ['discord:katty']],
-    ['дискорд: katty', ['discord:katty']],
-    ['twitch: katty', ['twitch:katty']],
-    ['snap: katty', ['snapchat:katty']],
-    ['sc: katty', ['snapchat:katty']],
-    ['жж: katty', ['livejournal:katty']],
-    ['gh: katty', ['github:katty']],
-    ['steam: katty', ['steam:katty']],
-    ['бусти: katty', ['boosty:katty']],
-    ['дзен: katty', ['dzen:katty']],
-    ['threads: katty', ['threads:katty']],
-    ['bsky: katty.bsky.social', ['bluesky:katty.bsky.social']],
-    ['wechat: katty', ['wechat:katty']],
-    ['line: katty', ['line:katty']],
-    ['макс: katty', ['max:katty']],
-    ['tg: anna, inst: anna.k | vk: id1', ['telegram:anna', 'instagram:anna.k', 'vk:id1']],
-    ['tg: anna\ninst: anna_k', ['telegram:anna', 'instagram:anna_k']],
-    ['tg: a', [], 'ник короче двух символов не считаем'],
-    ['Пишите в tg: katty.', ['telegram:katty']],
-  ];
-  for (const [text, expected] of cases) {
-    const { links } = extractLinks(text, ids());
-    assert.deepEqual(links.map((l) => `${l.network}:${l.handle}`), expected, text);
-  }
-});
-
-test('«О себе»: ссылка после подписи важнее подписи, подпись без ника не остаётся в заметках', () => {
-  const r = extractLinks('inst: instagram.com/katty.sh, tg: @katty', ids());
-  assert.deepEqual(r.links.map((l) => `${l.network}:${l.handle}`), ['instagram:katty.sh', 'telegram:katty']);
-  assert.equal(r.rest, '');
-  const r2 = extractLinks('певица. inst: katty · ищу барабанщика', ids());
-  assert.deepEqual(r2.links.map((l) => `${l.network}:${l.handle}`), ['instagram:katty']);
-  assert.equal(r2.rest, 'певица. · ищу барабанщика');
-});
-
-test('«О себе»: что не должно считаться ссылкой или ником', () => {
-  const cases = ['pin: 1234', 'ok, пишите', 'line of work: dev', 'x: 2 + y', 'так себе: день', 'be: happy', 'in: Moscow', 'Иван.Петров рядом', 'e.g. такое', 'мой e-mail katty@mail.ru'];
-  for (const text of cases) {
-    const { links } = extractLinks(text, ids());
-    assert.deepEqual(links, [], text);
-  }
-  assert.deepEqual(extractLinks('вк: 12345', ids()).links, [], 'в нике нужна хотя бы одна буква');
 });
 
 test('ник с сетью: адрес по шаблону сети, у сетей без страниц только ник', () => {

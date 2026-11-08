@@ -23,6 +23,12 @@
    "title": "Для любой задачи",
    "status": "",
    "sub": "Сбои и лимиты"
+  },
+  {
+   "id": "notes",
+   "title": "Соцсети из заметок",
+   "status": "в приложении",
+   "sub": "Меню магии и тост после импорта из Telegram"
   }
  ],
  "sits": [
@@ -163,6 +169,48 @@
    "section": "common",
    "name": "Что-то сломалось",
    "when": ""
+  },
+  {
+   "id": "notes.busy",
+   "section": "notes",
+   "name": "Пока читает",
+   "when": "Подпись в меню, пока идёт разбор"
+  },
+  {
+   "id": "notes.done",
+   "section": "notes",
+   "name": "Нашла соцсети",
+   "when": "{n} соцсетей у {k} друзей"
+  },
+  {
+   "id": "notes.tidy",
+   "section": "notes",
+   "name": "Без новых ссылок",
+   "when": "Ссылок нет, но заметки прибраны или есть подсказки"
+  },
+  {
+   "id": "notes.none",
+   "section": "notes",
+   "name": "Ничего не нашла",
+   "when": "Прочитала, ничего не поменялось"
+  },
+  {
+   "id": "notes.nothing",
+   "section": "notes",
+   "name": "Читать нечего",
+   "when": "Все заметки уже разобраны"
+  },
+  {
+   "id": "notes.fail",
+   "section": "notes",
+   "name": "Не получилось",
+   "when": "Магия недоступна: нет сети или перерыв"
+  },
+  {
+   "id": "notes.quiet",
+   "section": "notes",
+   "name": "Тост после импорта",
+   "when": "После импорта из Telegram, в фоне"
   }
  ],
  "phrases": [
@@ -1362,6 +1410,176 @@
    "ref": null,
    "new": true,
    "coffee": false
+  },
+  {
+   "id": "notes.busy.g0.p0",
+   "sit": "notes.busy",
+   "bucket": "",
+   "text": "Читаю заметки. Без спойлеров!",
+   "ref": null,
+   "new": true,
+   "coffee": false,
+   "draft": true
+  },
+  {
+   "id": "notes.busy.g0.p1",
+   "sit": "notes.busy",
+   "bucket": "",
+   "text": "Листаю «О себе». Люди такие интересные",
+   "ref": null,
+   "new": true,
+   "coffee": false,
+   "draft": true
+  },
+  {
+   "id": "notes.busy.g0.p2",
+   "sit": "notes.busy",
+   "bucket": "",
+   "text": "Секунду, вчитываюсь",
+   "ref": null,
+   "new": true,
+   "coffee": false,
+   "draft": true
+  },
+  {
+   "id": "notes.done.g0.p0",
+   "sit": "notes.done",
+   "bucket": "",
+   "text": "Нашла {n} {соцсеть} у {k} {друга}",
+   "ref": null,
+   "new": true,
+   "coffee": false,
+   "draft": true
+  },
+  {
+   "id": "notes.done.g0.p1",
+   "sit": "notes.done",
+   "bucket": "",
+   "text": "Готово! {n} {соцсеть} — уже в карточках",
+   "ref": null,
+   "new": true,
+   "coffee": false,
+   "draft": true
+  },
+  {
+   "id": "notes.done.g0.p2",
+   "sit": "notes.done",
+   "bucket": "",
+   "text": "Есть {n} {соцсеть}! Разложила по карточкам и прибрала заметки",
+   "ref": null,
+   "new": true,
+   "coffee": false,
+   "draft": true
+  },
+  {
+   "id": "notes.tidy.g0.p0",
+   "sit": "notes.tidy",
+   "bucket": "",
+   "text": "Соцсетей не нашла, зато кое-что записала в карточки",
+   "ref": null,
+   "new": true,
+   "coffee": false,
+   "draft": true
+  },
+  {
+   "id": "notes.tidy.g0.p1",
+   "sit": "notes.tidy",
+   "bucket": "",
+   "text": "Новых ссылок нет, но заметки я прибрала",
+   "ref": null,
+   "new": true,
+   "coffee": false,
+   "draft": true
+  },
+  {
+   "id": "notes.none.g0.p0",
+   "sit": "notes.none",
+   "bucket": "",
+   "text": "Прочитала всё — соцсетей там нет",
+   "ref": null,
+   "new": true,
+   "coffee": false,
+   "draft": true
+  },
+  {
+   "id": "notes.none.g0.p1",
+   "sit": "notes.none",
+   "bucket": "",
+   "text": "Ни одной ссылки. Твои друзья — люди-загадки",
+   "ref": null,
+   "new": true,
+   "coffee": false,
+   "draft": true
+  },
+  {
+   "id": "notes.nothing.g0.p0",
+   "sit": "notes.nothing",
+   "bucket": "",
+   "text": "Новых заметок нет — я всё уже прочитала",
+   "ref": null,
+   "new": true,
+   "coffee": false,
+   "draft": true
+  },
+  {
+   "id": "notes.nothing.g0.p1",
+   "sit": "notes.nothing",
+   "bucket": "",
+   "text": "Всё разобрано. Допишешь что-то — прочитаю",
+   "ref": null,
+   "new": true,
+   "coffee": false,
+   "draft": true
+  },
+  {
+   "id": "notes.fail.g0.p0",
+   "sit": "notes.fail",
+   "bucket": "",
+   "text": "Не получилось дочитать. Попробую чуть позже",
+   "ref": null,
+   "new": true,
+   "coffee": false,
+   "draft": true
+  },
+  {
+   "id": "notes.fail.g0.p1",
+   "sit": "notes.fail",
+   "bucket": "",
+   "text": "Магия на перерыве — вернусь скоро",
+   "ref": null,
+   "new": true,
+   "coffee": false,
+   "draft": true
+  },
+  {
+   "id": "notes.quiet.g0.p0",
+   "sit": "notes.quiet",
+   "bucket": "",
+   "text": "Заглянула в «О себе» — {n} {соцсеть} уже в карточках",
+   "ref": null,
+   "new": true,
+   "coffee": false,
+   "draft": true
+  },
+  {
+   "id": "notes.quiet.g0.p1",
+   "sit": "notes.quiet",
+   "bucket": "",
+   "text": "Прочитала «О себе» новых друзей: нашла {n} {соцсеть}",
+   "ref": null,
+   "new": true,
+   "coffee": false,
+   "draft": true
+  },
+  {
+   "id": "notes.quiet.g0.p2",
+   "sit": "notes.quiet",
+   "bucket": "",
+   "text": "Бонус к импорту: {n} {соцсеть} из «О себе»",
+   "ref": null,
+   "new": true,
+   "coffee": false,
+   "draft": true
   }
  ]
 }

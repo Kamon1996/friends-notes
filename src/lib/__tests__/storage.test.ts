@@ -35,3 +35,23 @@ test('пустое хранилище — нет данных; испорчен�
   assert.deepEqual(parseStored('{"friends":[{"id":"a"'), { data: null, broken: true });
   assert.equal(parseStored('{"friends":[]}').data?.friends.length, 0);
 });
+
+test('разбор заметок ИИ: отпечаток и «разобрать в фоне» переживают перезапуск, мусор отбрасывается', () => {
+  const data = normalizeData({
+    version: 1,
+    friends: [
+      { id: 'a', name: 'А', notes: 'О себе: inst: anya', notesQueue: true },
+      { id: 'b', name: 'Б', notes: 'x', notesSeen: '1-abc' },
+      { id: 'c', name: 'В', notesSeen: 42, notesQueue: 'yes' },
+    ],
+  });
+  assert.deepEqual(
+    data.friends.map((f) => [f.notesSeen, f.notesQueue]),
+    [
+      [undefined, true],
+      ['1-abc', undefined],
+      [undefined, undefined],
+    ],
+  );
+  assert.equal('notesQueue' in data.friends[2], false);
+});

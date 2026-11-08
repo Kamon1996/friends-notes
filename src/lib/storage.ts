@@ -34,7 +34,7 @@ function normalizeFriend(v: unknown): Friend | null {
     ? v.dates.filter((d): d is ImportantDate => isObject(d) && typeof d.id === 'string' && typeof d.date === 'string').map((d) => ({ ...d, title: str(d.title), yearly: d.yearly !== false }))
     : [];
   // Пол берём только из проверенных полей ниже, а не из исходной записи как есть.
-  const { gender: _gender, genderBy: _genderBy, genderStage: _genderStage, ...rest } = v;
+  const { gender: _gender, genderBy: _genderBy, genderStage: _genderStage, notesSeen: _seen, notesQueue: _queue, ...rest } = v;
   return {
     ...(rest as unknown as Friend),
     emoji: str(v.emoji),
@@ -48,6 +48,9 @@ function normalizeFriend(v: unknown): Friend | null {
     socials: Array.isArray(v.socials) ? v.socials.filter((l) => isObject(l) && typeof l.id === 'string' && typeof l.network === 'string') as Friend['socials'] : undefined,
     createdAt: typeof v.createdAt === 'number' ? v.createdAt : 0,
     ...genderFields(v),
+    // Разбор заметок ИИ: отпечаток разобранного текста и «разобрать в фоне» — только допустимые значения.
+    ...(typeof v.notesSeen === 'string' && v.notesSeen && { notesSeen: v.notesSeen }),
+    ...(v.notesQueue === true && { notesQueue: true }),
   };
 }
 

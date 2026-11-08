@@ -41,7 +41,7 @@
 
     <h2>Импорт из Telegram (по желанию)</h2>
     <p>Ты входишь в собственный аккаунт Telegram по номеру и коду (или по QR-коду), и приложение через официальную библиотеку TDLib запрашивает у серверов Telegram список твоих контактов: имена, телефоны, @username, дни рождения, «о себе», аватарки. Для этого твой номер телефона и код подтверждения передаются серверам Telegram; к ним применяется <a href="https://telegram.org/privacy">политика конфиденциальности Telegram</a>.</p>
-    <p>Приложение не читает сообщения, чаты, группы и файлы: таких функций в нём нет. Сразу после загрузки контактов приложение выходит из аккаунта и стирает данные входа. Сессия видна в Telegram → Настройки → Устройства как «Друзья · импорт контактов» и исчезает после выхода. Загруженные данные остаются только на устройстве.</p>
+    <p>Приложение не читает сообщения, чаты, группы и файлы: таких функций в нём нет. Сразу после загрузки контактов приложение выходит из аккаунта и стирает данные входа. Сессия видна в Telegram → Настройки → Устройства как «Друзья · импорт контактов» и исчезает после выхода. Загруженные данные остаются на устройстве; раздел «О себе» потом разбирает магия — см. «Соцсети из заметок».</p>
 
     <h2>Фото</h2>
     <p>Фото друга можно взять из контактов, выбрать из галереи или снять камерой. Приложение сохраняет уменьшенные копии в своей папке на устройстве и удаляет их вместе с записью о друге.</p>
@@ -50,7 +50,7 @@
     <ul>
       <li><code>READ_CONTACTS</code> — импорт друзей из телефонной книги (по запросу, можно отказать).</li>
       <li>Уведомления — напоминания о днях рождения, датах и делах (локальные).</li>
-      <li>Интернет — только для импорта из Telegram и открытия ссылок «Написать» в мессенджерах.</li>
+      <li>Интернет — для импорта из Telegram, открытия ссылок «Написать» в мессенджерах, определения пола друзей и разбора заметок (см. ниже).</li>
       <li>Камера и галерея — только когда ты сам выбираешь фото.</li>
       <li><code>READ_CALENDAR</code>, <code>WRITE_CALENDAR</code> — только если ты включил «Дни рождения в календаре»: приложение заводит на устройстве отдельный локальный календарь «Друзья» с днями рождения и важными датами и обновляет его. Чтобы не повторять то, что уже есть, оно сравнивает названия и даты событий в других календарях телефона и дни рождения в контактах (если доступ к контактам уже дан); эти данные не сохраняются и никуда не отправляются. Другие календари приложение не меняет; локальный календарь не синхронизируется с облаком. При выключении календарь удаляется.</li>
     </ul>
@@ -63,12 +63,15 @@
     <h2>Пол друзей</h2>
     <p>Чтобы напоминать о 8 Марта и 23 Февраля, приложение само определяет пол друзей — в фоне и про каждого не больше одного раза. Сначала прямо на телефоне. Если так понять не удалось, имя друга (без фамилии и номера телефона) и страна по коду номера (например, KZ) отправляются сторонним сервисам, которые определяют пол по имени, в том числе ИИ-сервисам. Они получают только имя — ни твоего аккаунта, ни номера, ни того, чей это контакт — и используют его, чтобы ответить; некоторые из них могут сохранять такие запросы и использовать их для улучшения своих моделей. Пол хранится только на телефоне и виден лишь в форме друга; там его можно выбрать вручную — ручной выбор приложение больше не меняет.</p>
 
+    <h2>Соцсети из заметок</h2>
+    <p>Чтобы найти в заметке друга его соцсети и подсказки для подарка (любимую еду, цветы, увлечения), приложение отправляет текст заметки — в том числе раздел «О себе» из Telegram — сторонним ИИ-сервисам. Имя, номер телефона и другие поля карточки не отправляются. Для друзей, добавленных импортом из Telegram, это происходит само, вскоре после импорта; для остальных — только когда ты запускаешь «Соцсети из заметок» в меню магии. Одну и ту же заметку дважды не отправляем; изменишь её — можно разобрать снова. Сервисы используют текст, чтобы ответить; некоторые из них могут сохранять такие запросы и использовать их для улучшения своих моделей. Найденное сохраняется только на телефоне: ссылки — в карточке друга, из заметки убираются только ссылки и подписи к ним.</p>
+
     <h2>Резервная копия</h2>
     <p>По кнопке «Сохранить копию» приложение собирает все записи, напоминания, настройки и фото (уменьшенные) в один файл и открывает меню «Поделиться». Куда положить файл — в Google Диск, себе в Telegram или в память телефона, — выбираешь ты. Файл не зашифрован: храни его там, куда нет доступа у посторонних. «Восстановить из копии» заменяет данные в приложении данными из файла; файл проверяется, посторонние файлы не принимаются.</p>
     <p>Кроме того, Android может сам сохранять данные приложения в твоём аккаунте Google, если в настройках телефона включено резервное копирование, и вернуть их при установке на новый телефон. Это делает система, а не приложение; данные входа в Telegram в эту копию не попадают.</p>
 
     <h2>Передача и хранение</h2>
-    <p>Данные не отправляются разработчику и не хранятся на серверах разработчика: их просто нет. Данные покидают телефон, только когда ты сам входишь в Telegram для импорта, сохраняешь резервную копию туда, куда выберешь, когда приложение определяет пол друзей (уходят только имена и страна по коду номера, см. выше), а также через резервное копирование Android в твой аккаунт Google, если оно включено.</p>
+    <p>Данные не отправляются разработчику и не хранятся на серверах разработчика: их просто нет. Данные покидают телефон, только когда ты сам входишь в Telegram для импорта, сохраняешь резервную копию туда, куда выберешь, когда приложение определяет пол друзей (уходят только имена и страна по коду номера, см. выше), когда магия разбирает заметки и «О себе» (уходит только текст заметки, см. выше), а также через резервное копирование Android в твой аккаунт Google, если оно включено.</p>
 
     <h2>Удаление данных</h2>
     <p>Удали друга или напоминание в приложении, и запись исчезнет вместе с фото. Удаление приложения стирает все его данные с устройства.</p>
@@ -101,7 +104,7 @@
 
     <h2>Telegram import (optional)</h2>
     <p>You log into your own Telegram account with your phone number and a code (or a QR code), and the app uses the official TDLib library to request your contact list from Telegram's servers: names, phones, usernames, birthdays, bios and profile photos. Your phone number and the confirmation code are sent to Telegram's servers for that purpose and are covered by <a href="https://telegram.org/privacy">Telegram's privacy policy</a>.</p>
-    <p>The app does not read messages, chats, groups or files; it has no such functions. Right after the contacts are loaded the app logs out and wipes the login data. The session appears in Telegram → Settings → Devices as «Друзья · импорт контактов» and disappears after logout. The imported data stays on the device only.</p>
+    <p>The app does not read messages, chats, groups or files; it has no such functions. Right after the contacts are loaded the app logs out and wipes the login data. The session appears in Telegram → Settings → Devices as «Друзья · импорт контактов» and disappears after logout. The imported data stays on the device; the bio is then processed by the magic — see “Social links from notes”.</p>
 
     <h2>Photos</h2>
     <p>A friend's photo can be taken from contacts, picked from the gallery or shot with the camera. The app stores downsized copies in its own folder on the device and deletes them together with the friend record.</p>
@@ -110,7 +113,7 @@
     <ul>
       <li><code>READ_CONTACTS</code> — importing friends from the address book (on request, can be declined).</li>
       <li>Notifications — local reminders about birthdays, dates and tasks.</li>
-      <li>Internet — only for the Telegram import and for opening "Write" links in messengers.</li>
+      <li>Internet — for the Telegram import, opening "Write" links in messengers, determining friends' gender and processing notes (see below).</li>
       <li>Camera and gallery — only when you pick a photo yourself.</li>
       <li><code>READ_CALENDAR</code>, <code>WRITE_CALENDAR</code> — only if you turn on "Birthdays in the calendar" («Дни рождения в календаре»): the app creates a separate local calendar "Друзья" on the device with birthdays and important dates and keeps it up to date. To avoid duplicates it compares the titles and dates of events in the phone's other calendars and the birthdays in your contacts (if contacts access was already granted); this data is not stored or sent anywhere. The app does not change other calendars; the local calendar is not synced to any cloud. Turning the option off deletes the calendar.</li>
     </ul>
@@ -123,12 +126,15 @@
     <h2>Friends' gender</h2>
     <p>To remind you about 8 March and 23 February, the app determines your friends' gender by itself — in the background and at most once per person. First on the phone itself. If that is not enough, the friend's first name (no surname, no phone number) and the country from the phone code (for example, KZ) are sent to third-party services that tell gender by name, including AI services. They receive only the name — neither your account, nor phone numbers, nor whose contact it is — and use it to answer; some of them may store such requests and use them to improve their models. The gender is stored only on the phone and shown only in the friend's edit form, where you can set it manually; the app never changes a manual choice.</p>
 
+    <h2>Social links from notes</h2>
+    <p>To find a friend's social profiles and gift hints (favourite food, flowers, hobbies) in their note, the app sends the note text — including the Telegram bio — to third-party AI services. The name, phone number and other fields are not sent. For friends added by the Telegram import this happens automatically, shortly after the import; for everyone else — only when you run “Social links from notes” («Соцсети из заметок») in the magic menu. The same note is never sent twice; if you edit it, it can be processed again. The services use the text to answer; some of them may store such requests and use them to improve their models. The results are stored only on the phone: links go to the friend's card, and only the links and their labels are removed from the note.</p>
+
     <h2>Backup</h2>
     <p>"Save a copy" ("Сохранить копию") collects all records, reminders, settings and (downsized) photos into a single file and opens the share menu; you choose where to keep it — Google Drive, your own Telegram chat or the phone's storage. The file is not encrypted: keep it where others cannot access it. "Restore from a copy" replaces the app's data with the data from the file; the file is validated and unrelated files are rejected.</p>
     <p>In addition, Android may back up the app's data to your Google account if backup is turned on in the phone settings, and restore it when the app is installed on a new phone. This is done by the system, not by the app; Telegram sign-in data is not included.</p>
 
     <h2>Transfer and storage</h2>
-    <p>No data is sent to or stored by the developer: there are no developer servers. Data leaves the phone only when you sign in to Telegram for the import, when you save a backup wherever you choose, when the app determines friends' gender (first names and the country from the phone code only, see above), and through Android backup to your Google account if it is enabled.</p>
+    <p>No data is sent to or stored by the developer: there are no developer servers. Data leaves the phone only when you sign in to Telegram for the import, when you save a backup wherever you choose, when the app determines friends' gender (first names and the country from the phone code only, see above), when the magic processes notes and bios (only the note text, see above), and through Android backup to your Google account if it is enabled.</p>
 
     <h2>Deleting data</h2>
     <p>Delete a friend or a reminder in the app and the record disappears together with its photo. Uninstalling the app removes all of its data from the device.</p>

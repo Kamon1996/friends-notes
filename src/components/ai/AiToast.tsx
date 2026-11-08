@@ -1,24 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { Text, View } from 'react-native';
 import Animated, { FadeInDown, FadeOutDown } from 'react-native-reanimated';
 
 import { useTheme } from '@/components/ui';
-import { voice } from '@/lib/voice';
 import { AiIcon } from './AiIcon';
 
-/** Тихий тост: ИИ сама определила пол новых друзей в фоне. Показывается несколько секунд и уходит. */
-export function AiToast({ news, onDone, bottom }: { news: number; onDone: () => void; bottom: number }) {
+/** Тихий тост: магия сама что-то сделала в фоне (пол новых друзей, соцсети из «О себе»). Несколько секунд — и уходит. */
+export function AiToast({ text, onDone, bottom }: { text: string | null; onDone: () => void; bottom: number }) {
   const { s, colors } = useTheme();
-  const [text, setText] = useState<string | null>(null);
-  const [seen, setSeen] = useState(0);
-  if (news > 0 && news !== seen) {
-    setSeen(news);
-    setText(voice.say('gender.quiet', { k: news }));
-  }
-  if (news === 0 && seen !== 0) {
-    setSeen(0);
-    setText(null);
-  }
   useEffect(() => {
     if (!text) return;
     const t = setTimeout(onDone, 3800);

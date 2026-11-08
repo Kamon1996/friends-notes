@@ -1,5 +1,4 @@
 import type { RawContact } from './contactsImport';
-import { extractLinks, mergeLinks } from './socials';
 import type { SocialLink } from './types';
 
 /** Данные пользователя Telegram, нужные для импорта (совпадает с тем, что отдаёт модуль). */
@@ -19,21 +18,22 @@ let seq = 0;
 const linkId = () => `tgl-${Date.now().toString(36)}-${(seq++).toString(36)}`;
 
 /**
- * Контакт Telegram → формат общего импорта. @username становится ссылкой на Telegram, ссылки и @ники
- * из «О себе» — соцсетями, остаток текста «О себе» — заметкой.
+ * Контакт Telegram → формат общего импорта. @username становится ссылкой на Telegram, «О себе» целиком — заметкой.
+ * Соцсети из «О себе» потом достаёт ИИ (src/lib/notesAi.ts) и убирает их из заметки — регулярными выражениями
+ * свободный текст не разбираем: подписи, сокращения и опечатки ИИ понимает надёжнее.
  */
 export function tgToRawContact(p: TgPerson): RawContact {
   const phone = p.phoneNumber ? (p.phoneNumber.startsWith('+') ? p.phoneNumber : `+${p.phoneNumber}`) : '';
   const own: SocialLink[] = p.usernames.map((u) => ({ id: linkId(), network: 'telegram', url: `https://t.me/${u}`, handle: u, source: 'tg' }));
-  const bio = p.bio ? extractLinks(p.bio, linkId) : { links: [], rest: '' };
+  const bio = p.bio?.trim() ?? '';
   return {
     id: `tg-${p.id}`,
     fullName: [p.firstName, p.lastName].filter(Boolean).join(' ').trim(),
     phones: phone ? [{ number: phone }] : [],
     birthday: p.birthdate ? { day: p.birthdate.day, month: p.birthdate.month, year: p.birthdate.year || undefined } : null,
-    note: bio.rest ? `О себе: ${bio.rest}` : '',
+    note: bio ? `О себе: ${bio}` : '',
     links: { telegramId: p.id },
-    socials: mergeLinks(own, bio.links),
+    socials: own,
     photoUri: p.photoUri ?? null,
     thumbUri: p.thumbUri ?? null,
   };

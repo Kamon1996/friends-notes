@@ -47,6 +47,8 @@ export function fill(text: string, v: Vars = {}): string {
     .replace(/\{n\}/g, String(n))
     .replace(/\{k\}/g, String(k))
     .replace(/\{друг\}/g, plural(n, 'друг', 'друга', 'друзей'))
+    .replace(/\{соцсеть\}/g, plural(n, 'соцсеть', 'соцсети', 'соцсетей'))
+    .replace(/\{друга\}/g, plural(k, 'друга', 'друзей', 'друзей'))
     .replace(/\{человек\}/g, plural(k, 'человек', 'человека', 'человек'))
     .replace(/\{загадка\}/g, plural(k, 'загадка', 'загадки', 'загадок'))
     .replace(/\{новым другом\}/g, plural(k, 'новым другом', 'новыми друзьями', 'новыми друзьями'))

@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useBottomTabBarHeight } from 'expo-router/tabs';
-import { useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
 import { FlatList, Pressable, Text, View } from 'react-native';
 import ReanimatedSwipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 
@@ -14,12 +14,14 @@ import { Button, Empty, Fab, GroupedRow, useTheme } from '@/components/ui';
 import { confirm } from '@/lib/confirm';
 import { plural, todayISO } from '@/lib/dates';
 import { buildFriendList, type FriendListItem, type FriendSort } from '@/lib/friendList';
+import { notesPending } from '@/lib/notesAi';
 import { useStore } from '@/lib/store';
 import { telegramAvailable } from '@/lib/telegramClient';
+import { voice } from '@/lib/voice';
 import { zodiacShown } from '@/lib/zodiac';
 
 export default function FriendsScreen() {
-  const { data, deleteFriends, updateFriends, genderBusy, genderNews, clearGenderNews } = useStore();
+  const { data, deleteFriends, updateFriends, genderBusy, genderNews, clearGenderNews, readNotes, notesBusy, notesNews, clearNotesNews } = useStore();
   const [aiOpen, setAiOpen] = useState(false);
   // Для «Пола друзей»: экран ИИ рисует этот же список с начала и не закрывает нижнее меню.
   const listRef = useRef<FlatList<FriendListItem>>(null);
@@ -36,6 +38,15 @@ export default function FriendsScreen() {
   const items = useMemo(() => buildFriendList(data.friends, query, sort, today), [data.friends, query, sort, today]);
 
   const n = data.friends.length;
+  const notesWaiting = useMemo(() => data.friends.filter((f) => notesPending(f, 'all')).length, [data.friends]);
+
+  // Тихий тост магии: сперва про пол, потом про соцсети из «О себе». Фраза выбирается один раз на новость.
+  const toast = useMemo(() => {
+    if (genderNews) return voice.say('gender.quiet', { k: genderNews });
+    if (notesNews) return notesNews.links ? voice.say('notes.quiet', { n: notesNews.links, k: notesNews.withLinks }) : voice.say('notes.tidy');
+    return null;
+  }, [genderNews, notesNews]);
+  const toastDone = useCallback(() => (genderNews ? clearGenderNews() : clearNotesNews()), [genderNews, clearGenderNews, clearNotesNews]);
 
   const toggle = (id: string) =>
     setSelected((prev) => {
@@ -148,6 +159,8 @@ export default function FriendsScreen() {
         visible={aiOpen}
         onClose={() => setAiOpen(false)}
         gender={{ known: data.friends.filter((f) => f.gender).length, total: n }}
+        notes={{ waiting: notesWaiting, busy: notesBusy }}
+        onNotes={() => readNotes('all')}
         onGender={() => {
           setAiOpen(false);
           // Список — к началу и «по имени»: экран ИИ рисует его точь-в-точь и подменяет незаметно.
@@ -158,7 +171,7 @@ export default function FriendsScreen() {
           setTimeout(() => router.push({ pathname: '/ai-gender', params: { tab: String(tabBar) } }), 230);
         }}
       />
-      <AiToast news={genderNews} onDone={clearGenderNews} bottom={selecting ? 90 : 96} />
+      <AiToast text={toast} onDone={toastDone} bottom={selecting ? 90 : 96} />
     </View>
   );
 }
