@@ -1,0 +1,62 @@
+name: Publish APK
+
+# Опубликовать уже собранный APK (артефакт «friends-notes-build» запуска «Android APK») как релиз — без пересборки.
+# Нужен, когда сборка прошла, а GitHub не дал создать релиз.
+# Запуск: коммитом со словами «[publish <номер запуска>]» в первой строке или вручную (Actions → Publish APK).
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: 'Номер запуска «Android APK» с артефактом (из адреса …/actions/runs/<номер>)'
+        required: true
+  push:
+    branches: [main, claude/mobile-project-creation-pgqs46]
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[publish ')
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Which run
+        id: pick
+        env:
+          MSG: ${{ github.event.head_commit.message }}
+          INPUT: ${{ github.event.inputs.run_id }}
+        run: |
+          RUN_ID="$INPUT"
+          if [ -z "$RUN_ID" ]; then RUN_ID=$(printf '%s\n' "$MSG" | head -1 | grep -oE '\[publish [0-9]+\]' | grep -oE '[0-9]+' || true); fi
+          if [ -z "$RUN_ID" ]; then echo "::error::Не указан номер запуска"; exit 1; fi
+          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@v4
+        with:
+          name: friends-notes-build
+          run-id: ${{ steps.pick.outputs.run_id }}
+          github-token: ${{ github.token }}
+          path: built
+      - name: Create release and attach APK
+        env:
+          RUN_ID: ${{ steps.pick.outputs.run_id }}
+        run: |
+          SHA=$(gh api "repos/$GH_REPO/actions/runs/$RUN_ID" --jq .head_sha)
+          VERSION=$(gh api "repos/$GH_REPO/contents/app.json?ref=$SHA" --jq .content | base64 -d | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).expo.version))')
+          TAG="v$VERSION"
+          FILE="friends-notes-$VERSION.apk"
+          test -f built/friends-notes.apk || { echo "::error::В артефакте нет APK"; ls -R built; exit 1; }
+          cp built/friends-notes.apk "$FILE"
+          echo "Запуск $RUN_ID → коммит $SHA → версия $VERSION"
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh api -X POST "repos/$GH_REPO/releases" \
+              -f tag_name="$TAG" -f target_commitish="$SHA" -f name="Друзья $VERSION" \
+              -f body="APK собран в GitHub Actions (запуск $RUN_ID) из коммита $SHA. Подпись та же, что у сборок EAS: ставится поверх прошлой версии." >/dev/null
+          fi
+          gh release upload "$TAG" "$FILE" --clobber
+          URL="https://github.com/$GH_REPO/releases/download/$TAG/$FILE"
+          { echo "### ✅ APK опубликован"; echo ""; echo "Файл: $URL"; } >> "$GITHUB_STEP_SUMMARY"
+          echo "APK: $URL"
