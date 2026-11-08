@@ -52,16 +52,6 @@ export function GenderWheel({ rows, s, reveal, finished }: { rows: readonly Whee
               backgroundColor: scheme === 'dark' ? 'rgba(243,236,228,0.07)' : 'rgba(34,28,24,0.05)',
             }}
           />
-          <Svg width={bandW} height={RH} style={{ position: 'absolute', left: 16, top: cy - RH / 2 }} pointerEvents="none">
-            <Defs>
-              <LinearGradient id={gradId} x1="0" y1="0" x2="1" y2="0">
-                <Stop offset="0" stopColor={AI_STOPS[0]} />
-                <Stop offset="0.5" stopColor={AI_STOPS[1]} />
-                <Stop offset="1" stopColor={AI_STOPS[2]} />
-              </LinearGradient>
-            </Defs>
-            <Rect x={0.75} y={0.75} width={Math.max(0, bandW - 1.5)} height={RH - 1.5} rx={11.5} ry={11.5} fill="none" stroke={`url(#${gradId})`} strokeWidth={1.5} strokeOpacity={0.85} />
-          </Svg>
           {rows.map((f, i) => (
             <Row
               key={i}
@@ -88,6 +78,17 @@ export function GenderWheel({ rows, s, reveal, finished }: { rows: readonly Whee
               </LinearGradient>
             </Defs>
             <Rect x="0" y="0" width={box.w} height={box.h} fill={`url(#${fadeId})`} />
+          </Svg>
+          {/* Рамка полосы — поверх строк: строки едут под ней, как под стеклом. */}
+          <Svg width={bandW} height={RH} style={{ position: 'absolute', left: 16, top: cy - RH / 2 }} pointerEvents="none">
+            <Defs>
+              <LinearGradient id={gradId} x1="0" y1="0" x2="1" y2="0">
+                <Stop offset="0" stopColor={AI_STOPS[0]} />
+                <Stop offset="0.5" stopColor={AI_STOPS[1]} />
+                <Stop offset="1" stopColor={AI_STOPS[2]} />
+              </LinearGradient>
+            </Defs>
+            <Rect x={0.75} y={0.75} width={Math.max(0, bandW - 1.5)} height={RH - 1.5} rx={11.5} ry={11.5} fill="none" stroke={`url(#${gradId})`} strokeWidth={1.5} strokeOpacity={1} />
           </Svg>
           {/* Подписи колонок — прямо над колесом, как «часы | минуты». */}
           <View style={{ position: 'absolute', left: 0, right: 0, top: Math.max(0, cy - WHEEL.radius - 14) }}>
