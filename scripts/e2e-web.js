@@ -727,15 +727,15 @@ scenario('Пол без интернета: своя база сразу, ост
   assert.equal(asked.length, 2);
 }, { data: seed({ friends: GENDER_FRIENDS }) });
 
-scenario('Пол в форме: «определено само» или «выбери сам»; ручной выбор главнее, и после переименования', async ({ ui }) => {
+scenario('Пол в форме: угаданное — без подписи, сомнительное — «подскажешь?»; ручной выбор главнее, и после переименования', async ({ ui }) => {
   await ui.go('/friend/edit?id=k');
-  await ui.see('Определено автоматически — можно поправить');
+  await ui.notSee('подскажешь');
   await ui.go('/friend/edit?id=s');
-  await ui.see('Не удалось определить — выбери сам');
+  await ui.see('подскажешь?');
   await ui.tap('Мужчина');
-  await ui.notSee('Не удалось определить');
+  await ui.notSee('подскажешь');
   await ui.fill('Например, Аня', 'Саша Иванова'); // фамилия «женская», но пол выбран вручную
-  await ui.notSee('Определено автоматически');
+  await ui.notSee('подскажешь');
   await ui.tap('Сохранить');
   const data = await ui.waitData((x) => x.friends.find((f) => f.id === 's').name === 'Саша Иванова', 'не сохранилось');
   assert.deepEqual(genderOf(data.friends.find((f) => f.id === 's')), ['s', 'm', 'manual', null]);
@@ -745,46 +745,55 @@ scenario('Пол в форме: «определено само» или «вы�
 
 scenario('Переименование: не определился — пробуем заново по новому имени; определённый пол остаётся', async ({ ui }) => {
   await ui.go('/friend/edit?id=s');
-  await ui.see('Не удалось определить — выбери сам');
+  await ui.see('подскажешь?');
   await ui.fill('Например, Аня', 'Саша Иванова');
-  await ui.see('Определено автоматически — можно поправить');
+  await ui.notSee('подскажешь');
   await ui.tap('Сохранить');
   let data = await ui.waitData((x) => x.friends.find((f) => f.id === 's').name === 'Саша Иванова', 'не сохранилось');
   assert.deepEqual(genderOf(data.friends.find((f) => f.id === 's')), ['s', 'f', 'names', null]);
   await ui.go('/friend/edit?id=k');
   await ui.fill('Например, Аня', 'Саша');
-  await ui.see('Определено автоматически — можно поправить');
+  await ui.notSee('подскажешь');
   await ui.tap('Сохранить');
   data = await ui.waitData((x) => x.friends.find((f) => f.id === 'k').name === 'Саша', 'не сохранилось');
   assert.deepEqual(genderOf(data.friends.find((f) => f.id === 'k')), ['k', 'f', 'genderize', null], 'определённый пол переименование не трогает');
 }, { data: seed({ friends: [ANYA, F({ id: 's', name: 'Саша', genderStage: 'ai' }), F({ id: 'k', name: 'Алуашка', gender: 'f', genderBy: 'genderize' })] }) });
 
-scenario('ИИ: значок → «Пол друзей» → барабан → итог; кого не понять — выбираешь сам', async ({ ui }) => {
+scenario('ИИ: значок → «Пол друзей» → список крутится → загадки → «Помочь» → карточка; выбор сохраняется', async ({ ui }) => {
   await ui.go('/friends');
   await ui.tap('ИИ для друзей');
-  await ui.see('ИИ для друзей');
-  await ui.see('Пройдёт по всем друзьям сам');
-  await ui.see('скоро');
-  await ui.tap('Пол друзей — запустить');
-  await ui.see('Пролистываю друзей…');
-  await ui.see('Друг');
-  await ui.pause(4500);
-  await ui.see('Женщины');
-  await ui.see('Выбери сам');
-  await ui.see('Этих по имени не понять');
+  await ui.see('Пол друзей');
+  await ui.see('Идеи подарков');
+  await ui.notSee('Поздравления');
+  await ui.tap('Пол друзей — поехали');
+  await ui.see('Разобралась с');
+  await ui.pause(5200);
+  // Саша — загадка: шторка с выбором.
+  await ui.see('Оставить так');
+  await ui.tap('Помочь');
+  await ui.see('Александр или Александра?');
   await ui.tap('Саша: мужчина');
-  let data = await ui.waitData((x) => x.friends.find((f) => f.id === 's').gender === 'm', 'выбор не сохранился');
+  const data = await ui.waitData((x) => x.friends.find((f) => f.id === 's').gender === 'm', 'выбор не сохранился');
   assert.deepEqual(genderOf(data.friends.find((f) => f.id === 's')), ['s', 'm', 'manual', null]);
-  // Выбранный остаётся в списке — не исчезает из-под пальца, а в кольце стало на одного больше.
-  await ui.see('Саша');
-  await ui.tap('Саша: женщина');
-  data = await ui.waitData((x) => x.friends.find((f) => f.id === 's').gender === 'f', 'передумать нельзя');
-  await ui.tap('Готово');
+  // Загадок больше нет — экран сам возвращается к списку.
+  await ui.pause(2800);
+  await ui.notSee('Разобралась с');
   await ui.see('Аня Смирнова');
-  await ui.notSee('Пролистываю друзей…');
   const text = await ui.text();
   assert.ok(!/gemini|openrouter|genderize|hugging|google/i.test(text), 'в интерфейсе не называем, как это устроено');
 }, { data: seed({ friends: [ANYA, IGOR, MAMA, F({ id: 's', name: 'Саша', genderStage: 'ai' }), F({ id: 'k', name: 'Карина' })] }) });
+
+scenario('ИИ: всё определилось — «Готово» и сам возвращается; «Оставить так» — тоже', async ({ ui }) => {
+  await ui.go('/friends');
+  await ui.tap('ИИ для друзей');
+  await ui.tap('Пол друзей — поехали');
+  await ui.pause(5200);
+  await ui.see('Оставить так');
+  await ui.tap('Оставить так');
+  await ui.pause(2600);
+  await ui.notSee('Разобралась с');
+  assert.equal((await ui.data()).friends.find((f) => f.id === 's').gender, undefined, '«оставить так» ничего не меняет');
+}, { data: seed({ friends: [ANYA, IGOR, F({ id: 's', name: 'Саша', genderStage: 'ai' })] }) });
 
 scenario('ИИ: без друзей значка нет', async ({ ui }) => {
   await ui.go('/friends');
@@ -796,7 +805,7 @@ scenario('Новый друг: пол по имени сразу; сомните
   const asked = await genderizeStub(page);
   await ui.go('/friend/edit');
   await ui.fill('Например, Аня', 'Вероника');
-  await ui.see('Определено автоматически — можно поправить');
+  await ui.notSee('подскажешь');
   await ui.tap('Сохранить');
   let data = await ui.waitData((x) => x.friends.some((f) => f.name === 'Вероника'), 'друг не сохранился');
   const v = data.friends.find((f) => f.name === 'Вероника');
@@ -804,14 +813,14 @@ scenario('Новый друг: пол по имени сразу; сомните
 
   await ui.go('/friend/edit');
   await ui.fill('Например, Аня', 'Женя');
-  await ui.notSee('Определено автоматически');
+  await ui.notSee('подскажешь');
   await ui.tap('Сохранить');
   await ui.waitData((x) => x.friends.find((f) => f.name === 'Женя')?.genderStage === 'genderize', 'Женю не отправили в Genderize');
   assert.deepEqual(asked.map((a) => a.names), [['Женя']]);
 
   await ui.go(`/friend/edit?id=${v.id}`);
   await ui.tap('Не указан');
-  await ui.notSee('Определено автоматически');
+  await ui.notSee('подскажешь');
   await ui.tap('Сохранить');
   data = await ui.waitData((x) => x.friends.find((f) => f.id === v.id).genderBy === 'manual', 'ручной выбор не сохранился');
   assert.equal(data.friends.find((f) => f.id === v.id).gender, undefined);

@@ -1,4 +1,4 @@
-import { useEffect, useId } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, { Easing, cancelAnimation, useAnimatedStyle, useReducedMotion, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import Svg, { Defs, LinearGradient, Path, RadialGradient, Rect, Stop } from 'react-native-svg';
@@ -16,20 +16,28 @@ export function useSvgId(prefix: string): string {
   return prefix + useId().replace(/[^a-zA-Z0-9_-]/g, '');
 }
 
-/** Заливка «волшебным» градиентом во весь родитель (кнопки, полоски). */
+/**
+ * Заливка «волшебным» градиентом во весь родитель (кнопки, полоски). Размер — по замеру, в пикселях: проценты у SVG
+ * на Android считаются не от родителя, и пилюля выходила меньше своего текста.
+ */
 export function AiGradient({ radius = 0, stops = AI_STOPS, opacity = 1 }: { radius?: number; stops?: readonly string[]; opacity?: number }) {
   const id = useSvgId('aig');
+  const [size, setSize] = useState<{ w: number; h: number } | null>(null);
   return (
-    <Svg style={StyleSheet.absoluteFill} width="100%" height="100%" pointerEvents="none">
-      <Defs>
-        <LinearGradient id={id} x1="0" y1="0" x2="1" y2="1">
-          {stops.map((c, i) => (
-            <Stop key={i} offset={i / (stops.length - 1)} stopColor={c} stopOpacity={opacity} />
-          ))}
-        </LinearGradient>
-      </Defs>
-      <Rect x="0" y="0" width="100%" height="100%" rx={radius} ry={radius} fill={`url(#${id})`} />
-    </Svg>
+    <View style={StyleSheet.absoluteFill} pointerEvents="none" onLayout={(e) => setSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}>
+      {size && size.w > 0 && size.h > 0 && (
+        <Svg width={size.w} height={size.h}>
+          <Defs>
+            <LinearGradient id={id} x1="0" y1="0" x2="1" y2="1">
+              {stops.map((c, i) => (
+                <Stop key={i} offset={i / (stops.length - 1)} stopColor={c} stopOpacity={opacity} />
+              ))}
+            </LinearGradient>
+          </Defs>
+          <Rect x="0" y="0" width={size.w} height={size.h} rx={Math.min(radius, size.h / 2)} ry={Math.min(radius, size.h / 2)} fill={`url(#${id})`} />
+        </Svg>
+      )}
+    </View>
   );
 }
 

@@ -1,27 +1,32 @@
 import { router } from 'expo-router';
+import { useBottomTabBarHeight } from 'expo-router/tabs';
 import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { FlatList, Pressable, Text, View } from 'react-native';
 import ReanimatedSwipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 
-import { Avatar } from '@/components/Avatar';
 import { AiButton } from '@/components/ai/AiIcon';
 import { AiSheet } from '@/components/ai/AiSheet';
+import { AiToast } from '@/components/ai/AiToast';
+import { FriendRow } from '@/components/FriendRow';
 import { Icon } from '@/components/Icon';
 import { SelectionBar } from '@/components/SelectionBar';
 import { TelegramImportCard } from '@/components/TelegramImportCard';
-import { ZodiacMark } from '@/components/ZodiacGlyph';
-import { Button, Chip, Empty, Fab, GroupedRow, IconButton, ListRow, ScreenHeader, SearchField, Tag, useTheme } from '@/components/ui';
+import { Button, Chip, Empty, Fab, GroupedRow, IconButton, ScreenHeader, SearchField, useTheme } from '@/components/ui';
 import { confirm } from '@/lib/confirm';
-import { ageOn, daysBetween, formatDate, hasYear, nextAnniversary, plural, relativeDay, todayISO } from '@/lib/dates';
-import { buildFriendList, type FriendSort } from '@/lib/friendList';
+import { daysBetween, nextAnniversary, plural, todayISO } from '@/lib/dates';
+import { buildFriendList, type FriendListItem, type FriendSort } from '@/lib/friendList';
 import { useStore } from '@/lib/store';
 import { telegramAvailable } from '@/lib/telegramClient';
-import type { Friend } from '@/lib/types';
 import { zodiacShown } from '@/lib/zodiac';
 
 export default function FriendsScreen() {
-  const { data, deleteFriends, updateFriends, genderBusy } = useStore();
+  const { data, deleteFriends, updateFriends, genderBusy, genderNews, clearGenderNews } = useStore();
   const [aiOpen, setAiOpen] = useState(false);
+  // Для «Пола друзей»: экран ИИ рисует список с той же высоты, что здесь, и не закрывает нижнее меню.
+  const listRef = useRef<FlatList<FriendListItem>>(null);
+  const headerH = useRef(0);
+  const labelH = useRef(0);
+  const tabBar = useBottomTabBarHeight();
   const { s, colors } = useTheme();
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<FriendSort>('name');
@@ -70,6 +75,7 @@ export default function FriendsScreen() {
   return (
     <View style={s.screen}>
       <FlatList
+        ref={listRef}
         data={items}
         keyExtractor={(i) => i.key}
         extraData={selected}
@@ -78,7 +84,7 @@ export default function FriendsScreen() {
         onScroll={(e) => setScrolled(e.nativeEvent.contentOffset.y > 2)}
         scrollEventThrottle={32}
         ListHeaderComponent={
-          <>
+          <View onLayout={(e) => (headerH.current = e.nativeEvent.layout.height)}>
             {/* В режиме выбора шапка остаётся на месте, но прячется: панель действий ложится поверх, и список не прыгает. */}
             <View style={{ opacity: selecting ? 0 : 1, pointerEvents: selecting ? 'none' : 'auto' }} importantForAccessibility={selecting ? 'no-hide-descendants' : 'auto'}>
               <ScreenHeader
@@ -103,11 +109,14 @@ export default function FriendsScreen() {
               </View>
             )}
             <TelegramImportCard style={{ marginHorizontal: 20, marginBottom: 12 }} />
-          </>
+          </View>
         }
-        renderItem={({ item }) =>
+        renderItem={({ item, index }) =>
           item.type === 'label' ? (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 24, paddingTop: 10, paddingBottom: 6 }}>
+            <View
+              onLayout={index === 0 ? (e) => (labelH.current = e.nativeEvent.layout.height) : undefined}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 24, paddingTop: 10, paddingBottom: 6 }}
+            >
               {item.star && <Icon name="star" size={13} color={colors.accent} fill={colors.accent} />}
               <Text style={[s.name, { fontSize: 13, color: item.star ? colors.accentText : s.caption.color }]}>{item.title}</Text>
             </View>
@@ -164,9 +173,16 @@ export default function FriendsScreen() {
         gender={{ known: data.friends.filter((f) => f.gender).length, total: n }}
         onGender={() => {
           setAiOpen(false);
-          router.push('/ai-gender');
+          // Список — к началу и «по имени»: экран ИИ начинает с того же вида и плавно проявляется поверх.
+          setQuery('');
+          setSort('name');
+          listRef.current?.scrollToOffset({ offset: 0, animated: false });
+          const first = items[0]?.type === 'label' ? labelH.current : 0;
+          clearGenderNews();
+          setTimeout(() => router.push({ pathname: '/ai-gender', params: { top: String(Math.round(headerH.current + first)), tab: String(Math.round(tabBar)) } }), 230);
         }}
       />
+      <AiToast news={genderNews} onDone={clearGenderNews} bottom={selecting ? 90 : 96} />
     </View>
   );
 }
@@ -198,80 +214,5 @@ function SwipeToDelete({ enabled, onDelete, children }: { enabled: boolean; onDe
     >
       {children}
     </ReanimatedSwipeable>
-  );
-}
-
-function FriendRow({
-  friend,
-  today,
-  selected,
-  selecting,
-  zodiac,
-  onPress,
-  onLongPress,
-}: {
-  friend: Friend;
-  today: string;
-  /** Показывать маленький знак зодиака после даты. */
-  zodiac: boolean;
-  selected: boolean;
-  selecting: boolean;
-  onPress: () => void;
-  onLongPress: () => void;
-}) {
-  const { s, colors } = useTheme();
-  const next = friend.birthday ? nextAnniversary(friend.birthday, today) : null;
-  const diff = next ? daysBetween(today, next) : null;
-  const age = friend.birthday && next && hasYear(friend.birthday) ? ageOn(friend.birthday, next) : null;
-  const sub = friend.birthday
-    ? `${formatDate(friend.birthday, false)}${age ? ` · ${age} ${plural(age, 'год', 'года', 'лет')}` : ''}`
-    : [friend.flowers, friend.food].filter(Boolean).join(' · ') || 'Без дня рождения';
-
-  return (
-    <ListRow
-      onPress={onPress}
-      onLongPress={onLongPress}
-      leading={
-        <View>
-          <Avatar friend={friend} size={44} />
-          {selected && (
-            <View
-              style={{
-                position: 'absolute',
-                right: -3,
-                bottom: -3,
-                width: 20,
-                height: 20,
-                borderRadius: 10,
-                backgroundColor: colors.success,
-                borderWidth: 2,
-                borderColor: colors.card,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Icon name="check" size={11} color="#FFFFFF" strokeWidth={3} />
-            </View>
-          )}
-        </View>
-      }
-      title={<Text style={s.name} numberOfLines={1}>{friend.name}</Text>}
-      subtitle={
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-          <Text style={[s.muted, { fontVariant: ['tabular-nums'], flexShrink: 1 }]} numberOfLines={1}>
-            {sub}
-          </Text>
-          {zodiac && friend.birthday ? <ZodiacMark birthday={friend.birthday} color={colors.text3} /> : null}
-        </View>
-      }
-      trailing={
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          {friend.muted && <Icon name="bellOff" size={16} color={colors.text3} />}
-          {diff === 0 ? <Tag text="сегодня" tone="solid" /> : diff !== null && diff <= 7 ? <Tag text={relativeDay(next!, today)} tone="accent" /> : null}
-        </View>
-      }
-      chevron={!selecting && (diff === null || diff > 7)}
-      style={{ paddingVertical: 10, backgroundColor: selected ? colors.soft : undefined }}
-    />
   );
 }

@@ -1,0 +1,1358 @@
+{
+ "sections": [
+  {
+   "id": "menu",
+   "title": "Меню задач",
+   "status": "в приложении",
+   "sub": "Шторка по значку ИИ"
+  },
+  {
+   "id": "gender",
+   "title": "Пол друзей",
+   "status": "в приложении",
+   "sub": "Плашка над списком, итог и загадки"
+  },
+  {
+   "id": "gifts",
+   "title": "Идеи подарков",
+   "status": "скоро",
+   "sub": "По заметкам о друге"
+  },
+  {
+   "id": "common",
+   "title": "Для любой задачи",
+   "status": "",
+   "sub": "Сбои и лимиты"
+  }
+ ],
+ "sits": [
+  {
+   "id": "menu.title",
+   "section": "menu",
+   "name": "Заголовок",
+   "when": "Каждый раз один из вариантов"
+  },
+  {
+   "id": "menu.sub",
+   "section": "menu",
+   "name": "Подзаголовок",
+   "when": ""
+  },
+  {
+   "id": "menu.privacy",
+   "section": "menu",
+   "name": "Что видит ИИ",
+   "when": "Под задачами, своё для каждой"
+  },
+  {
+   "id": "gender.start",
+   "section": "gender",
+   "name": "Старт",
+   "when": "Первая фраза, зависит от числа друзей"
+  },
+  {
+   "id": "gender.spin",
+   "section": "gender",
+   "name": "Пока крутится",
+   "when": "Середина"
+  },
+  {
+   "id": "gender.end",
+   "section": "gender",
+   "name": "Под конец",
+   "when": "Список тормозит"
+  },
+  {
+   "id": "gender.slow",
+   "section": "gender",
+   "name": "Ответ задерживается",
+   "when": "Список крутится дольше обычного"
+  },
+  {
+   "id": "gender.done",
+   "section": "gender",
+   "name": "Всё определилось",
+   "when": ""
+  },
+  {
+   "id": "gender.left",
+   "section": "gender",
+   "name": "Остались загадки",
+   "when": "Плашка над списком"
+  },
+  {
+   "id": "gender.choice",
+   "section": "gender",
+   "name": "Выбор: помочь или оставить",
+   "when": "Шторка или тост снизу"
+  },
+  {
+   "id": "gender.why",
+   "section": "gender",
+   "name": "Загадка: почему",
+   "when": "Под именем на карточке"
+  },
+  {
+   "id": "gender.cards",
+   "section": "gender",
+   "name": "Карточки загадок",
+   "when": "Заголовок и кнопка «потом»"
+  },
+  {
+   "id": "gender.solved",
+   "section": "gender",
+   "name": "Загадки разгаданы",
+   "when": ""
+  },
+  {
+   "id": "gender.quiet",
+   "section": "gender",
+   "name": "Тихо, в фоне",
+   "when": "Добавили друзей — определила сама"
+  },
+  {
+   "id": "gender.form",
+   "section": "gender",
+   "name": "Форма друга",
+   "when": "Подпись под выбором пола"
+  },
+  {
+   "id": "gifts.start",
+   "section": "gifts",
+   "name": "Старт",
+   "when": ""
+  },
+  {
+   "id": "gifts.little",
+   "section": "gifts",
+   "name": "Мало заметок",
+   "when": ""
+  },
+  {
+   "id": "gifts.done",
+   "section": "gifts",
+   "name": "Готово",
+   "when": ""
+  },
+  {
+   "id": "gifts.food",
+   "section": "gifts",
+   "name": "Любит поесть",
+   "when": "В заметках еда"
+  },
+  {
+   "id": "gifts.dino",
+   "section": "gifts",
+   "name": "Любит динозавров",
+   "when": "В заметках динозавры"
+  },
+  {
+   "id": "common.offline",
+   "section": "common",
+   "name": "Нет интернета",
+   "when": ""
+  },
+  {
+   "id": "common.limit",
+   "section": "common",
+   "name": "Лимит на сегодня",
+   "when": ""
+  },
+  {
+   "id": "common.error",
+   "section": "common",
+   "name": "Что-то сломалось",
+   "when": ""
+  }
+ ],
+ "phrases": [
+  {
+   "id": "menu.title.g0.p0",
+   "sit": "menu.title",
+   "bucket": "",
+   "text": "Чем займёмся?",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "menu.title.g0.p1",
+   "sit": "menu.title",
+   "bucket": "",
+   "text": "Опять работа? Ладно, я в деле",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "menu.title.g0.p2",
+   "sit": "menu.title",
+   "bucket": "",
+   "text": "Я тут. Что делаем?",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "menu.title.g0.p3",
+   "sit": "menu.title",
+   "bucket": "",
+   "text": "Хау ю дуин? 😉",
+   "ref": "«How you doin'?» — Джоуи",
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "menu.title.n0",
+   "sit": "menu.title",
+   "bucket": "",
+   "text": "Ну что, начнём?",
+   "ref": null,
+   "new": true,
+   "coffee": false
+  },
+  {
+   "id": "menu.title.n1",
+   "sit": "menu.title",
+   "bucket": "",
+   "text": "Привет! Чем помочь?",
+   "ref": null,
+   "new": true,
+   "coffee": false
+  },
+  {
+   "id": "menu.title.n2",
+   "sit": "menu.title",
+   "bucket": "",
+   "text": "Снова ты! Рада видеть",
+   "ref": null,
+   "new": true,
+   "coffee": false
+  },
+  {
+   "id": "menu.sub.g0.p1",
+   "sit": "menu.sub",
+   "bucket": "",
+   "text": "Сделаю всё сама, а ты пока попей кофе",
+   "ref": null,
+   "new": false,
+   "coffee": true
+  },
+  {
+   "id": "menu.sub.g0.p2",
+   "sit": "menu.sub",
+   "bucket": "",
+   "text": "Пройдусь по всем друзьям сама",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "menu.sub.n0",
+   "sit": "menu.sub",
+   "bucket": "",
+   "text": "Скажи, что сделать — остальное на мне",
+   "ref": null,
+   "new": true,
+   "coffee": false
+  },
+  {
+   "id": "menu.sub.n1",
+   "sit": "menu.sub",
+   "bucket": "",
+   "text": "Выбирай задачу, я на подхвате",
+   "ref": null,
+   "new": true,
+   "coffee": false
+  },
+  {
+   "id": "menu.privacy.g0.p0",
+   "sit": "menu.privacy",
+   "bucket": "",
+   "text": "Мне видны только имена — номера, даты и заметки остаются у тебя",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "menu.privacy.g0.p1",
+   "sit": "menu.privacy",
+   "bucket": "",
+   "text": "Загляну в заметки о друге — номера и даты остаются у тебя",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gender.start.g0.p0",
+   "sit": "gender.start",
+   "bucket": "1 друг",
+   "text": "Один друг? Даже кофе остыть не успеет",
+   "ref": null,
+   "new": false,
+   "coffee": true
+  },
+  {
+   "id": "gender.start.g0.p2",
+   "sit": "gender.start",
+   "bucket": "1 друг",
+   "text": "Один, зато какой. Смотрю",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gender.start.n0",
+   "sit": "gender.start",
+   "bucket": "1 друг",
+   "text": "Один? Это даже не задача, а разминка",
+   "ref": null,
+   "new": true,
+   "coffee": false
+  },
+  {
+   "id": "gender.start.g1.p0",
+   "sit": "gender.start",
+   "bucket": "2–10",
+   "text": "7 друзей — почти как наша компания.",
+   "ref": "В компании было шестеро",
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gender.start.g1.p1",
+   "sit": "gender.start",
+   "bucket": "2–10",
+   "text": "Маленькая компания — люблю такие",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gender.start.n1",
+   "sit": "gender.start",
+   "bucket": "2–10",
+   "text": "Небольшая компания — разберусь мигом",
+   "ref": null,
+   "new": true,
+   "coffee": false
+  },
+  {
+   "id": "gender.start.g2.p0",
+   "sit": "gender.start",
+   "bucket": "11–60",
+   "text": "34 друга. У меня было всего пятеро — и мне хватало",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gender.start.g2.p1",
+   "sit": "gender.start",
+   "bucket": "11–60",
+   "text": "Так, 34 друга. Наливаю кофе и листаю",
+   "ref": null,
+   "new": false,
+   "coffee": true
+  },
+  {
+   "id": "gender.start.g2.p2",
+   "sit": "gender.start",
+   "bucket": "11–60",
+   "text": "Сейчас посмотрю, кто есть кто. Обожаю знакомиться",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gender.start.n2",
+   "sit": "gender.start",
+   "bucket": "11–60",
+   "text": "Отличная компания. Поехали",
+   "ref": null,
+   "new": true,
+   "coffee": false
+  },
+  {
+   "id": "gender.start.g3.p0",
+   "sit": "gender.start",
+   "bucket": "61–200",
+   "text": "Ого, 124 друга! Беру второй кофе",
+   "ref": null,
+   "new": false,
+   "coffee": true
+  },
+  {
+   "id": "gender.start.g3.p2",
+   "sit": "gender.start",
+   "bucket": "61–200",
+   "text": "Сколько людей! Возьми меня как-нибудь на вечеринку, а?",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gender.start.n3",
+   "sit": "gender.start",
+   "bucket": "61–200",
+   "text": "124 друга! Ты, похоже, душа компании",
+   "ref": null,
+   "new": true,
+   "coffee": false
+  },
+  {
+   "id": "gender.start.n4",
+   "sit": "gender.start",
+   "bucket": "61–200",
+   "text": "Ничего себе список. Ладно, засучиваю рукава",
+   "ref": null,
+   "new": true,
+   "coffee": false
+  },
+  {
+   "id": "gender.start.g4.p0",
+   "sit": "gender.start",
+   "bucket": "больше 200",
+   "text": "312 друзей?! Это уже не компания, а сериал на десять сезонов",
+   "ref": "В сериале десять сезонов",
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gender.start.g4.p1",
+   "sit": "gender.start",
+   "bucket": "больше 200",
+   "text": "312… Мне нужен кофе. Много кофе",
+   "ref": null,
+   "new": false,
+   "coffee": true
+  },
+  {
+   "id": "gender.start.n5",
+   "sit": "gender.start",
+   "bucket": "больше 200",
+   "text": "312?! Ты что, дружишь со всем Нью-Йорком?",
+   "ref": "Сериал — про Нью-Йорк",
+   "new": true,
+   "coffee": false
+  },
+  {
+   "id": "gender.start.n6",
+   "sit": "gender.start",
+   "bucket": "больше 200",
+   "text": "312 друзей… Надеюсь, ты помнишь хотя бы половину",
+   "ref": null,
+   "new": true,
+   "coffee": false
+  },
+  {
+   "id": "gender.spin.g0.p1",
+   "sit": "gender.spin",
+   "bucket": "",
+   "text": "Так-так-так…",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gender.spin.g0.p2",
+   "sit": "gender.spin",
+   "bucket": "",
+   "text": "Кто тут у нас…",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gender.spin.g0.p3",
+   "sit": "gender.spin",
+   "bucket": "",
+   "text": "Интересные у тебя друзья. Познакомишь?",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gender.spin.g0.p4",
+   "sit": "gender.spin",
+   "bucket": "",
+   "text": "Поворачивай! Поворачивай!",
+   "ref": "«Поворачивай!» — Росс с диваном на лестнице",
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gender.spin.n0",
+   "sit": "gender.spin",
+   "bucket": "",
+   "text": "Так, этот… и эта…",
+   "ref": null,
+   "new": true,
+   "coffee": false
+  },
+  {
+   "id": "gender.spin.n1",
+   "sit": "gender.spin",
+   "bucket": "",
+   "text": "Ага… ага… понятно",
+   "ref": null,
+   "new": true,
+   "coffee": false
+  },
+  {
+   "id": "gender.spin.n2",
+   "sit": "gender.spin",
+   "bucket": "",
+   "text": "Ой, какое имя красивое",
+   "ref": null,
+   "new": true,
+   "coffee": false
+  },
+  {
+   "id": "gender.end.g0.p0",
+   "sit": "gender.end",
+   "bucket": "",
+   "text": "Почти — и можно на перерыв",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gender.end.g0.p1",
+   "sit": "gender.end",
+   "bucket": "",
+   "text": "Ещё чуть-чуть",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gender.end.g0.p2",
+   "sit": "gender.end",
+   "bucket": "",
+   "text": "Последние штрихи — как укладка перед выходом",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gender.end.n0",
+   "sit": "gender.end",
+   "bucket": "",
+   "text": "Финишная прямая",
+   "ref": null,
+   "new": true,
+   "coffee": false
+  },
+  {
+   "id": "gender.end.n1",
+   "sit": "gender.end",
+   "bucket": "",
+   "text": "Ещё парочка",
+   "ref": null,
+   "new": true,
+   "coffee": false
+  },
+  {
+   "id": "gender.slow.g0.p0",
+   "sit": "gender.slow",
+   "bucket": "",
+   "text": "Секунду… тут интернет, как в 90-х",
+   "ref": "Сериал — про 90-е",
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gender.slow.g0.p3",
+   "sit": "gender.slow",
+   "bucket": "",
+   "text": "Кто-то занял мой диван в кофейне — секунду",
+   "ref": "Оранжевый диван в Central Perk",
+   "new": false,
+   "coffee": true
+  },
+  {
+   "id": "gender.slow.n0",
+   "sit": "gender.slow",
+   "bucket": "",
+   "text": "Хм, тут надо подумать",
+   "ref": null,
+   "new": true,
+   "coffee": false
+  },
+  {
+   "id": "gender.slow.n1",
+   "sit": "gender.slow",
+   "bucket": "",
+   "text": "Секунду, тут кто-то с хитрым именем",
+   "ref": null,
+   "new": true,
+   "coffee": false
+  },
+  {
+   "id": "gender.slow.n2",
+   "sit": "gender.slow",
+   "bucket": "",
+   "text": "Не уходи, я почти",
+   "ref": null,
+   "new": true,
+   "coffee": false
+  },
+  {
+   "id": "gender.done.g0.p1",
+   "sit": "gender.done",
+   "bucket": "1 друг",
+   "text": "Готово — даже кофе не остыл",
+   "ref": null,
+   "new": false,
+   "coffee": true
+  },
+  {
+   "id": "gender.done.n0",
+   "sit": "gender.done",
+   "bucket": "1 друг",
+   "text": "Готово! Быстрее, чем можно сказать «привет»",
+   "ref": null,
+   "new": true,
+   "coffee": false
+  },
+  {
+   "id": "gender.done.g1.p0",
+   "sit": "gender.done",
+   "bucket": "2–200",
+   "text": "Готово! Все 34 как на ладони",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gender.done.g1.p1",
+   "sit": "gender.done",
+   "bucket": "2–200",
+   "text": "Всех разгадала. Можно мне теперь кофе?",
+   "ref": null,
+   "new": false,
+   "coffee": true
+  },
+  {
+   "id": "gender.done.g1.p3",
+   "sit": "gender.done",
+   "bucket": "2–200",
+   "text": "Вот и всё — можно поздравлять",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gender.done.n1",
+   "sit": "gender.done",
+   "bucket": "2–200",
+   "text": "Готово! Никого не перепутала",
+   "ref": null,
+   "new": true,
+   "coffee": false
+  },
+  {
+   "id": "gender.done.n2",
+   "sit": "gender.done",
+   "bucket": "2–200",
+   "text": "Все на своих местах. Я молодец, скажи?",
+   "ref": null,
+   "new": true,
+   "coffee": false
+  },
+  {
+   "id": "gender.done.g2.p0",
+   "sit": "gender.done",
+   "bucket": "больше 200",
+   "text": "Все 312! Где мои аплодисменты?",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gender.done.g2.p1",
+   "sit": "gender.done",
+   "bucket": "больше 200",
+   "text": "312 из 312. Это заслуживает второго кофе",
+   "ref": null,
+   "new": false,
+   "coffee": true
+  },
+  {
+   "id": "gender.done.n3",
+   "sit": "gender.done",
+   "bucket": "больше 200",
+   "text": "312! Кажется, я заслужила отпуск",
+   "ref": null,
+   "new": true,
+   "coffee": false
+  },
+  {
+   "id": "gender.left.g0.p0",
+   "sit": "gender.left",
+   "bucket": "1",
+   "text": "Почти! Но один человек меня запутал",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gender.left.g0.p1",
+   "sit": "gender.left",
+   "bucket": "1",
+   "text": "Один хитрец остался",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gender.left.n0",
+   "sit": "gender.left",
+   "bucket": "1",
+   "text": "Остался один загадочный тип",
+   "ref": null,
+   "new": true,
+   "coffee": false
+  },
+  {
+   "id": "gender.left.g1.p0",
+   "sit": "gender.left",
+   "bucket": "2–4",
+   "text": "Почти! Но 3 человека меня запутали",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gender.left.g1.p1",
+   "sit": "gender.left",
+   "bucket": "2–4",
+   "text": "С тремя засомневалась",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gender.left.n1",
+   "sit": "gender.left",
+   "bucket": "2–4",
+   "text": "Трое не дались. Поможешь?",
+   "ref": null,
+   "new": true,
+   "coffee": false
+  },
+  {
+   "id": "gender.left.g2.p0",
+   "sit": "gender.left",
+   "bucket": "5 и больше",
+   "text": "Почти! Но 7 человек меня запутали",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gender.left.n2",
+   "sit": "gender.left",
+   "bucket": "5 и больше",
+   "text": "7 человек — загадка века",
+   "ref": null,
+   "new": true,
+   "coffee": false
+  },
+  {
+   "id": "gender.left.g3.p0",
+   "sit": "gender.left",
+   "bucket": "больше половины",
+   "text": "Ох, тут сплошные прозвища",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gender.left.g3.p1",
+   "sit": "gender.left",
+   "bucket": "больше половины",
+   "text": "Твои друзья подписаны как шпионы",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gender.left.n3",
+   "sit": "gender.left",
+   "bucket": "больше половины",
+   "text": "Тут больше прозвищ, чем имён",
+   "ref": null,
+   "new": true,
+   "coffee": false
+  },
+  {
+   "id": "gender.choice.g0.p0",
+   "sit": "gender.choice",
+   "bucket": "заголовок",
+   "text": "7 загадок",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gender.choice.g0.p1",
+   "sit": "gender.choice",
+   "bucket": "заголовок",
+   "text": "Одна загадка",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gender.choice.g0.p2",
+   "sit": "gender.choice",
+   "bucket": "заголовок",
+   "text": "3 загадки",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gender.choice.g1.p0",
+   "sit": "gender.choice",
+   "bucket": "текст",
+   "text": "По именам не угадать. Поможешь?",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gender.choice.g1.p1",
+   "sit": "gender.choice",
+   "bucket": "текст",
+   "text": "Я бы спросила лично, но ты их знаешь лучше. Поможешь?",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gender.choice.n0",
+   "sit": "gender.choice",
+   "bucket": "текст",
+   "text": "Ты их знаешь, а я только имена. Поможешь?",
+   "ref": null,
+   "new": true,
+   "coffee": false
+  },
+  {
+   "id": "gender.choice.n1",
+   "sit": "gender.choice",
+   "bucket": "текст",
+   "text": "Пара подсказок от тебя — и всё будет идеально",
+   "ref": null,
+   "new": true,
+   "coffee": false
+  },
+  {
+   "id": "gender.choice.g2.p0",
+   "sit": "gender.choice",
+   "bucket": "кнопки",
+   "text": "Помочь · Оставить так",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gender.choice.g3.p0",
+   "sit": "gender.choice",
+   "bucket": "если «Оставить так»",
+   "text": "Ладно, оставим. Если что — я тут",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gender.choice.g3.p2",
+   "sit": "gender.choice",
+   "bucket": "если «Оставить так»",
+   "text": "Хорошо. Вернёмся, когда захочешь",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gender.choice.n2",
+   "sit": "gender.choice",
+   "bucket": "если «Оставить так»",
+   "text": "Как скажешь. Загадки подождут",
+   "ref": null,
+   "new": true,
+   "coffee": false
+  },
+  {
+   "id": "gender.why.g0.p0",
+   "sit": "gender.why",
+   "bucket": "Саша, Шура, Саня",
+   "text": "Александр или Александра?",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gender.why.g1.p0",
+   "sit": "gender.why",
+   "bucket": "Женя",
+   "text": "Евгений или Евгения?",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gender.why.g2.p0",
+   "sit": "gender.why",
+   "bucket": "Валя",
+   "text": "Валентин или Валентина?",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gender.why.g3.p0",
+   "sit": "gender.why",
+   "bucket": "Слава",
+   "text": "Вячеслав или Ярослава?",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gender.why.g4.p0",
+   "sit": "gender.why",
+   "bucket": "Стася",
+   "text": "Станислав или Станислава?",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gender.why.g5.p0",
+   "sit": "gender.why",
+   "bucket": "Ника",
+   "text": "Никита или Вероника?",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gender.why.g6.p0",
+   "sit": "gender.why",
+   "bucket": "Крис",
+   "text": "Кристина или Кристофер?",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gender.why.g7.p0",
+   "sit": "gender.why",
+   "bucket": "Ким, Ли",
+   "text": "Имя или фамилия? Сдаюсь",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gender.why.g8.p0",
+   "sit": "gender.why",
+   "bucket": "Сантехник, Сосед",
+   "text": "Тут роль, а не имя. Подскажешь?",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gender.why.n0",
+   "sit": "gender.why",
+   "bucket": "Сантехник, Сосед",
+   "text": "Сантехник? Хочется сказать «мужчина», но боюсь показаться сексисткой",
+   "ref": null,
+   "new": true,
+   "coffee": false
+  },
+  {
+   "id": "gender.why.n1",
+   "sit": "gender.why",
+   "bucket": "Сантехник, Сосед",
+   "text": "Профессия — не пол. Тут без тебя никак",
+   "ref": null,
+   "new": true,
+   "coffee": false
+  },
+  {
+   "id": "gender.why.g9.p0",
+   "sit": "gender.why",
+   "bucket": "остальные",
+   "text": "По имени не угадать",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gender.why.g9.p2",
+   "sit": "gender.why",
+   "bucket": "остальные",
+   "text": "Похоже на прозвище — кто это?",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gender.why.n2",
+   "sit": "gender.why",
+   "bucket": "остальные",
+   "text": "Даже не знаю, кто это",
+   "ref": null,
+   "new": true,
+   "coffee": false
+  },
+  {
+   "id": "gender.why.n3",
+   "sit": "gender.why",
+   "bucket": "остальные",
+   "text": "Тут сдаюсь — подскажи",
+   "ref": null,
+   "new": true,
+   "coffee": false
+  },
+  {
+   "id": "gender.cards.g0.p0",
+   "sit": "gender.cards",
+   "bucket": "",
+   "text": "Кто это?",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gender.cards.g0.p3",
+   "sit": "gender.cards",
+   "bucket": "",
+   "text": "Отложим",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gender.cards.n0",
+   "sit": "gender.cards",
+   "bucket": "",
+   "text": "Кто же это?",
+   "ref": null,
+   "new": true,
+   "coffee": false
+  },
+  {
+   "id": "gender.solved.g0.p1",
+   "sit": "gender.solved",
+   "bucket": "",
+   "text": "Спасибо! С тобой работать — одно удовольствие",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gender.solved.g0.p2",
+   "sit": "gender.solved",
+   "bucket": "",
+   "text": "Вот это команда! Не то что некоторые.. на перерыве",
+   "ref": "«Мы были на перерыве!» — Росс",
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gender.solved.n0",
+   "sit": "gender.solved",
+   "bucket": "",
+   "text": "Спасибо! Теперь все как на ладони",
+   "ref": null,
+   "new": true,
+   "coffee": false
+  },
+  {
+   "id": "gender.solved.n1",
+   "sit": "gender.solved",
+   "bucket": "",
+   "text": "Отлично! Ты лучше любого детектива",
+   "ref": null,
+   "new": true,
+   "coffee": false
+  },
+  {
+   "id": "gender.quiet.g0.p0",
+   "sit": "gender.quiet",
+   "bucket": "",
+   "text": "Пока тебя не было, разобралась с 5 новыми друзьями",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gender.quiet.g0.p1",
+   "sit": "gender.quiet",
+   "bucket": "",
+   "text": "Добавились новенькие — уже посмотрела",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gender.quiet.n0",
+   "sit": "gender.quiet",
+   "bucket": "",
+   "text": "Новенькие! Прямо как у нас в квартире — вечно кто-то заходит",
+   "ref": "Квартира Моники, куда вечно кто-то заходит",
+   "new": true,
+   "coffee": false
+  },
+  {
+   "id": "gender.quiet.n1",
+   "sit": "gender.quiet",
+   "bucket": "",
+   "text": "Пока тебя не было, разобралась с новенькими",
+   "ref": null,
+   "new": true,
+   "coffee": false
+  },
+  {
+   "id": "gender.form.g1.p0",
+   "sit": "gender.form",
+   "bucket": "засомневалась",
+   "text": "Засомневалась — подскажешь?",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gender.form.g1.p1",
+   "sit": "gender.form",
+   "bucket": "засомневалась",
+   "text": "По имени не угадать — подскажешь?",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gender.form.g2.p0",
+   "sit": "gender.form",
+   "bucket": "переименовали",
+   "text": "Новое имя? Посмотрю",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gender.form.n2",
+   "sit": "gender.form",
+   "bucket": "переименовали",
+   "text": "Посмотрю, что за новое имя",
+   "ref": null,
+   "new": true,
+   "coffee": false
+  },
+  {
+   "id": "gender.form.n0",
+   "sit": "gender.form",
+   "bucket": "угадала",
+   "text": "Определила по имени",
+   "ref": null,
+   "new": true,
+   "coffee": false
+  },
+  {
+   "id": "gender.form.n1",
+   "sit": "gender.form",
+   "bucket": "угадала",
+   "text": "Кажется, так — поправь, если ошиблась",
+   "ref": null,
+   "new": true,
+   "coffee": false
+  },
+  {
+   "id": "gifts.start.g0.p2",
+   "sit": "gifts.start",
+   "bucket": "",
+   "text": "Ищу идеи. Обещаю: никаких кружек с надписями",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gifts.start.n0",
+   "sit": "gifts.start",
+   "bucket": "",
+   "text": "Так, что бы я подарила…",
+   "ref": null,
+   "new": true,
+   "coffee": false
+  },
+  {
+   "id": "gifts.start.n1",
+   "sit": "gifts.start",
+   "bucket": "",
+   "text": "Ищу идеи — без носков и кружек",
+   "ref": null,
+   "new": true,
+   "coffee": false
+  },
+  {
+   "id": "gifts.little.g0.p0",
+   "sit": "gifts.little",
+   "bucket": "",
+   "text": "Заметок маловато — дам идеи, которые нравятся почти всем",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gifts.little.g0.p1",
+   "sit": "gifts.little",
+   "bucket": "",
+   "text": "Расскажи о друге побольше — и я попаду точнее",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gifts.done.g0.p0",
+   "sit": "gifts.done",
+   "bucket": "",
+   "text": "Вот что я бы подарила. И себе бы взяла",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gifts.done.g0.p1",
+   "sit": "gifts.done",
+   "bucket": "",
+   "text": "Нашла 5 идей — одна лучше другой",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gifts.done.g0.p2",
+   "sit": "gifts.done",
+   "bucket": "",
+   "text": "Это понравится. Завидую",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "gifts.done.n0",
+   "sit": "gifts.done",
+   "bucket": "",
+   "text": "Пара идей, от которых будет «вау»",
+   "ref": null,
+   "new": true,
+   "coffee": false
+  },
+  {
+   "id": "gifts.dino.g0.p0",
+   "sit": "gifts.dino",
+   "bucket": "",
+   "text": "Динозавры? У меня был такой знакомый. Долгая история",
+   "ref": "Росс и его динозавры",
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "common.offline.g0.p0",
+   "sit": "common.offline",
+   "bucket": "",
+   "text": "Нет интернета — даже я тут бессильна",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "common.offline.g0.p1",
+   "sit": "common.offline",
+   "bucket": "",
+   "text": "Связь пропала. Подожду, пока вернётся",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "common.offline.g0.p2",
+   "sit": "common.offline",
+   "bucket": "",
+   "text": "Похоже, мы на перерыве. Вернусь, когда появится интернет",
+   "ref": "«Мы были на перерыве!» — Росс",
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "common.offline.n0",
+   "sit": "common.offline",
+   "bucket": "",
+   "text": "Интернет пропал. Я подожду",
+   "ref": null,
+   "new": true,
+   "coffee": false
+  },
+  {
+   "id": "common.limit.g0.p0",
+   "sit": "common.limit",
+   "bucket": "",
+   "text": "На сегодня всё — даже мне нужен перерыв",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "common.limit.g0.p1",
+   "sit": "common.limit",
+   "bucket": "",
+   "text": "Перерыв! Посижу на любимом диване",
+   "ref": "Оранжевый диван в Central Perk",
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "common.limit.n0",
+   "sit": "common.limit",
+   "bucket": "",
+   "text": "Устала. Завтра продолжим?",
+   "ref": null,
+   "new": true,
+   "coffee": false
+  },
+  {
+   "id": "common.error.g0.p0",
+   "sit": "common.error",
+   "bucket": "",
+   "text": "Ой. Что-то пошло не так — давай ещё раз?",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "common.error.g0.p1",
+   "sit": "common.error",
+   "bucket": "",
+   "text": "Не получилось. Бывает даже у меня",
+   "ref": null,
+   "new": false,
+   "coffee": false
+  },
+  {
+   "id": "common.error.n0",
+   "sit": "common.error",
+   "bucket": "",
+   "text": "Хм, что-то сломалось. Ещё разок?",
+   "ref": null,
+   "new": true,
+   "coffee": false
+  }
+ ]
+}

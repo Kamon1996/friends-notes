@@ -10,6 +10,7 @@ import { Button, Card, Chip, Field, IconButton, Label, ListRow, SectionTitle, Sw
 import { cleanupAvatars, deleteOwnedFiles } from '@/lib/avatars';
 import { confirm, notify } from '@/lib/confirm';
 import { linkSubtitle, linkTitle, mergeLinks } from '@/lib/socials';
+import { voice } from '@/lib/voice';
 import { newId, useFriend, useStore } from '@/lib/store';
 import { genderFromName, type Gender } from '@/lib/gender';
 import type { Friend, ImportantDate } from '@/lib/types';
@@ -45,7 +46,14 @@ function FriendForm() {
   // сразу подсказка по своей базе (так же и сохранится), остальное доделает фоновый проход.
   const renamed = !existing || existing.name !== f.name.trim();
   const shownGender = f.genderBy === 'manual' || f.gender || !renamed ? f.gender : (genderFromName(f.name) ?? undefined);
-  const genderNote = genderCaption(f, shownGender, renamed);
+  // Подписи голосом ИИ: выбираем по фразе на каждый случай один раз, чтобы не менялись при наборе.
+  const [captions] = useState(() => ({
+    guessed: voice.say('gender.form', {}, 'guessed'),
+    unsure: voice.say('gender.form', {}, 'unsure'),
+    renamed: voice.say('gender.form', {}, 'renamed'),
+  }));
+  const captionKind = genderCaption(f, shownGender, renamed);
+  const genderNote = captionKind ? captions[captionKind] : null;
   const setGender = (g: Gender | undefined) => {
     if (!g && !shownGender && f.genderBy !== 'manual') return; // «Не указан» и так выбран — ничего не меняем
     setF(({ gender: _g, genderBy: _b, genderStage: _s, ...rest }) => (g ? { ...rest, gender: g, genderBy: 'manual' } : { ...rest, genderBy: 'manual' }));
@@ -227,10 +235,10 @@ function FriendForm() {
 }
 
 /** Короткая подпись под выбором пола: определилось само или не получилось. Выбранный вручную — без подписи. */
-function genderCaption(f: Friend, shown: Gender | undefined, renamed: boolean): string | null {
+function genderCaption(f: Friend, shown: Gender | undefined, renamed: boolean): 'guessed' | 'unsure' | 'renamed' | null {
   if (f.genderBy === 'manual') return null;
-  if (shown) return 'Определено автоматически — можно поправить';
-  if (renamed && f.genderStage && f.genderStage !== 'names') return 'Попробую определить заново по новому имени';
-  if (!renamed && f.genderStage && f.genderStage !== 'names') return 'Не удалось определить — выбери сам';
+  if (shown) return 'guessed';
+  if (renamed && f.genderStage && f.genderStage !== 'names') return 'renamed';
+  if (!renamed && f.genderStage && f.genderStage !== 'names') return 'unsure';
   return null;
 }

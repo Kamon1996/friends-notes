@@ -39,6 +39,9 @@ interface Store {
   detectGenders: () => Promise<void>;
   /** Идёт определение пола (значок ИИ тихо светится). */
   genderBusy: boolean;
+  /** Сколько друзей фоновый проход только что определил — для тихого тоста; 0 — нечего сказать. */
+  genderNews: number;
+  clearGenderNews: () => void;
 }
 
 const StoreContext = createContext<Store | null>(null);
@@ -91,7 +94,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // Пол друзей определяется сам, в фоне: при открытии приложения, при возвращении в него и когда появились новые друзья.
   // Каждый друг проходит ступени только один раз (см. genderDetect.ts); ручной выбор не трогается.
   const [genderBusy, setGenderBusy] = useState(false);
+  const [genderNews, setGenderNews] = useState(0);
+  const clearGenderNews = useCallback(() => setGenderNews(0), []);
   const genderRunRef = useRef<Promise<void> | null>(null);
+  const manualRef = useRef(false);
   const syncGenders = useCallback((): Promise<void> => {
     if (genderRunRef.current) return genderRunRef.current;
     if (!liveRef.current) return Promise.resolve();
@@ -104,6 +110,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (!updates.length) return;
       const byId = new Map(updates.map((u) => [u.id, u]));
       setData((d) => ({ ...d, friends: d.friends.map((f) => applyGenderUpdate(f, byId.get(f.id), namesAtStart.get(f.id))) }));
+      // Пока человек смотрит барабан, тост не нужен — он и так всё видит.
+      const found = updates.filter((u) => u.gender).length;
+      if (found && !manualRef.current) setGenderNews((x) => x + found);
     })().finally(() => {
       genderRunRef.current = null;
       setGenderBusy(false);
@@ -111,6 +120,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     genderRunRef.current = run;
     return run;
   }, []);
+  /** Ручной запуск (экран «Пол друзей»): тот же проход, но без тихого тоста. */
+  const detectGenders = useCallback((): Promise<void> => {
+    manualRef.current = true;
+    return syncGenders().finally(() => {
+      manualRef.current = false;
+    });
+  }, [syncGenders]);
   // Сколько друзей ещё не прошли Genderize и дальше: растёт, когда добавили друга, импортировали или переименовали.
   const freshGenders = useMemo(() => data.friends.filter((f) => genderPending(f) && (!f.genderStage || f.genderStage === 'names')).length, [data.friends]);
   const seenFresh = useRef(-1);
@@ -234,10 +250,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setRemindersDone,
       updateSettings,
       replaceData,
-      detectGenders: syncGenders,
+      detectGenders,
+      genderNews,
+      clearGenderNews,
       genderBusy,
     }),
-    [ready, data, saveFriend, addFriends, updateFriends, deleteFriend, deleteFriends, saveReminder, deleteReminder, deleteReminders, toggleReminderDone, setRemindersDone, updateSettings, replaceData, syncGenders, genderBusy],
+    [ready, data, saveFriend, addFriends, updateFriends, deleteFriend, deleteFriends, saveReminder, deleteReminder, deleteReminders, toggleReminderDone, setRemindersDone, updateSettings, replaceData, detectGenders, genderBusy, genderNews, clearGenderNews],
   );
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
