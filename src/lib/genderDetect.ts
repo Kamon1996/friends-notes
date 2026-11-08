@@ -61,8 +61,8 @@ export const BACKOFF_REFUSED = 7 * 24 * HOUR;
 export const BACKOFF_SERVER = HOUR;
 /** Сколько имён за один проход — по бесплатным лимитам (Genderize — 100 имён в день); остальные — в следующий раз. */
 export const PASS_LIMITS = { genderize: 100, deviceAi: 100, ai: 100 };
-/** Сколько имён в одном вопросе облачному ИИ. */
-export const AI_BATCH = 25;
+/** Сколько имён в одном вопросе облачному ИИ — по 50 модели проверены на испытании (src/lib/ai/bench.ts). */
+export const AI_BATCH = 50;
 
 const stageIndex = (s: GenderStage | undefined) => (s ? GENDER_STAGES.indexOf(s) : -1);
 

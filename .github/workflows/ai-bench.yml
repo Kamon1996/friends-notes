@@ -3,14 +3,15 @@ name: AI bench
 # Испытание бесплатных моделей ИИ на задаче приложения (src/lib/ai/bench.ts): все модели получают один и тот же набор
 # имён тем же запросом, что в приложении; в итогах — таблица и тир-лист, в логе — подробности по каждой модели
 # (BENCH_JSON). Оценки сохраняются коммитом в src/lib/ai/ratings.ts — по ним приложение выбирает модели.
-# Запуск: коммитом со словом «[bench]» в первой строке или вручную (Actions → AI bench → Run workflow).
+# Запуск: коммитом со словом «[bench]» (или «[bench openrouter]» — только эти сервисы) в первой строке или вручную
+# (Actions → AI bench → Run workflow).
 # Ключи — те же секреты, что для сборки: GEMINI_API_KEY, OPENROUTER_API_KEY, HF_TOKEN.
 on:
   workflow_dispatch:
     inputs:
       providers:
         description: 'Сервисы через запятую'
-        default: 'gemini,openrouter,huggingface'
+        default: 'gemini,openrouter'
       batch:
         description: 'Имён в одном запросе'
         default: '50'
@@ -33,7 +34,7 @@ concurrency:
 
 jobs:
   bench:
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[bench]')
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[bench')
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -50,11 +51,17 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          BENCH_PROVIDERS: ${{ github.event.inputs.providers || 'gemini,openrouter,huggingface' }}
+          BENCH_PROVIDERS: ${{ github.event.inputs.providers || 'gemini,openrouter' }}
           BENCH_BATCH: ${{ github.event.inputs.batch || '50' }}
           BENCH_MAX_MODELS: ${{ github.event.inputs.max_models || '40' }}
           BENCH_ONLY: ${{ github.event.inputs.only || '' }}
-        run: npx tsx scripts/ai-bench/run.ts
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          # «[bench openrouter]» в первой строке коммита — испытать только эти сервисы.
+          P=$(printf '%s\n' "$COMMIT_MESSAGE" | head -1 | grep -oE '\[bench [a-z,]+\]' | sed -E 's/\[bench ([a-z,]+)\]/\1/' || true)
+          if [ -n "$P" ] && [ "${{ github.event_name }}" = "push" ]; then export BENCH_PROVIDERS="$P"; fi
+          echo "Сервисы: $BENCH_PROVIDERS"
+          npx tsx scripts/ai-bench/run.ts
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -16,7 +16,7 @@ import { accuracy, mergeRatings, rankModels, ratingsSource, type TaskRatings } f
 import type { AiFetch, ProviderId } from '../../src/lib/ai/types';
 
 const env = process.env;
-const providers = (env.BENCH_PROVIDERS || 'gemini,openrouter,huggingface').split(',').map((s: string) => s.trim()).filter(Boolean) as ProviderId[];
+const providers = (env.BENCH_PROVIDERS || 'gemini,openrouter').split(',').map((s: string) => s.trim()).filter(Boolean) as ProviderId[];
 const keys: Partial<Record<ProviderId, string>> = {
   gemini: env.GEMINI_API_KEY || undefined,
   openrouter: env.OPENROUTER_API_KEY || undefined,

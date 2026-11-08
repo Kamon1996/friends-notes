@@ -28,7 +28,8 @@ const gemini: ProviderDef = {
   id: 'gemini',
   label: 'Google Gemini',
   // Псевдонимы «-latest» Google сам переводит на свежие модели; конкретные — на случай, если псевдоним уберут.
-  models: ['gemini-flash-lite-latest', 'gemini-3.5-flash-lite', 'gemini-flash-latest', 'gemini-2.5-flash-lite'],
+  // Модели 2.5 новым пользователям больше не выдаются (404 на испытании 8 ноября 2026).
+  models: ['gemini-flash-lite-latest', 'gemini-3.5-flash-lite', 'gemini-flash-latest', 'gemini-3.6-flash'],
   rateLimitScope: 'model',
   request(model, key, req) {
     return {
@@ -61,8 +62,17 @@ const gemini: ProviderDef = {
 
 // ---------- OpenAI-совместимые ----------
 
-function openAiCompatible(base: Omit<ProviderDef, 'request' | 'text'> & { url: string; headers?: Record<string, string> }): ProviderDef {
-  const { url, headers, ...rest } = base;
+function openAiCompatible(
+  base: Omit<ProviderDef, 'request' | 'text'> & {
+    url: string;
+    headers?: Record<string, string>;
+    /** Доп. поля запроса, которые понимает именно этот сервис. */
+    body?: Record<string, unknown>;
+    /** Во сколько раз больше токенов дать на ответ: «рассуждающие» модели тратят часть на рассуждение. */
+    tokenFactor?: number;
+  },
+): ProviderDef {
+  const { url, headers, body: extraBody, tokenFactor = 1, ...rest } = base;
   return {
     ...rest,
     request(model, key, req) {
@@ -75,7 +85,8 @@ function openAiCompatible(base: Omit<ProviderDef, 'request' | 'text'> & { url: s
             model,
             messages: [...(req.system ? [{ role: 'system', content: req.system }] : []), { role: 'user', content: req.prompt }],
             temperature: req.temperature ?? 0,
-            ...(req.maxTokens && { max_tokens: req.maxTokens }),
+            ...(req.maxTokens && { max_tokens: Math.round(req.maxTokens * tokenFactor) }),
+            ...extraBody,
             // response_format не отправляем: не все модели его принимают, а формат и так задан в просьбе.
           }),
         },
@@ -132,6 +143,10 @@ const openrouter = openAiCompatible({
   // Дневной лимит бесплатных запросов общий на аккаунт; поминутный — у модели. Какой сработал — видно по тексту ошибки.
   rateLimitScope: 'model',
   discover: { url: 'https://openrouter.ai/api/v1/models', pick: pickOpenRouterFree },
+  // Почти все бесплатные модели OpenRouter «рассуждают» и на испытании тратили весь лимит токенов, не дойдя до ответа:
+  // просим рассуждать коротко, рассуждение не присылать, и даём втрое больше токенов. Модели без рассуждений это поле игнорируют.
+  body: { reasoning: { effort: 'low', exclude: true } },
+  tokenFactor: 3,
 });
 
 const huggingface = openAiCompatible({

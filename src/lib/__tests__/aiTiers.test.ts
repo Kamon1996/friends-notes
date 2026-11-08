@@ -209,7 +209,7 @@ describe('приложение спрашивает по тир-листу', () 
     };
     const { ai, asked } = run(ratings, () => 404, { gemini: 'g' });
     await ai.run(ECHO, 'q');
-    assert.deepEqual(asked, ['gemini:gemini-flash-lite-latest', 'gemini:gemini-2.5-flash-lite', 'gemini:gemini-flash-latest']);
+    assert.deepEqual(asked, ['gemini:gemini-flash-lite-latest', 'gemini:gemini-3.6-flash', 'gemini:gemini-flash-latest']);
   });
 
   test('без оценок — как раньше, по приоритету сервисов', async () => {

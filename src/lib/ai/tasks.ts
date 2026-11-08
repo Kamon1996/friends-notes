@@ -7,9 +7,10 @@ import type { ProviderId } from './types';
  * по своим оценкам из испытания (tiers.ts).
  *
  * gender — пол по имени (русские, казахские, татарские, кавказские имена и уменьшительные):
- *   Gemini лучше всех знает редкие и неславянские имена; OpenRouter — бесплатные модели разных компаний, но
- *   50 запросов в день; Hugging Face — копеечные месячные кредиты, поэтому последним.
+ *   Gemini Flash-Lite на испытании 8 ноября 2026 — 100 из 100 за 2 секунды; OpenRouter — запасной (бесплатные модели
+ *   разных компаний, 50 запросов в день). Hugging Face бесплатных кредитов не даёт (402 «купите кредиты»), поэтому
+ *   в задачу не входит — код сервиса оставлен на будущее.
  */
 export const TASK_PROVIDERS = {
-  gender: ['gemini', 'openrouter', 'huggingface'],
+  gender: ['gemini', 'openrouter'],
 } satisfies Record<string, ProviderId[]>;

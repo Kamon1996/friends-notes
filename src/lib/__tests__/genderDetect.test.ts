@@ -253,7 +253,7 @@ describe('разбор ответов', () => {
     assert.match(req.prompt, /Не угадывай/);
     assert.equal(req.json, true);
     assert.equal(req.temperature, 0);
-    assert.deepEqual(GENDER_TASK.providers, ['gemini', 'openrouter', 'huggingface']);
+    assert.deepEqual(GENDER_TASK.providers, ['gemini', 'openrouter']);
   });
 
   test('ответ встроенного ИИ одним словом', () => {
@@ -524,11 +524,11 @@ describe('ИИ: сначала телефона, потом облачный', (
   test(`облачный ИИ: не больше ${PASS_LIMITS.ai} имён за запуск, по ${AI_BATCH} в вопросе`, async () => {
     const { net, ai, phone } = setup(Array.from({ length: 120 }, (_, i) => friend(`n${i}`, latinName(i))), { ai: true });
     await phone.launch(); // Genderize — 100, облачный ИИ — те же 100
-    assert.deepEqual(ai.asked.map((n) => n.length), [25, 25, 25, 25]);
+    assert.deepEqual(ai.asked.map((n) => n.length), [50, 50]);
     await phone.launch(); // Genderize — 20, облачный ИИ — 20
-    assert.deepEqual(ai.asked.map((n) => n.length), [25, 25, 25, 25, 20]);
+    assert.deepEqual(ai.asked.map((n) => n.length), [50, 50, 20]);
     await phone.launch();
-    assert.equal(net.calls.length + ai.asked.length, 10 + 2 + 5, 'третий запуск — никого');
+    assert.equal(net.calls.length + ai.asked.length, 10 + 2 + 3, 'третий запуск — никого');
     assert.equal(ai.answered.size, 120);
     assert.equal(ai.maxAnswered(), 1);
     assert.equal(net.maxAnswered('genderize'), 1);
@@ -586,11 +586,12 @@ describe('ИИ: сначала телефона, потом облачный', (
     assert.deepEqual(phone.state(), { k: [null, null, 'names'] });
   });
 
-  test('целиком: настоящий модуль ИИ — Gemini упёрся в лимит, ответил Hugging Face, Gemini до сброса не трогаем', async () => {
+  test('целиком: настоящий модуль ИИ — Gemini упёрся в лимит, ответил OpenRouter, Gemini до сброса не трогаем', async () => {
     const calls: { url: string; body: string }[] = [];
     const aiFetch: AiFetch = async (url, init) => {
-      calls.push({ url, body: init.body ?? '' });
       const reply = (status: number, body: unknown, h: Record<string, string> = {}) => ({ status, headers: { get: (n: string) => h[n.toLowerCase()] ?? null }, text: async () => JSON.stringify(body) });
+      if (url === 'https://openrouter.ai/api/v1/models') return reply(500, null); // список моделей не дали — встроенный
+      calls.push({ url, body: init.body ?? '' });
       if (url.includes('generativelanguage')) return reply(429, { error: { code: 429, status: 'RESOURCE_EXHAUSTED' } }, { 'retry-after': '3600' });
       const prompt = JSON.parse(init.body!).messages.at(-1).content as string;
       const names = prompt.split('\n').filter((l) => /^\d+: /.test(l)).map((l) => l.replace(/^\d+: /, ''));
@@ -598,12 +599,12 @@ describe('ИИ: сначала телефона, потом облачный', (
       return reply(200, { choices: [{ message: { content: `Вот: ${JSON.stringify({ answers })}` } }] });
     };
     let stored: string | null = null;
-    const realAi = createAi({ keys: { gemini: 'g', huggingface: 'h' }, fetch: aiFetch, now: () => T0, load: async () => (stored ? JSON.parse(stored) : null), save: async (st) => void (stored = JSON.stringify(st)), modelsPerProvider: 1 });
+    const realAi = createAi({ keys: { gemini: 'g', openrouter: 'o' }, fetch: aiFetch, now: () => T0, load: async () => (stored ? JSON.parse(stored) : null), save: async (st) => void (stored = JSON.stringify(st)), modelsPerProvider: 1 });
     const net = new Net();
     const phone = new Phone([friend('k', 'Kai'), friend('s', 'Саша Ким', { phone: '+7 707 111 22 33' })], { fetch: net.fetch, ai: realAi });
     await phone.launch();
     assert.deepEqual(phone.state(), { k: ['m', 'ai', null], s: [null, null, 'ai'] });
-    assert.deepEqual(calls.map((c) => new URL(c.url).hostname), ['generativelanguage.googleapis.com', 'router.huggingface.co']);
+    assert.deepEqual(calls.map((c) => new URL(c.url).hostname), ['generativelanguage.googleapis.com', 'openrouter.ai']);
     assert.ok(calls.every((c) => !/Ким|707/.test(c.body)), 'только имена');
     assert.ok(JSON.parse(stored!).pauses['gemini/gemini-flash-lite-latest'].until === T0 + HOUR);
   });

@@ -222,16 +222,22 @@ describe('как разговариваем с каждым сервисом', (
         { role: 'user', content: 'Вопрос' },
       ]);
       assert.equal(body.temperature, 0);
-      assert.equal(body.max_tokens, 300);
       assert.equal(body.response_format, undefined, 'не все модели его понимают');
+      if (id === 'openrouter') {
+        assert.equal(body.max_tokens, 900, 'рассуждающим моделям — втрое больше токенов');
+        assert.deepEqual(body.reasoning, { effort: 'low', exclude: true });
+      } else {
+        assert.equal(body.max_tokens, 300);
+        assert.equal(body.reasoning, undefined);
+      }
       for (const v of Object.values(r.init.headers)) assert.match(v, /^[\x20-\x7e]*$/, 'заголовки — только латиница');
     });
   }
 
-  test('у каждого сервиса есть модели, у задачи «пол» — все три сервиса', () => {
+  test('у каждого сервиса есть модели; у задачи «пол» — Gemini, потом OpenRouter (у Hugging Face нет бесплатных кредитов)', () => {
     for (const p of Object.values(PROVIDERS)) assert.ok(p.models.length >= 2, p.id);
-    assert.deepEqual([...TASK_PROVIDERS.gender].sort(), ['gemini', 'huggingface', 'openrouter']);
-    assert.equal(TASK_PROVIDERS.gender[0], 'gemini');
+    assert.deepEqual(TASK_PROVIDERS.gender, ['gemini', 'openrouter']);
+    assert.ok(!PROVIDERS.gemini.models.some((m) => m.startsWith('gemini-2.5')), 'модели 2.5 новым пользователям недоступны');
   });
 
   test('текст ответа: Gemini без «мыслей»; OpenAI — строка или части; пусто — null', () => {
