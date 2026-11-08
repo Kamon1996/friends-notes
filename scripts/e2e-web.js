@@ -187,6 +187,17 @@ scenario('Карточка: связь только через то, что ес
   await ui.notSee('Добавить день рождения'); // дата есть — подсказка не нужна
 });
 
+scenario('Карточка: знак зодиака чипом рядом с отсчётом; без дня рождения — без знака', async ({ ui }) => {
+  await ui.go('/friend/c');
+  await ui.see('Знак зодиака: Рак', { label: true });
+  await ui.see('Рак');
+  await ui.go('/friend/a');
+  await ui.see('Знак зодиака: Близнецы', { label: true });
+  await ui.go('/friend/x');
+  await ui.see('Добавить день рождения');
+  await ui.notSee('Знак зодиака', { label: true });
+}, { data: seed({ friends: [ANYA, IGOR, MAMA, F({ id: 'x', name: 'Без даты' })] }) });
+
 scenario('Карточка: звезда поднимает друга в «Избранные»', async ({ ui, page }) => {
   await ui.go('/friends');
   await ui.tap('Мама');

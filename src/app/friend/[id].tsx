@@ -5,6 +5,7 @@ import { Pressable, ScrollView, Text, View } from 'react-native';
 import { Avatar } from '@/components/Avatar';
 import { ContactButtons } from '@/components/ContactButtons';
 import { SocialChips } from '@/components/SocialChips';
+import { ZodiacChip } from '@/components/ZodiacGlyph';
 import { SocialLinkSheet } from '@/components/SocialLinkSheet';
 import { ReminderRow } from '@/components/ReminderRow';
 import { Icon } from '@/components/Icon';
@@ -73,17 +74,21 @@ export default function FriendScreen() {
         </Pressable>
         <Text style={{ fontFamily: fonts.display, fontSize: 26, lineHeight: 30, color: colors.text, textAlign: 'center', letterSpacing: -0.2, alignSelf: 'stretch' }}>{friend.name}</Text>
         {friend.birthday && nextBirthday && (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <>
             <Text style={[s.muted, { fontSize: 14, fontVariant: ['tabular-nums'] }]}>
               {formatDate(friend.birthday, hasYear(friend.birthday))}
               {ageNow !== null ? ` · ${ageNow} ${plural(ageNow, 'год', 'года', 'лет')}` : ''}
             </Text>
-            {diff === 0 ? (
-              <Tag text="сегодня" tone="solid" />
-            ) : (
-              <Tag text={relativeDay(nextBirthday, today)} tone={diff !== null && diff <= 7 ? 'accent' : 'neutral'} />
-            )}
-          </View>
+            {/* Отсчёт и знак зодиака — чипами в одну строку; на узком экране переносятся. */}
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center', gap: 6 }}>
+              {diff === 0 ? (
+                <Tag text="сегодня" tone="solid" />
+              ) : (
+                <Tag text={relativeDay(nextBirthday, today)} tone={diff !== null && diff <= 7 ? 'accent' : 'neutral'} />
+              )}
+              <ZodiacChip birthday={friend.birthday} />
+            </View>
+          </>
         )}
         {!friend.birthday && (
           // Ради дней рождения приложение и существует: без даты о друге не напомним — подсказываем добавить.

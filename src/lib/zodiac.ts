@@ -1,4 +1,5 @@
-import type { ISODate } from './types';
+import { accentById, type Scheme } from './theme';
+import type { AccentId, ISODate } from './types';
 
 /**
  * Знак зодиака по дню рождения (тропический зодиак, общепринятые границы). Год не нужен — знак зависит только
@@ -67,3 +68,15 @@ export function zodiacSign(date: ISODate | null | undefined): ZodiacSign | null 
 
 /** «20 янв — 18 фев» */
 export const zodiacRange = (s: ZodiacSign) => `${s.from[1]} ${MONTHS_SHORT[s.from[0] - 1]} — ${s.to[1]} ${MONTHS_SHORT[s.to[0] - 1]}`;
+
+/**
+ * Цвет стихии — один из акцентов приложения, чтобы чип выглядел своим в любой теме:
+ * огонь — терракота, земля — эвкалипт, воздух — мёд, вода — индиго.
+ */
+export const ELEMENT_ACCENT: Record<ZodiacElement, AccentId> = { fire: 'terracotta', earth: 'eucalyptus', air: 'honey', water: 'indigo' };
+
+/** Цвета чипа знака: значок, текст и фон — для светлой или тёмной темы. */
+export function zodiacColors(element: ZodiacElement, scheme: Scheme): { icon: string; text: string; bg: string } {
+  const a = accentById(ELEMENT_ACCENT[element])[scheme];
+  return { icon: a.accent, text: a.accentText, bg: a.soft };
+}

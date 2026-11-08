@@ -3,7 +3,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { ELEMENT_NAME, ZODIAC, zodiacRange, zodiacSign } from '../zodiac';
+import { ACCENTS } from '../theme';
+import { ELEMENT_ACCENT, ELEMENT_NAME, ZODIAC, zodiacColors, zodiacRange, zodiacSign } from '../zodiac';
 
 const name = (d: string | null) => zodiacSign(d)?.name ?? null;
 
@@ -58,3 +59,30 @@ test('подписи: диапазон дат и стихия', () => {
     [3, 3, 3, 3],
   );
 });
+
+test('цвет стихии — акцент приложения: огонь терракота, земля эвкалипт, воздух мёд, вода индиго', () => {
+  assert.deepEqual(ELEMENT_ACCENT, { fire: 'terracotta', earth: 'eucalyptus', air: 'honey', water: 'indigo' });
+  for (const scheme of ['light', 'dark'] as const) {
+    const fire = ACCENTS.find((a) => a.id === 'terracotta')![scheme];
+    assert.deepEqual(zodiacColors('fire', scheme), { icon: fire.accent, text: fire.accentText, bg: fire.soft });
+  }
+  assert.notDeepEqual(zodiacColors('water', 'light'), zodiacColors('water', 'dark'), 'у тёмной темы свои оттенки');
+});
+
+test('текст чипа читается на его фоне: контраст не ниже 4.5 в обеих темах', () => {
+  const lum = (hex: string) => {
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const contrast = (a: string, b: string) => {
+    const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
+    return (x + 0.05) / (y + 0.05);
+  };
+  for (const el of ['fire', 'earth', 'air', 'water'] as const) {
+    for (const scheme of ['light', 'dark'] as const) {
+      const c = zodiacColors(el, scheme);
+      assert.ok(contrast(c.text, c.bg) >= 4.5, `${el}/${scheme}: ${contrast(c.text, c.bg).toFixed(2)}`);
+    }
+  }
+});
+
