@@ -98,6 +98,17 @@ describe('ответ', () => {
     assert.equal(got?.get(0)?.rest, null);
     assert.equal(got?.get(0)?.links.length, 1);
   });
+  test('подпись, висящая после ссылки («Донаты:»), и тире в конце строки уходят; пустые строки — только где были', () => {
+    const text = 'Мой канал о путешествиях — t.me/travel_kat\nДонаты: boosty.to/kat';
+    const links = [
+      { network: 'telegram', url: 't.me/travel_kat' },
+      { network: 'boosty', url: 'boosty.to/kat' },
+    ];
+    assert.equal(tidyRest('Мой канал о путешествиях —\nДонаты:', text, links), 'Мой канал о путешествиях');
+    assert.equal(tidyRest('Важно:\nне опаздывать', 'Важно:\nне опаздывать', []), 'Важно:\nне опаздывать', 'обычный заголовок в заметке не трогаем');
+    assert.equal(tidyRest('Пою и рисую\n\nМосква', 'Пою и рисую\n📸 inst: a\nМосква', []), 'Пою и рисую\nМосква');
+    assert.equal(tidyRest('Абзац\n\nЕщё', 'Абзац\n\nЕщё inst: a', []), 'Абзац\n\nЕщё');
+  });
   test('наша подпись «О себе:» без текста после неё уходит вместе со ссылками', () => {
     assert.equal(tidyRest('О себе: \nДругое'), 'Другое');
     assert.equal(tidyRest('О себе: Фотограф'), 'О себе: Фотограф');
@@ -110,6 +121,14 @@ describe('ссылки для приложения', () => {
   test('адрес разбирается по каталогу: домен главнее названия сети', () => {
     const l = toSocialLink({ network: 'instagram', url: 'https://www.tiktok.com/@shameless66613' }, 'x');
     assert.deepEqual([l?.network, l?.handle, l?.source], ['tiktok', 'shameless66613', 'notes']);
+  });
+  test('ник, положенный в поле адреса («anya.photo» у Instagram), — всё равно ник, а не сайт', () => {
+    const l = toSocialLink({ network: 'instagram', handle: 'anya.photo', url: 'anya.photo' }, 'x');
+    assert.deepEqual([l?.network, l?.handle, l?.url], ['instagram', 'anya.photo', 'https://instagram.com/anya.photo']);
+    const b = toSocialLink({ network: 'bluesky', handle: 'katty.bsky.social', url: 'katty.bsky.social' }, 'x');
+    assert.deepEqual([b?.network, b?.handle], ['bluesky', 'katty.bsky.social']);
+    const vk = toSocialLink({ network: 'vk', handle: 'anya_s', url: 'anya_s' }, 'x');
+    assert.deepEqual([vk?.network, vk?.handle], ['vk', 'anya_s']);
   });
   test('ник — по сети; сайт — по адресу; ник без сети или сайт без адреса — ничего', () => {
     assert.deepEqual(toSocialLink({ network: 'vk', handle: 'anya_s' }, 'x'), { id: 'x', network: 'vk', url: 'https://vk.com/anya_s', handle: 'anya_s', source: 'notes' });

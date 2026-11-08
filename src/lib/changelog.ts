@@ -14,7 +14,7 @@ export interface Release {
  */
 export const CHANGELOG: Release[] = [
   {
-    version: '1.30.0',
+    version: '1.30.1',
     date: '2026-11-08',
     items: [
       'Соцсети из заметок: магия читает заметки и «О себе» из Telegram, добавляет соцсети в карточку и убирает ссылки из заметки — остальной текст остаётся.',

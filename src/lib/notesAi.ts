@@ -52,9 +52,10 @@ export const NOTES_RULES = [
   'Ты помогаешь вести записную книжку о друзьях. Тебе дают тексты о людях: раздел «О себе» из Telegram и заметки. По каждому тексту верни три вещи.',
   '',
   '1. links — соцсети, мессенджеры, сайты и ники ЭТОГО человека, которые указаны в тексте: ссылки (https://…, instagram.com/…, t.me/…), подписи с ником («inst: anya», «тг — @anya», «вк anya_s», «мой ютуб: …»), отдельные @ники.',
-  '   network — id сети из списка ниже; любой другой сайт — "site". handle — ник ровно как в тексте, без @. url — адрес ровно как в тексте, если он есть.',
+  '   network — id сети из списка ниже; любой другой сайт — "site". handle — ник ровно как в тексте, без @. url — только если в тексте есть адрес с доменом (instagram.com/…, t.me/…, https://…), ровно как в тексте; у ника без адреса url не пиши.',
   '   Ничего не придумывай и не достраивай: каждый ник и адрес должен встречаться в тексте буквально. Не бери почту, телефоны, номера карт и кошельков, а также ссылки на чужие страницы, магазины и сервисы, если по тексту это не страница самого человека. Ник без названия сети (просто @anya) — это Telegram.',
   '2. rest — исходный текст, из которого убрано то, что было только ради ссылок: сами ссылки и ники, подписи к ним («inst:», «мой канал:», «пишите в лс»), призывы подписаться, разделители и эмодзи, оставшиеся без слов. Всё остальное оставь слово в слово: не переписывай, не сокращай, не исправляй ошибки, не переводи; порядок и переносы строк сохрани. Ссылок не было — верни текст без изменений. Ничего не осталось — "".',
+  '   Примеры: «Фотограф · inst: lena.ph | вк lena_v» → rest «Фотограф». «Пишите в тг: @lena_k, отвечаю быстро» → rest «отвечаю быстро». «Мой блог — lena.ru\\nДонаты: boosty.to/lena» → rest «Мой блог»: подпись к ссылке («Донаты:», «пишите в», тире перед ссылкой) уходит вместе со ссылкой.',
   '3. facts — только если в тексте прямо сказано то, что пригодится для подарка: food — любимая еда и напитки, что человек не ест; flowers — любимые цветы; gifts — увлечения и то, что человек любит или собирает. Коротко, через запятую. Такого нет — поле не пиши.',
   '',
   `Сети: ${CATALOG}.`,
@@ -128,15 +129,31 @@ function grounded(fact: string, text: string): boolean {
   return words(fact).some((w) => w.length >= 3 && stems.has(w.slice(0, 4)));
 }
 
-/** Наша же подпись «О себе:», после которой ничего не осталось, — тоже мусор. */
-export function tidyRest(rest: string): string {
-  return rest
+/**
+ * Доочистка ответа, привязанная к найденным ссылкам: подпись, которая в исходном тексте стояла прямо перед ссылкой
+ * («Донаты: boosty.to/…»), а теперь висит одна («Донаты:»), уходит; разделитель в конце строки — тоже. Наша же подпись
+ * «О себе:», после которой ничего не осталось, — мусор. Пустые строки — только там, где они были в исходном тексте.
+ */
+export function tidyRest(rest: string, source = '', links: RawNotesLink[] = []): string {
+  const low = source.toLowerCase();
+  const marks = links.flatMap((l) => [l.url, l.handle && `@${l.handle}`, l.handle].filter((x): x is string => !!x)).map((x) => x.toLowerCase());
+  const beforeLink = (label: string) => {
+    const at = low.indexOf(label.toLowerCase());
+    if (at < 0) return false;
+    const after = low.slice(at + label.length, at + label.length + 80).trimStart();
+    return marks.some((m) => after.startsWith(m));
+  };
+  const out = rest
     .split('\n')
-    .map((l) => l.replace(/[ \t]+$/g, ''))
+    .map((l) => l.replace(/[ \t]+$/g, '').replace(/\s*[—–·•|]+$/u, ''))
     .filter((l) => !/^\s*О себе:\s*$/i.test(l))
+    .filter((l) => {
+      const m = /^\s*([^:]{1,30}:)\s*$/u.exec(l);
+      return !(m && beforeLink(m[1].trim()));
+    })
     .join('\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
+    .replace(/\n{3,}/g, '\n\n');
+  return (source.includes('\n\n') ? out : out.replace(/\n{2,}/g, '\n')).trim();
 }
 
 /** Ответ ИИ → проверенные ответы по номерам текстов. null — ответ не разобрать (модуль ИИ спросит другую модель). */
@@ -154,7 +171,7 @@ export function parseNotesAnswer(text: string, texts: string[]): Map<number, Not
     const links = checkLinks(item.links, source);
     const rawRest = typeof item.rest === 'string' ? item.rest : null;
     const whole = source.length <= NOTES_MAX_TEXT;
-    const rest = whole && rawRest !== null && restIsSafe(source, rawRest, links) ? tidyRest(rawRest) : null;
+    const rest = whole && rawRest !== null && restIsSafe(source, rawRest, links) ? tidyRest(rawRest, source, links) : null;
     const facts: NotesAnswer['facts'] = {};
     const rawFacts = item.facts && typeof item.facts === 'object' ? (item.facts as Record<string, unknown>) : {};
     for (const k of NOTES_FACTS) {
@@ -185,21 +202,19 @@ export const NOTES_TASK: AiTask<string[], Map<number, NotesAnswer>> = {
 
 /** Ссылка из ответа → ссылка приложения: адрес разбираем по каталогу (домен главнее названия сети), ник — по сети. */
 export function toSocialLink(raw: RawNotesLink, id: string): SocialLink | null {
+  const claimed = raw.network !== SITE.id ? networkById(raw.network) : SITE;
+  const byHandle = (): SocialLink | null =>
+    raw.handle && claimed.id !== SITE.id ? { id, network: claimed.id, url: claimed.profile ? claimed.profile(raw.handle) : '', handle: raw.handle, source: 'notes' } : null;
   if (raw.url) {
-    const parsed = parseSocialInput(raw.url);
-    const link = linkFromInput(parsed, null, id, 'notes');
-    if (link) {
-      // Ник из ответа пригодится, если по адресу его не понять.
-      if (!link.handle && raw.handle && link.network !== SITE.id && link.network === raw.network) link.handle = raw.handle;
+    const link = linkFromInput(parseSocialInput(raw.url), null, id, 'notes');
+    // Адрес сети из каталога — домен главнее названия. «Адрес» неизвестного сайта при названной сети — скорее всего,
+    // ник, положенный не в то поле («anya.photo» у Instagram): тогда верим нику.
+    if (link && (link.network !== SITE.id || claimed.id === SITE.id || !raw.handle)) {
+      if (!link.handle && raw.handle && link.network !== SITE.id && link.network === claimed.id) link.handle = raw.handle;
       return link;
     }
   }
-  if (raw.handle && raw.network !== SITE.id) {
-    const n = networkById(raw.network);
-    if (n.id === SITE.id) return null;
-    return { id, network: n.id, url: n.profile ? n.profile(raw.handle) : '', handle: raw.handle, source: 'notes' };
-  }
-  return null;
+  return byHandle();
 }
 
 // ---------- Проход по друзьям ----------
