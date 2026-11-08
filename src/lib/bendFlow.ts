@@ -25,10 +25,10 @@ export const BEND = {
   spin: 3.5,
   /** Список выпрямляется. */
   bendOut: 0.5,
-  /** Радиус изгиба, px: строка в пяти от рамки наклонена примерно на 25°. */
-  radius: 700,
-  /** Рамка — на месте пятого друга сверху. */
-  bandRow: 4,
+  /** Радиус изгиба, px: строка в четырёх от рамки наклонена примерно на 25°. */
+  radius: 600,
+  /** Рамка — на друге, который ближе всех к этой доле высоты видимого списка: сверху и снизу гнётся поровну. */
+  bandAt: 0.5,
   /** Выше верха списка — не дальше стольких строк (дальше строка уже за краем). */
   above: 3,
   maxCruise: 20,
@@ -155,18 +155,26 @@ export interface RunGeo {
 /**
  * Геометрия списка из двух замеров: высота подзаголовка и строки друга в середине группы. Строки в группе-карточке:
  * у первой — рамка сверху, у остальных — разделитель той же толщины, у последней ещё рамка снизу (+1).
- * Рамка хода — на месте BEND.bandRow-го друга (друзей меньше — на последнем).
+ * Рамка хода — на друге, чья середина ближе всех к BEND.bandAt высоты видимого списка (список короче — на последнем),
+ * чтобы изгиб был и сверху, и снизу.
  */
 export function runGeometry(items: readonly ({ kind: 'label' } | { kind: 'row'; last: boolean })[], labelH: number, rowH: number, viewH: number): RunGeo {
   const y: number[] = [];
   const h: number[] = [];
   let at = 0;
   let band = -1;
-  let rows = 0;
+  let best = Infinity;
+  const target = viewH * BEND.bandAt;
   for (let i = 0; i < items.length; i++) {
     const it = items[i];
     const size = it.kind === 'label' ? labelH : rowH + (it.last ? 1 : 0);
-    if (it.kind === 'row' && (rows++ <= BEND.bandRow || band < 0)) band = i;
+    if (it.kind === 'row') {
+      const off = Math.abs(at + size / 2 - target);
+      if (off < best) {
+        best = off;
+        band = i;
+      }
+    }
     y.push(at);
     h.push(size);
     at += size;

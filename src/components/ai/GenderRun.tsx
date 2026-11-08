@@ -479,15 +479,18 @@ function BannerBody({
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
         <AiIcon size={36} busy={busy} />
         <View style={{ flex: 1, gap: 2 }}>
-          <Animated.Text
-            key={phrase}
-            entering={FadeIn.duration(180)}
-            style={[s.title, { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20 }]}
-            numberOfLines={2}
-          >
-            {phrase}
-          </Animated.Text>
-          <Text style={s.muted} accessibilityLiveRegion={stopped ? 'polite' : 'none'}>
+          {/* Фраза — в одну или две строки, а место под неё всегда на две: плашка не меняет высоту от фразы к фразе. */}
+          <View style={{ height: 40, justifyContent: 'center' }}>
+            <Animated.Text
+              key={phrase}
+              entering={FadeIn.duration(180)}
+              style={[s.title, { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20 }]}
+              numberOfLines={2}
+            >
+              {phrase}
+            </Animated.Text>
+          </View>
+          <Text style={s.muted} numberOfLines={1} accessibilityLiveRegion={stopped ? 'polite' : 'none'}>
             {line}
           </Text>
         </View>

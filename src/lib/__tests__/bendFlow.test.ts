@@ -133,11 +133,14 @@ describe('геометрия', () => {
     assert.deepEqual(g.y, [0, 34, 99, 165, 199]);
     assert.deepEqual(g.h, [34, 65, 66, 34, 66]);
   });
-  test('рамка — на пятом друге; друзей меньше — на последнем', () => {
+  test('рамка — на друге у середины видимого списка; друзей меньше — на последнем', () => {
     const items = [L, R(), R(), R(), R(true), L, R(), R(), R(true)];
+    // экран 400: середина 200 → третий друг (34 + 65·2 … 34 + 65·3 = 164…229)
     const g = runGeometry(items, 34, 65, 400);
-    assert.equal(g.bandTop, g.y[6], 'пятый друг — после второго подзаголовка');
-    assert.equal(g.mid, g.y[6] + 65 / 2);
+    assert.equal(g.bandTop, g.y[3]);
+    assert.equal(g.mid, g.y[3] + 65 / 2);
+    // экран 700: середина 350 → пятый друг (середина 361), после второго подзаголовка
+    assert.equal(runGeometry(items, 34, 65, 700).bandTop, g.y[6]);
     const few = runGeometry([L, R(), R(true)], 34, 65, 400);
     assert.equal(few.bandTop, few.y[2]);
   });
