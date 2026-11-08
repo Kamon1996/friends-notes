@@ -144,14 +144,6 @@ export const BENCH_LISTS: Record<ProviderId, { url: string; auth: boolean; pick(
       return wanted.map((re) => ids.find((id) => re.test(id))).filter((id): id is string => !!id);
     },
   },
-  groq: {
-    url: 'https://api.groq.com/openai/v1/models',
-    auth: true,
-    pick(body) {
-      const data = (body as { data?: { id?: string; active?: boolean }[] })?.data ?? [];
-      return data.filter((m) => typeof m.id === 'string' && m.active !== false && !NOT_TEXT.test(m.id)).map((m) => m.id!);
-    },
-  },
 };
 
 // ---------- Прогон ----------
@@ -198,7 +190,7 @@ export interface BenchOptions {
 }
 
 /** Пауза между запросами к одному сервису — по бесплатным поминутным лимитам. */
-const GAP: Record<ProviderId, number> = { gemini: 4500, openrouter: 3200, huggingface: 500, groq: 2100 };
+const GAP: Record<ProviderId, number> = { gemini: 4500, openrouter: 3200, huggingface: 500 };
 
 const chunk = <T,>(list: T[], size: number) => Array.from({ length: Math.ceil(list.length / size) }, (_, i) => list.slice(i * size, i * size + size));
 

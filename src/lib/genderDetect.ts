@@ -5,7 +5,7 @@ import { countryByPhone, firstNameForLookup, genderFromName, type Gender, type G
 
 /**
  * Пол друзей определяется сам, в фоне, по ступеням:
- *   names → genderize → device-ai → ai (облачные ИИ из src/lib/ai: Gemini, Groq, OpenRouter, Hugging Face)
+ *   names → genderize → device-ai → ai (облачные ИИ из src/lib/ai: Gemini, OpenRouter, Hugging Face)
  * У каждого друга запоминается последняя ступень, которая честно ответила «не знаю» (genderStage), — в следующий раз
  * начинаем со следующей и одного и того же человека дважды не спрашиваем. Ступень отмечается только когда ответ
  * получен; сбой сети ничего не отмечает (попробуем при следующем запуске). Если Genderize отказал надолго

@@ -1,7 +1,7 @@
 /** Облачные ИИ-сервисы с бесплатными ключами. Порядок для каждой задачи — в tasks.ts. */
-export type ProviderId = 'gemini' | 'groq' | 'openrouter' | 'huggingface';
+export type ProviderId = 'gemini' | 'openrouter' | 'huggingface';
 
-export const PROVIDER_IDS: ProviderId[] = ['gemini', 'groq', 'openrouter', 'huggingface'];
+export const PROVIDER_IDS: ProviderId[] = ['gemini', 'openrouter', 'huggingface'];
 
 /** Ответ сети — то немногое из fetch, что нужно модулю (так его легко подменить в тестах). */
 export interface AiResponse {

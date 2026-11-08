@@ -6,11 +6,13 @@
  *
  * Настройки — переменными окружения: BENCH_PROVIDERS (через запятую), BENCH_BATCH (имён в запросе),
  * BENCH_MAX_MODELS (на сервис), BENCH_ONLY («openrouter:модель,gemini:модель» — только эти).
- * Ключи в лог не попадают.
+ * Ключи в лог не попадают. Оценки сохраняются в src/lib/ai/ratings.ts (тир-лист), workflow коммитит их в ветку.
  */
 import fs from 'node:fs';
 
 import { GENDER_BENCH, groupErrors, rankResults, runBench, type BenchModelResult } from '../../src/lib/ai/bench';
+import { RATINGS } from '../../src/lib/ai/ratings';
+import { accuracy, mergeRatings, rankModels, ratingsSource, type TaskRatings } from '../../src/lib/ai/tiers';
 import type { AiFetch, ProviderId } from '../../src/lib/ai/types';
 
 const env = process.env;
@@ -19,7 +21,6 @@ const keys: Partial<Record<ProviderId, string>> = {
   gemini: env.GEMINI_API_KEY || undefined,
   openrouter: env.OPENROUTER_API_KEY || undefined,
   huggingface: env.HF_TOKEN || undefined,
-  groq: env.GROQ_API_KEY || undefined,
 };
 const batch = Number(env.BENCH_BATCH) || 50;
 const maxModels = Number(env.BENCH_MAX_MODELS) || 40;
@@ -47,6 +48,15 @@ function table(results: BenchModelResult[]): string {
     '|---|---|---|---|---|---|---|---|---|---|---|---|',
     ...rows,
   ].join('\n');
+}
+
+/** Тир-лист задачи — таблицей. */
+function tierTable(task: TaskRatings | undefined): string {
+  const rows = rankModels(task).map(
+    (m) =>
+      `| ${m.tier} | ${m.provider} | \`${m.model}\` | ${m.rating.score} | ${m.rating.harmful} | ${Math.round(accuracy(m.rating) * 100)}% | ${sec(m.rating.medianMs ?? NaN)} | ${m.rating.testedAt} |`,
+  );
+  return ['| Тир | Сервис | Модель | Итог | Вредные ошибки | Верно | Время | Испытана |', '|---|---|---|---|---|---|---|---|', ...rows].join('\n');
 }
 
 (async () => {
@@ -81,5 +91,13 @@ function table(results: BenchModelResult[]): string {
   }
   console.log(`Готово за ${Math.round((Date.now() - started) / 1000)} с`);
   fs.writeFileSync('bench-results.json', JSON.stringify({ cases: GENDER_BENCH, batch, results }, null, 2));
-  if (env.GITHUB_STEP_SUMMARY) fs.appendFileSync(env.GITHUB_STEP_SUMMARY, `## Испытание моделей: пол по имени\n\n${md}\n`);
+
+  // Оценки → тир-лист: новые записываем, не проверенные в этот раз (лимиты, сбои) оставляем как были.
+  const { ratings, updated, kept } = mergeRatings(RATINGS, 'gender', GENDER_BENCH.length, results, new Date().toISOString().slice(0, 10));
+  fs.writeFileSync(env.BENCH_RATINGS_FILE || 'src/lib/ai/ratings.ts', ratingsSource(ratings));
+  const tiers = tierTable(ratings.gender);
+  console.log(`\nОценки: обновлено ${updated.length}, не проверены в этот раз ${kept.length}.\n\n${tiers}\n`);
+  if (env.GITHUB_STEP_SUMMARY) {
+    fs.appendFileSync(env.GITHUB_STEP_SUMMARY, `## Испытание моделей: пол по имени\n\n${md}\n\n## Тир-лист\n\n${tiers}\n`);
+  }
 })();

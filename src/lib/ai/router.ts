@@ -1,10 +1,12 @@
 import { pauseUntil, retryHint } from './limits';
 import { PROVIDERS, classify, isProviderWideLimit, type ProviderDef } from './providers';
+import { tierPlan, type Ratings } from './tiers';
 import type { AiAttempt, AiFetch, AiResult, AiRunner, AiTask, FailureKind, ProviderId } from './types';
 
 /**
  * Основа для любых ИИ-задач приложения:
- * - сервисы спрашиваются в порядке приоритета задачи; нет ключа — сервис пропускается;
+ * - сначала модели, которые лучше всех показали себя на испытании (тир-лист, tiers.ts), потом ещё не испытанные —
+ *   в порядке приоритета сервисов задачи; модели с тиром F не спрашиваются никогда; нет ключа — сервис пропускается;
  * - у сервиса несколько моделей: модель убрали или упёрлась в свой лимит — пробуем следующую;
  * - не ответил (лимит, сбой, отказ) — идём к следующему сервису, а этот ставим на паузу: до времени, которое он
  *   назвал сам, иначе — по умолчанию, с каждой неудачей подряд дольше (limits.ts). До конца паузы его не трогаем;
@@ -12,7 +14,7 @@ import type { AiAttempt, AiFetch, AiResult, AiRunner, AiTask, FailureKind, Provi
  * - паузы и список бесплатных моделей сохраняются между запусками (load/save).
  */
 
-/** Пауза: сервис («groq») целиком или одна его модель («groq/llama-3.3-70b-versatile»). */
+/** Пауза: сервис («openrouter») целиком или одна его модель («gemini/gemini-flash-lite-latest»). */
 export interface AiPause {
   until: number;
   /** Сколько неудач подряд — чтобы пауза по умолчанию росла. */
@@ -37,6 +39,8 @@ export interface AiOptions {
   /** Сколько моделей одного сервиса пробовать за один вопрос — чтобы не сжечь лимиты перебором. */
   modelsPerProvider?: number;
   providers?: Record<ProviderId, ProviderDef>;
+  /** Тир-лист: оценки моделей по задачам (ratings.ts). Нет — порядок по приоритету сервисов. */
+  ratings?: Ratings;
 }
 
 const DAY = 24 * 3_600_000;
@@ -144,64 +148,95 @@ export function createAi(opts: AiOptions): AiRunner & { state(): Promise<AiState
         return result;
       };
 
-      for (const id of task.providers) {
+      // Порядок: проверенные хорошие модели по тир-листу → ещё не испытанные по приоритету сервисов → слабые (C).
+      const plan = tierPlan(opts.ratings?.[task.id], task.providers);
+      const tried = new Set<string>();
+      const stopped = new Set<ProviderId>(); // сервис выбыл из этого вопроса
+      const used: Partial<Record<ProviderId, number>> = {};
+      const providerPaused = (id: ProviderId) => {
+        if (!pausedNow(s, id, opts.now())) return false;
+        if (!stopped.has(id)) attempts.push({ provider: id, outcome: 'paused', until: s.pauses[id].until });
+        stopped.add(id);
+        return true;
+      };
+
+      /** Спросить одну модель. Вернёт результат, если она ответила по делу. */
+      const ask = async (id: ProviderId, model: string): Promise<AiResult<O> | null> => {
         const def = providers[id];
         const key = opts.keys[id];
-        if (!def || !key) continue;
-        let now = opts.now();
-        if (pausedNow(s, id, now)) {
-          attempts.push({ provider: id, outcome: 'paused', until: s.pauses[id].until });
-          continue;
+        const pairKey = `${id}:${model}`;
+        if (!def || !key || stopped.has(id) || tried.has(pairKey) || plan.banned.has(pairKey)) return null;
+        tried.add(pairKey);
+        if (providerPaused(id)) return null;
+        const now = opts.now();
+        if (pausedNow(s, `${id}/${model}`, now) || (used[id] ?? 0) >= perProvider) return null;
+        used[id] = (used[id] ?? 0) + 1;
+
+        const req = def.request(model, key, task.request(input));
+        let res;
+        try {
+          res = await send(req.url, req.init);
+        } catch {
+          attempts.push({ provider: id, model, outcome: 'network' });
+          stopped.add(id); // нет сети или сервис недоступен отсюда — пауза не нужна, идём к следующему
+          return null;
         }
-        const models = (await modelsOf(def, s, now)).filter((m) => !pausedNow(s, `${id}/${m}`, now)).slice(0, perProvider);
-        if (!models.length) attempts.push({ provider: id, outcome: 'paused' });
-
-        for (const model of models) {
-          const req = def.request(model, key, task.request(input));
-          now = opts.now();
-          let res;
-          try {
-            res = await send(req.url, req.init);
-          } catch {
-            attempts.push({ provider: id, model, outcome: 'network' });
-            break; // нет сети или сервис недоступен отсюда — пауза не нужна, идём к следующему
-          }
-          if (res === TIMEOUT) {
-            const until = pause(s, id, 'timeout', undefined, now);
-            attempts.push({ provider: id, model, outcome: 'timeout', until });
-            break;
-          }
-          const raw = await res.text().catch(() => '');
-          let body: unknown = null;
-          try {
-            body = raw ? JSON.parse(raw) : null;
-          } catch {
-            body = raw;
-          }
-          const kind = classify(id, res.status, body);
-
-          if (!kind) {
-            const text = def.text(body);
-            const value = text === null ? null : task.parse(text, input);
-            if (value !== null) {
-              delete s.pauses[id];
-              delete s.pauses[`${id}/${model}`];
-              attempts.push({ provider: id, model, outcome: 'ok' });
-              return finish({ status: 'ok', value, provider: id, model, attempts });
-            }
-            answered = true;
-            attempts.push({ provider: id, model, outcome: 'unusable' });
-            continue; // другая модель может ответить по делу
-          }
-
-          const hint = retryHint({ status: res.status, headers: res.headers, body }, now);
-          const wide =
-            kind === 'auth' || kind === 'region' || kind === 'credits' || kind === 'server' || (kind === 'rate-limit' && isProviderWideLimit(id, body));
-          const until = pause(s, wide ? id : `${id}/${model}`, kind, hint, now);
-          attempts.push({ provider: id, model, outcome: kind, until });
-          if (kind === 'model-missing' && s.models[id]) s.models[id]!.at = 0; // список устарел — обновим в следующий раз
-          if (wide) break;
+        if (res === TIMEOUT) {
+          const until = pause(s, id, 'timeout', undefined, now);
+          attempts.push({ provider: id, model, outcome: 'timeout', until });
+          stopped.add(id);
+          return null;
         }
+        const raw = await res.text().catch(() => '');
+        let body: unknown = null;
+        try {
+          body = raw ? JSON.parse(raw) : null;
+        } catch {
+          body = raw;
+        }
+        const kind = classify(id, res.status, body);
+
+        if (!kind) {
+          const text = def.text(body);
+          const value = text === null ? null : task.parse(text, input);
+          if (value !== null) {
+            delete s.pauses[id];
+            delete s.pauses[`${id}/${model}`];
+            attempts.push({ provider: id, model, outcome: 'ok' });
+            return { status: 'ok', value, provider: id, model, attempts };
+          }
+          answered = true;
+          attempts.push({ provider: id, model, outcome: 'unusable' });
+          return null; // другая модель может ответить по делу
+        }
+
+        const hint = retryHint({ status: res.status, headers: res.headers, body }, now);
+        const wide = kind === 'auth' || kind === 'region' || kind === 'credits' || kind === 'server' || (kind === 'rate-limit' && isProviderWideLimit(id, body));
+        const until = pause(s, wide ? id : `${id}/${model}`, kind, hint, now);
+        attempts.push({ provider: id, model, outcome: kind, until });
+        if (kind === 'model-missing' && s.models[id]) s.models[id]!.at = 0; // список устарел — обновим в следующий раз
+        if (wide) stopped.add(id);
+        return null;
+      };
+
+      for (const p of plan.first) {
+        const r = await ask(p.provider, p.model);
+        if (r) return finish(r);
+      }
+      const later = new Set(plan.last.map((p) => `${p.provider}:${p.model}`));
+      for (const id of task.providers) {
+        const def = providers[id];
+        if (!def || !opts.keys[id] || stopped.has(id) || providerPaused(id)) continue;
+        for (const model of await modelsOf(def, s, opts.now())) {
+          if (later.has(`${id}:${model}`)) continue; // слабые — после всех остальных
+          const r = await ask(id, model);
+          if (r) return finish(r);
+          if (stopped.has(id) || (used[id] ?? 0) >= perProvider) break;
+        }
+      }
+      for (const p of plan.last) {
+        const r = await ask(p.provider, p.model);
+        if (r) return finish(r);
       }
       return finish(answered ? { status: 'unusable', attempts } : { status: 'unavailable', attempts });
     },

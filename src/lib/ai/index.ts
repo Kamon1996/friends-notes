@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 
+import { RATINGS } from './ratings';
 import { createAi } from './router';
 import { PROVIDER_IDS, type AiFetch, type ProviderId } from './types';
 
@@ -8,7 +9,7 @@ export type { AiRequest, AiResult, AiRunner, AiTask, ProviderId } from './types'
 export { TASK_PROVIDERS } from './tasks';
 
 /**
- * Ключи попадают в сборку из секретов репозитория (GEMINI_API_KEY, GROQ_API_KEY, OPENROUTER_API_KEY, HF_TOKEN —
+ * Ключи попадают в сборку из секретов репозитория (GEMINI_API_KEY, OPENROUTER_API_KEY, HF_TOKEN —
  * см. .github/workflows/android-apk.yml). Нет ключа — сервис просто пропускается.
  */
 function keysFromConfig(): Partial<Record<ProviderId, string>> {
@@ -31,6 +32,7 @@ const appFetch: AiFetch = async (url, init) => {
 /** ИИ приложения: один на всё приложение, паузы сервисов общие для всех задач. */
 export const ai = createAi({
   keys: keysFromConfig(),
+  ratings: RATINGS,
   fetch: appFetch,
   now: () => Date.now(),
   load: async () => {

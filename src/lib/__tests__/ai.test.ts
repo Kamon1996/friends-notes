@@ -36,7 +36,7 @@ interface Call {
 function identify(url: string, body: Record<string, unknown> | null): { provider: Call['provider']; model: string } {
   if (url.includes('generativelanguage.googleapis.com')) return { provider: 'gemini', model: decodeURIComponent(/models\/([^:]+):/.exec(url)![1]) };
   if (url === 'https://openrouter.ai/api/v1/models') return { provider: 'openrouter-models', model: '' };
-  const provider: ProviderId = url.includes('groq.com') ? 'groq' : url.includes('openrouter.ai') ? 'openrouter' : 'huggingface';
+  const provider: ProviderId = url.includes('openrouter.ai') ? 'openrouter' : 'huggingface';
   return { provider, model: String(body?.model ?? '') };
 }
 
@@ -65,12 +65,12 @@ const ok = (c: Call, text = 'OK') => (c.provider === 'gemini' ? geminiOk(text) :
 /** Простая задача: ответ годится, если начинается с «OK». */
 const ECHO: AiTask<string, string> = {
   id: 'echo',
-  providers: ['gemini', 'groq', 'openrouter', 'huggingface'],
+  providers: ['gemini', 'openrouter', 'huggingface'],
   request: (q) => ({ system: 'Отвечай коротко.', prompt: q, json: true, maxTokens: 50 }),
   parse: (text) => (text.startsWith('OK') ? text : null),
 };
 
-const ALL_KEYS = { gemini: 'g-key', groq: 'q-key', openrouter: 'o-key', huggingface: 'h-key' };
+const ALL_KEYS = { gemini: 'g-key', openrouter: 'o-key', huggingface: 'h-key' };
 
 /** «Телефон» с модулем ИИ: состояние хранится между запусками как JSON. */
 function phone(respond: (c: Call) => Reply, keys: Partial<Record<ProviderId, string>> = ALL_KEYS, extra: { timeoutMs?: number; modelsPerProvider?: number } = {}) {
@@ -156,7 +156,7 @@ describe('когда сервис снова можно трогать', () => {
     assert.equal(retryHint({ status: 429, headers: headers(), body: day }, T0), nextPacificMidnight(T0), 'дневная квота важнее «20 секунд»');
   });
 
-  test('Groq: сброс счётчиков — только если упёрлись и Retry-After нет', () => {
+  test('OpenAI-совместимые: сброс счётчиков — только если упёрлись и Retry-After нет', () => {
     const h = headers({ 'x-ratelimit-reset-requests': '2m59.56s', 'x-ratelimit-reset-tokens': '7.66s' });
     assert.equal(retryHint({ status: 429, headers: h, body: null }, T0), T0 + 179_560);
     assert.equal(retryHint({ status: 200, headers: h, body: null }, T0), undefined, 'обычный ответ — это не пауза');
@@ -207,7 +207,6 @@ describe('как разговариваем с каждым сервисом', (
   });
 
   for (const [id, url] of [
-    ['groq', 'https://api.groq.com/openai/v1/chat/completions'],
     ['openrouter', 'https://openrouter.ai/api/v1/chat/completions'],
     ['huggingface', 'https://router.huggingface.co/v1/chat/completions'],
   ] as const) {
@@ -229,9 +228,9 @@ describe('как разговариваем с каждым сервисом', (
     });
   }
 
-  test('у каждого сервиса есть модели, у задачи «пол» — все четыре сервиса', () => {
+  test('у каждого сервиса есть модели, у задачи «пол» — все три сервиса', () => {
     for (const p of Object.values(PROVIDERS)) assert.ok(p.models.length >= 2, p.id);
-    assert.deepEqual([...TASK_PROVIDERS.gender].sort(), ['gemini', 'groq', 'huggingface', 'openrouter']);
+    assert.deepEqual([...TASK_PROVIDERS.gender].sort(), ['gemini', 'huggingface', 'openrouter']);
     assert.equal(TASK_PROVIDERS.gender[0], 'gemini');
   });
 
@@ -239,10 +238,10 @@ describe('как разговариваем с каждым сервисом', (
     assert.equal(PROVIDERS.gemini.text({ candidates: [{ content: { parts: [{ text: 'думаю…', thought: true }, { text: '{"a":1}' }] } }] }), '{"a":1}');
     assert.equal(PROVIDERS.gemini.text({ candidates: [{ finishReason: 'SAFETY' }] }), null);
     assert.equal(PROVIDERS.gemini.text({ promptFeedback: { blockReason: 'OTHER' } }), null);
-    assert.equal(PROVIDERS.groq.text({ choices: [{ message: { content: 'да' } }] }), 'да');
+    assert.equal(PROVIDERS.huggingface.text({ choices: [{ message: { content: 'да' } }] }), 'да');
     assert.equal(PROVIDERS.openrouter.text({ choices: [{ message: { content: [{ type: 'text', text: 'а' }, { type: 'text', text: 'б' }] } }] }), 'аб');
     assert.equal(PROVIDERS.huggingface.text({ choices: [{ message: { content: '  ' } }] }), null);
-    assert.equal(PROVIDERS.groq.text(null), null);
+    assert.equal(PROVIDERS.openrouter.text(null), null);
   });
 
   test('что значит ошибка', () => {
@@ -255,13 +254,13 @@ describe('как разговариваем с каждым сервисом', (
       ['gemini', 404, { error: { code: 404, status: 'NOT_FOUND', message: 'models/x is not found for API version v1beta' } }, 'model-missing'],
       ['gemini', 400, { error: { code: 400, status: 'INVALID_ARGUMENT', message: 'Invalid JSON payload' } }, 'bad-request'],
       ['gemini', 503, { error: { code: 503, status: 'UNAVAILABLE', message: 'The model is overloaded.' } }, 'server'],
-      ['groq', 429, { error: { message: 'Rate limit reached for model', type: 'tokens', code: 'rate_limit_exceeded' } }, 'rate-limit'],
-      ['groq', 400, { error: { message: 'The model `x` has been decommissioned', code: 'model_decommissioned' } }, 'model-missing'],
-      ['groq', 404, { error: { message: 'The model `x` does not exist', code: 'model_not_found' } }, 'model-missing'],
-      ['groq', 401, { error: { message: 'Invalid API Key', code: 'invalid_api_key' } }, 'auth'],
-      ['groq', 403, { error: { message: 'Forbidden' } }, 'auth'],
-      ['groq', 498, { error: { message: 'Flex tier capacity exceeded' } }, 'server'],
-      ['groq', 413, { error: { message: 'Request too large' } }, 'bad-request'],
+      ['huggingface', 429, { error: { message: 'Rate limit reached for model', type: 'tokens', code: 'rate_limit_exceeded' } }, 'rate-limit'],
+      ['huggingface', 400, { error: { message: 'The model `x` has been decommissioned', code: 'model_decommissioned' } }, 'model-missing'],
+      ['huggingface', 404, { error: { message: 'The model `x` does not exist', code: 'model_not_found' } }, 'model-missing'],
+      ['huggingface', 401, { error: { message: 'Invalid API Key', code: 'invalid_api_key' } }, 'auth'],
+      ['huggingface', 403, { error: { message: 'Forbidden' } }, 'auth'],
+      ['huggingface', 498, { error: { message: 'Flex tier capacity exceeded' } }, 'server'],
+      ['huggingface', 413, { error: { message: 'Request too large' } }, 'bad-request'],
       ['openrouter', 402, { error: { code: 402, message: 'Insufficient credits' } }, 'credits'],
       ['openrouter', 404, { error: { code: 404, message: 'No endpoints found matching your data policy' } }, 'model-missing'],
       ['openrouter', 403, { error: { code: 403, message: 'Input was flagged by moderation' } }, 'bad-request'],
@@ -330,9 +329,9 @@ describe('порядок и запасные варианты', () => {
   });
 
   test('сервис упёрся в лимит — спрашиваем следующий и не трогаем этот до времени, которое он назвал', async () => {
-    const p = phone((c) => (c.provider === 'gemini' ? { status: 429, headers: { 'retry-after': '3600' }, body: { error: { code: 429, status: 'RESOURCE_EXHAUSTED' } } } : ok(c, 'OK groq')));
+    const p = phone((c) => (c.provider === 'gemini' ? { status: 429, headers: { 'retry-after': '3600' }, body: { error: { code: 429, status: 'RESOURCE_EXHAUSTED' } } } : ok(c, 'OK')));
     const first = await p.ai.run(ECHO, 'вопрос');
-    assert.equal(first.status === 'ok' && first.provider, 'groq');
+    assert.equal(first.status === 'ok' && first.provider, 'openrouter');
     assert.equal(p.stored.pauses['gemini/gemini-flash-lite-latest'].until, T0 + HOUR, 'лимит у модели');
     // Минутный лимит у модели — следующая модель Gemini может ответить.
     assert.deepEqual(p.net.asked.slice(0, 2), ['gemini/gemini-flash-lite-latest', 'gemini/gemini-3.5-flash-lite']);
@@ -340,13 +339,13 @@ describe('порядок и запасные варианты', () => {
 
   test('после перезапуска пауза помнится; кончилась — снова спрашиваем по приоритету', async () => {
     let geminiDown = true;
-    const p = phone((c) => (c.provider === 'gemini' && geminiDown ? { status: 429, headers: { 'retry-after': '600' } } : ok(c)), { gemini: 'g', groq: 'q' }, { modelsPerProvider: 1 });
+    const p = phone((c) => (c.provider === 'gemini' && geminiDown ? { status: 429, headers: { 'retry-after': '600' } } : ok(c)), { gemini: 'g', huggingface: 'h' }, { modelsPerProvider: 1 });
     await p.ai.run(ECHO, '1');
-    assert.deepEqual(p.net.asked, ['gemini/gemini-flash-lite-latest', 'groq/llama-3.3-70b-versatile']);
+    assert.deepEqual(p.net.asked, ['gemini/gemini-flash-lite-latest', 'huggingface/meta-llama/Llama-3.3-70B-Instruct']);
     p.restart();
     p.clock.now = T0 + 5 * MINUTE;
     await p.ai.run(ECHO, '2');
-    assert.deepEqual(p.net.asked.slice(2), ['gemini/gemini-3.5-flash-lite', 'groq/llama-3.3-70b-versatile'], 'модель на паузе даже не спрашиваем — только следующую');
+    assert.deepEqual(p.net.asked.slice(2), ['gemini/gemini-3.5-flash-lite', 'huggingface/meta-llama/Llama-3.3-70B-Instruct'], 'модель на паузе даже не спрашиваем — только следующую');
     p.clock.now = T0 + 10 * MINUTE;
     geminiDown = false;
     await p.ai.run(ECHO, '3');
@@ -368,10 +367,10 @@ describe('порядок и запасные варианты', () => {
       { error: { code: 400, status: 'INVALID_ARGUMENT', message: 'API key not valid.' } },
       { error: { code: 400, status: 'FAILED_PRECONDITION', message: 'User location is not supported for the API use.' } },
     ]) {
-      const p = phone((c) => (c.provider === 'gemini' ? { status: 400, body } : ok(c)), { gemini: 'g', groq: 'q' });
+      const p = phone((c) => (c.provider === 'gemini' ? { status: 400, body } : ok(c)), { gemini: 'g', huggingface: 'h' });
       const r = await p.ai.run(ECHO, '1');
-      assert.equal(r.status === 'ok' && r.provider, 'groq');
-      assert.deepEqual(p.net.asked, ['gemini/gemini-flash-lite-latest', 'groq/llama-3.3-70b-versatile']);
+      assert.equal(r.status === 'ok' && r.provider, 'huggingface');
+      assert.deepEqual(p.net.asked, ['gemini/gemini-flash-lite-latest', 'huggingface/meta-llama/Llama-3.3-70B-Instruct']);
       assert.equal(p.stored.pauses.gemini.until, T0 + 7 * DAY);
     }
   });
@@ -402,23 +401,23 @@ describe('порядок и запасные варианты', () => {
 
   test('сбой сервиса — пауза растёт с каждым разом; ответил — счётчик сброшен', async () => {
     let down = true;
-    const p = phone((c) => (down ? { status: 503, body: { error: { code: 503, status: 'UNAVAILABLE' } } } : ok(c)), { groq: 'q' });
+    const p = phone((c) => (down ? { status: 503, body: { error: { code: 503, status: 'UNAVAILABLE' } } } : ok(c)), { huggingface: 'h' });
     await p.ai.run(ECHO, '1');
-    assert.equal(p.stored.pauses.groq.until, T0 + 5 * MINUTE);
+    assert.equal(p.stored.pauses.huggingface.until, T0 + 5 * MINUTE);
     p.clock.now = T0 + 6 * MINUTE;
     await p.ai.run(ECHO, '2');
-    assert.equal(p.stored.pauses.groq.until, p.clock.now + 10 * MINUTE);
-    assert.equal(p.stored.pauses.groq.strikes, 2);
+    assert.equal(p.stored.pauses.huggingface.until, p.clock.now + 10 * MINUTE);
+    assert.equal(p.stored.pauses.huggingface.strikes, 2);
     p.clock.now += 11 * MINUTE;
     down = false;
     assert.equal((await p.ai.run(ECHO, '3')).status, 'ok');
-    assert.equal(p.stored.pauses.groq, undefined);
+    assert.equal(p.stored.pauses.huggingface, undefined);
   });
 
   test('не ответил вовремя — следующий сервис, этот на паузе', async () => {
-    const p = phone((c) => (c.provider === 'gemini' ? 'hang' : ok(c)), { gemini: 'g', groq: 'q' }, { timeoutMs: 20 });
+    const p = phone((c) => (c.provider === 'gemini' ? 'hang' : ok(c)), { gemini: 'g', huggingface: 'h' }, { timeoutMs: 20 });
     const r = await p.ai.run(ECHO, '1');
-    assert.equal(r.status === 'ok' && r.provider, 'groq');
+    assert.equal(r.status === 'ok' && r.provider, 'huggingface');
     assert.equal(p.stored.pauses.gemini.reason, 'timeout');
   });
 
@@ -432,24 +431,24 @@ describe('порядок и запасные варианты', () => {
   });
 
   test('ответ не по делу — пробуем другую модель и сервис; не по делу у всех — «бесполезно»', async () => {
-    const p = phone((c) => (c.provider === 'groq' ? ok(c, 'OK groq') : ok(c, 'Извините, не могу помочь')), { gemini: 'g', groq: 'q' });
+    const p = phone((c) => (c.provider === 'huggingface' ? ok(c, 'OK hf') : ok(c, 'Извините, не могу помочь')), { gemini: 'g', huggingface: 'h' });
     const r = await p.ai.run(ECHO, '1');
-    assert.equal(r.status === 'ok' && r.provider, 'groq');
+    assert.equal(r.status === 'ok' && r.provider, 'huggingface');
     assert.equal(p.net.asked.filter((a) => a.startsWith('gemini/')).length, 3, 'три модели Gemini');
     assert.deepEqual(p.stored.pauses, {}, 'за ответ не по делу не наказываем');
 
-    const q = phone((c) => ok(c, 'нет'), { gemini: 'g', groq: 'q' });
+    const q = phone((c) => ok(c, 'нет'), { gemini: 'g', huggingface: 'h' });
     const all = await q.ai.run(ECHO, '1');
     assert.equal(all.status, 'unusable');
   });
 
   test('ответ не по делу у одного, а остальные недоступны — тоже «бесполезно» (повторять нет смысла)', async () => {
-    const p = phone((c) => (c.provider === 'gemini' ? ok(c, 'нет') : { status: 429 }), { gemini: 'g', groq: 'q' }, { modelsPerProvider: 1 });
+    const p = phone((c) => (c.provider === 'gemini' ? ok(c, 'нет') : { status: 429 }), { gemini: 'g', huggingface: 'h' }, { modelsPerProvider: 1 });
     assert.equal((await p.ai.run(ECHO, '1')).status, 'unusable');
   });
 
   test(`за один вопрос — не больше трёх моделей одного сервиса`, async () => {
-    const p = phone(() => ({ status: 404 }), { groq: 'q' });
+    const p = phone(() => ({ status: 404 }), { gemini: 'g' });
     await p.ai.run(ECHO, '1');
     assert.equal(p.net.calls.length, 3);
     await p.ai.run(ECHO, '2');
@@ -515,10 +514,10 @@ describe('хранение состояния', () => {
     assert.deepEqual(sanitizeState('мусор'), { pauses: {}, models: {} });
     assert.deepEqual(
       sanitizeState({
-        pauses: { groq: { until: T0, strikes: 2, reason: 'rate-limit' }, bad: { until: 'завтра', strikes: 1, reason: 'rate-limit' }, odd: { until: T0, strikes: 1, reason: 'лень' } },
-        models: { openrouter: { list: ['a:free'], at: T0 }, nobody: { list: ['x'], at: T0 }, groq: { list: [1], at: T0 } },
+        pauses: { gemini: { until: T0, strikes: 2, reason: 'rate-limit' }, bad: { until: 'завтра', strikes: 1, reason: 'rate-limit' }, odd: { until: T0, strikes: 1, reason: 'лень' } },
+        models: { openrouter: { list: ['a:free'], at: T0 }, nobody: { list: ['x'], at: T0 }, huggingface: { list: [1], at: T0 } },
       }),
-      { pauses: { groq: { until: T0, strikes: 2, reason: 'rate-limit' } }, models: { openrouter: { list: ['a:free'], at: T0 } } },
+      { pauses: { gemini: { until: T0, strikes: 2, reason: 'rate-limit' } }, models: { openrouter: { list: ['a:free'], at: T0 } } },
     );
   });
 
@@ -529,13 +528,13 @@ describe('хранение состояния', () => {
   });
 
   test('давно кончившиеся паузы выбрасываются', async () => {
-    const p = phone((c) => ok(c), { groq: 'q' });
+    const p = phone((c) => ok(c), { huggingface: 'h' });
     p.net.respond = () => ({ status: 503 });
     await p.ai.run(ECHO, '1');
     p.clock.now = T0 + 3 * DAY;
     p.net.respond = () => ({ status: 401 });
     await p.ai.run(ECHO, '2');
-    assert.deepEqual(Object.keys(p.stored.pauses), ['groq']);
-    assert.equal(p.stored.pauses.groq.reason, 'auth');
+    assert.deepEqual(Object.keys(p.stored.pauses), ['huggingface']);
+    assert.equal(p.stored.pauses.huggingface.reason, 'auth');
   });
 });

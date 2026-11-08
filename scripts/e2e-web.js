@@ -1133,7 +1133,7 @@ async function run(browser, s, index) {
   // Часы стоят на NOW и дальше идут сами: дата в сценариях та же, а анимации (они меряют время по Date.now) доигрывают.
   await ctx.clock.install({ time: NOW });
   // Сервисы определения пола по умолчанию «без интернета»: сценарий, которому они нужны, подставляет ответ сам.
-  await ctx.route(/api\.genderize\.io|generativelanguage\.googleapis\.com|api\.groq\.com|openrouter\.ai|router\.huggingface\.co/, (route) => route.abort('internetdisconnected'));
+  await ctx.route(/api\.genderize\.io|generativelanguage\.googleapis\.com|openrouter\.ai|router\.huggingface\.co/, (route) => route.abort('internetdisconnected'));
   const data = s.data === undefined ? seed() : s.data;
   const raw = s.raw ?? (data ? JSON.stringify(data) : null);
   await ctx.addInitScript(([key, value, extra]) => {

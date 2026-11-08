@@ -84,11 +84,6 @@ describe('какие модели испытывать', () => {
     const body = { data: ['meta-llama/Llama-3.3-70B-Instruct', 'Qwen/Qwen2.5-72B-Instruct', 'Qwen/Qwen2.5-Coder-32B-Instruct', 'google/gemma-3-27b-it', 'someone/tiny-model'].map((id) => ({ id })) };
     assert.deepEqual(BENCH_LISTS.huggingface.pick(body), ['meta-llama/Llama-3.3-70B-Instruct', 'Qwen/Qwen2.5-72B-Instruct', 'google/gemma-3-27b-it']);
   });
-
-  test('Groq: активные текстовые', () => {
-    const body = { data: [{ id: 'llama-3.3-70b-versatile', active: true }, { id: 'whisper-large-v3', active: true }, { id: 'old', active: false }, { id: 'meta-llama/llama-guard-4-12b' }] };
-    assert.deepEqual(BENCH_LISTS.groq.pick(body), ['llama-3.3-70b-versatile']);
-  });
 });
 
 // ---------- Прогон на подставной сети ----------

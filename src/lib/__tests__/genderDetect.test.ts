@@ -253,7 +253,7 @@ describe('разбор ответов', () => {
     assert.match(req.prompt, /Не угадывай/);
     assert.equal(req.json, true);
     assert.equal(req.temperature, 0);
-    assert.deepEqual(GENDER_TASK.providers, ['gemini', 'groq', 'openrouter', 'huggingface']);
+    assert.deepEqual(GENDER_TASK.providers, ['gemini', 'openrouter', 'huggingface']);
   });
 
   test('ответ встроенного ИИ одним словом', () => {
@@ -586,7 +586,7 @@ describe('ИИ: сначала телефона, потом облачный', (
     assert.deepEqual(phone.state(), { k: [null, null, 'names'] });
   });
 
-  test('целиком: настоящий модуль ИИ — Gemini упёрся в лимит, ответил Groq, Gemini до сброса не трогаем', async () => {
+  test('целиком: настоящий модуль ИИ — Gemini упёрся в лимит, ответил Hugging Face, Gemini до сброса не трогаем', async () => {
     const calls: { url: string; body: string }[] = [];
     const aiFetch: AiFetch = async (url, init) => {
       calls.push({ url, body: init.body ?? '' });
@@ -598,12 +598,12 @@ describe('ИИ: сначала телефона, потом облачный', (
       return reply(200, { choices: [{ message: { content: `Вот: ${JSON.stringify({ answers })}` } }] });
     };
     let stored: string | null = null;
-    const realAi = createAi({ keys: { gemini: 'g', groq: 'q' }, fetch: aiFetch, now: () => T0, load: async () => (stored ? JSON.parse(stored) : null), save: async (st) => void (stored = JSON.stringify(st)), modelsPerProvider: 1 });
+    const realAi = createAi({ keys: { gemini: 'g', huggingface: 'h' }, fetch: aiFetch, now: () => T0, load: async () => (stored ? JSON.parse(stored) : null), save: async (st) => void (stored = JSON.stringify(st)), modelsPerProvider: 1 });
     const net = new Net();
     const phone = new Phone([friend('k', 'Kai'), friend('s', 'Саша Ким', { phone: '+7 707 111 22 33' })], { fetch: net.fetch, ai: realAi });
     await phone.launch();
     assert.deepEqual(phone.state(), { k: ['m', 'ai', null], s: [null, null, 'ai'] });
-    assert.deepEqual(calls.map((c) => new URL(c.url).hostname), ['generativelanguage.googleapis.com', 'api.groq.com']);
+    assert.deepEqual(calls.map((c) => new URL(c.url).hostname), ['generativelanguage.googleapis.com', 'router.huggingface.co']);
     assert.ok(calls.every((c) => !/Ким|707/.test(c.body)), 'только имена');
     assert.ok(JSON.parse(stored!).pauses['gemini/gemini-flash-lite-latest'].until === T0 + HOUR);
   });

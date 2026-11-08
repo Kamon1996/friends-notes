@@ -2,7 +2,7 @@ import type { AiRequest, FailureKind, ProviderId } from './types';
 
 /**
  * Как разговаривать с каждым сервисом: адрес, ключ, тело запроса, где в ответе текст и что значит ошибка.
- * Gemini — свой формат; Groq, OpenRouter и Hugging Face — OpenAI-совместимый.
+ * Gemini — свой формат; OpenRouter и Hugging Face — OpenAI-совместимый.
  * Ключ всегда в заголовке, не в адресе (адреса попадают в логи).
  */
 export interface ProviderDef {
@@ -89,14 +89,6 @@ function openAiCompatible(base: Omit<ProviderDef, 'request' | 'text'> & { url: s
   };
 }
 
-const groq = openAiCompatible({
-  id: 'groq',
-  label: 'Groq',
-  url: 'https://api.groq.com/openai/v1/chat/completions',
-  models: ['llama-3.3-70b-versatile', 'openai/gpt-oss-120b', 'moonshotai/kimi-k2-instruct-0905', 'llama-3.1-8b-instant'],
-  rateLimitScope: 'model',
-});
-
 /** Бесплатные модели OpenRouter меняются часто — список берём у самого сервиса, эти — порядок предпочтения. */
 const OPENROUTER_PREFERRED = [/llama-3\.3-70b/, /gemma-3-27b/, /deepseek-(chat|v3)/, /qwen3/, /mistral-small/, /llama-4/, /gpt-oss/];
 
@@ -151,7 +143,7 @@ const huggingface = openAiCompatible({
   rateLimitScope: 'provider',
 });
 
-export const PROVIDERS: Record<ProviderId, ProviderDef> = { gemini, groq, openrouter, huggingface };
+export const PROVIDERS: Record<ProviderId, ProviderDef> = { gemini, openrouter, huggingface };
 
 // ---------- Ошибки ----------
 

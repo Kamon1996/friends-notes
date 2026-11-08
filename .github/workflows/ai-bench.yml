@@ -1,9 +1,10 @@
 name: AI bench
 
 # Испытание бесплатных моделей ИИ на задаче приложения (src/lib/ai/bench.ts): все модели получают один и тот же набор
-# имён тем же запросом, что в приложении; в итогах — таблица, в логе — подробности по каждой модели (BENCH_JSON).
+# имён тем же запросом, что в приложении; в итогах — таблица и тир-лист, в логе — подробности по каждой модели
+# (BENCH_JSON). Оценки сохраняются коммитом в src/lib/ai/ratings.ts — по ним приложение выбирает модели.
 # Запуск: коммитом со словом «[bench]» в первой строке или вручную (Actions → AI bench → Run workflow).
-# Ключи — те же секреты, что для сборки: GEMINI_API_KEY, OPENROUTER_API_KEY, HF_TOKEN, по желанию GROQ_API_KEY.
+# Ключи — те же секреты, что для сборки: GEMINI_API_KEY, OPENROUTER_API_KEY, HF_TOKEN.
 on:
   workflow_dispatch:
     inputs:
@@ -22,8 +23,9 @@ on:
   push:
     branches: [main, claude/mobile-project-creation-pgqs46]
 
+# Запись — чтобы сохранить оценки моделей (src/lib/ai/ratings.ts) коммитом в ту же ветку.
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: ai-bench-${{ github.ref }}
@@ -36,6 +38,8 @@ jobs:
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -46,7 +50,6 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           BENCH_PROVIDERS: ${{ github.event.inputs.providers || 'gemini,openrouter,huggingface' }}
           BENCH_BATCH: ${{ github.event.inputs.batch || '50' }}
           BENCH_MAX_MODELS: ${{ github.event.inputs.max_models || '40' }}
@@ -59,3 +62,16 @@ jobs:
           path: bench-results.json
           if-no-files-found: ignore
           retention-days: 30
+      - name: Save ratings
+        run: |
+          if git diff --quiet -- src/lib/ai/ratings.ts; then echo "Оценки не изменились"; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/lib/ai/ratings.ts
+          git commit -m "AI bench: model ratings from run ${GITHUB_RUN_ID}"
+          for i in 1 2 3; do
+            git pull --rebase origin "$GITHUB_REF_NAME" && git push origin "HEAD:$GITHUB_REF_NAME" && exit 0
+            sleep 5
+          done
+          echo "::error::Не удалось сохранить оценки — они есть в артефакте и в логе (BENCH_JSON)"
+          exit 1

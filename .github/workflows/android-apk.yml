@@ -7,8 +7,8 @@ name: Android APK
 #  - коммитом со словом «[apk-cloud]» — облачная сборка в EAS, как раньше;
 #  - вручную: вкладка Actions → «Android APK» → Run workflow, там же выбирается режим.
 # Нужны секреты репозитория EXPO_TOKEN (подпись и проект EAS), TG_API_ID и TG_API_HASH; по желанию ключи облачных ИИ
-# с бесплатными тарифами: GEMINI_API_KEY (Google AI Studio), GROQ_API_KEY (console.groq.com), OPENROUTER_API_KEY
-# (openrouter.ai), HF_TOKEN (huggingface.co, fine-grained: «Make calls to Inference Providers») — см. src/lib/ai
+# с бесплатными тарифами: GEMINI_API_KEY (Google AI Studio), OPENROUTER_API_KEY (openrouter.ai), HF_TOKEN
+# (huggingface.co, fine-grained: «Make calls to Inference Providers») — см. src/lib/ai
 # (Settings → Secrets and variables → Actions).
 on:
   workflow_dispatch:
@@ -101,7 +101,6 @@ jobs:
           TG_API_HASH: ${{ secrets.TG_API_HASH }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
@@ -112,7 +111,7 @@ jobs:
             const apiHash = process.env.TG_API_HASH || "";
             const dsn = process.env.SENTRY_DSN || (a.expo.extra && a.expo.extra.sentry && a.expo.extra.sentry.dsn) || "";
             // Ключи облачных ИИ (src/lib/ai): нет ключа — сервис просто пропускается.
-            const ai = { gemini: process.env.GEMINI_API_KEY || "", groq: process.env.GROQ_API_KEY || "", openrouter: process.env.OPENROUTER_API_KEY || "", huggingface: process.env.HF_TOKEN || "" };
+            const ai = { gemini: process.env.GEMINI_API_KEY || "", openrouter: process.env.OPENROUTER_API_KEY || "", huggingface: process.env.HF_TOKEN || "" };
             a.expo.extra = { ...a.expo.extra, telegram: { apiId, apiHash }, sentry: { dsn }, ai };
             fs.writeFileSync("app.json", JSON.stringify(a, null, 2));
             console.log("Telegram keys:", apiId && apiHash ? "set" : "MISSING", "· Sentry DSN:", dsn ? "set" : "MISSING", "· AI keys:", Object.entries(ai).map(([k, v]) => `${k} ${v ? "set" : "нет"}`).join(", "));
@@ -265,7 +264,6 @@ jobs:
           TG_API_HASH: ${{ secrets.TG_API_HASH }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
@@ -276,7 +274,7 @@ jobs:
             const apiHash = process.env.TG_API_HASH || "";
             const dsn = process.env.SENTRY_DSN || (a.expo.extra && a.expo.extra.sentry && a.expo.extra.sentry.dsn) || "";
             // Ключи облачных ИИ (src/lib/ai): нет ключа — сервис просто пропускается.
-            const ai = { gemini: process.env.GEMINI_API_KEY || "", groq: process.env.GROQ_API_KEY || "", openrouter: process.env.OPENROUTER_API_KEY || "", huggingface: process.env.HF_TOKEN || "" };
+            const ai = { gemini: process.env.GEMINI_API_KEY || "", openrouter: process.env.OPENROUTER_API_KEY || "", huggingface: process.env.HF_TOKEN || "" };
             a.expo.extra = { ...a.expo.extra, telegram: { apiId, apiHash }, sentry: { dsn }, ai };
             fs.writeFileSync("app.json", JSON.stringify(a, null, 2));
             console.log("Telegram keys:", apiId && apiHash ? "set" : "MISSING", "· Sentry DSN:", dsn ? "set" : "MISSING", "· AI keys:", Object.entries(ai).map(([k, v]) => `${k} ${v ? "set" : "нет"}`).join(", "));

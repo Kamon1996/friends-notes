@@ -2,9 +2,9 @@ import type { FailureKind } from './types';
 
 /**
  * Когда сервис снова можно трогать. Сервисы сами говорят, когда обновится лимит, — каждый по-своему:
- * - заголовок Retry-After (секунды или дата) и retry-after-ms — Groq, OpenAI-совместимые;
+ * - заголовок Retry-After (секунды или дата) и retry-after-ms — OpenAI-совместимые сервисы;
  * - X-RateLimit-Reset (момент времени в мс или с) — OpenRouter, иногда внутри error.metadata.headers;
- * - x-ratelimit-reset-requests / -tokens («2m59.56s») — Groq;
+ * - x-ratelimit-reset-requests / -tokens («2m59.56s») — OpenAI-совместимые сервисы;
  * - error.details[RetryInfo].retryDelay («33s») и квота «PerDay» — Gemini (дневная квота обновляется в полночь
  *   по тихоокеанскому времени).
  * Если сервис ничего не сказал — пауза по умолчанию, с каждой неудачей подряд длиннее.
@@ -97,7 +97,7 @@ export function retryHint({ status, headers, body }: HintSource, now: number): n
     }
   }
 
-  // Groq: когда обновятся счётчики запросов и токенов — только если лимит уже упёрся.
+  // Когда обновятся счётчики запросов и токенов — только если лимит уже упёрся.
   if (status === 429 && !found.length) {
     for (const h of ['x-ratelimit-reset-requests', 'x-ratelimit-reset-tokens']) {
       const d = parseDuration(headers.get(h));
