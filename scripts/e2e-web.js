@@ -360,6 +360,19 @@ scenario('Соцсети: ссылка, ник с выбором сети, са�
   await ui.see('уже есть');
 });
 
+scenario('Соцсети: нажатие на чип открывает профиль по его ссылке', async ({ ui, page }) => {
+  await ui.go('/friends');
+  await ui.tap('Аня Смирнова');
+  // В браузере нативного модуля нет: ссылка открывается обычным способом, в новой вкладке. На Android — сначала в приложении сети.
+  // Внешний сайт не грузим: тесты не должны зависеть от сети, проверяем только адрес.
+  await page.context().route(/tiktok\.com/, (route) => route.fulfill({ status: 200, contentType: 'text/html', body: 'tiktok' }));
+  const popup = page.waitForEvent('popup', { timeout: 5000 });
+  await ui.tap('TikTok');
+  const opened = await popup;
+  await opened.waitForLoadState('commit').catch(() => {});
+  assert.equal(opened.url(), 'https://www.tiktok.com/@anya');
+});
+
 scenario('Соцсети: убрать сеть в форме друга', async ({ ui }) => {
   await ui.go('/friends');
   await ui.tap('Аня Смирнова');

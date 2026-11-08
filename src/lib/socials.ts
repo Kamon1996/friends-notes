@@ -166,7 +166,13 @@ export function isWebUrl(url: string): boolean {
 
 const stripWww = (host: string) => host.replace(/^(www|m|mobile)\./, '');
 
-function networkForHost(host: string): Network | null {
+/** Хост веб-адреса в нижнем регистре или null, если это не http(s)-ссылка. */
+export function splitHost(url: string): string | null {
+  return isWebUrl(url) ? (splitUrl(url)?.host ?? null) : null;
+}
+
+/** Сеть из каталога по хосту ссылки (www., m. и поддомены учитываются). */
+export function networkForHost(host: string): Network | null {
   const h = stripWww(host);
   for (const n of NETWORKS) {
     if (n.domains.some((d) => h === d || h.endsWith('.' + d))) return n;

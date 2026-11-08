@@ -1,0 +1,50 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!--
+    Приложения соцсетей и мессенджеров, которым ссылка на профиль отдаётся напрямую (src/lib/appLinks.ts).
+    Начиная с Android 11 приложение видит только перечисленные здесь пакеты; список совпадает с appLinks.ts (проверяет тест).
+  -->
+  <queries>
+    <package android:name="com.behance.behance" />
+    <package android:name="com.discord" />
+    <package android:name="com.duolingo" />
+    <package android:name="com.facebook.katana" />
+    <package android:name="com.github.android" />
+    <package android:name="com.google.android.youtube" />
+    <package android:name="com.instagram.android" />
+    <package android:name="com.instagram.barcelona" />
+    <package android:name="com.linkedin.android" />
+    <package android:name="com.medium.reader" />
+    <package android:name="com.pinterest" />
+    <package android:name="com.reddit.frontpage" />
+    <package android:name="com.snapchat.android" />
+    <package android:name="com.soundcloud.android" />
+    <package android:name="com.spotify.music" />
+    <package android:name="com.ss.android.ugc.trill" />
+    <package android:name="com.strava" />
+    <package android:name="com.twitter.android" />
+    <package android:name="com.valvesoftware.android.steam.community" />
+    <package android:name="com.vimeo.android.videoapp" />
+    <package android:name="com.vkontakte.android" />
+    <package android:name="com.whatsapp" />
+    <package android:name="com.whatsapp.w4b" />
+    <package android:name="com.zhiliaoapp.musically" />
+    <package android:name="org.telegram.messenger" />
+    <package android:name="org.telegram.messenger.web" />
+    <package android:name="org.thunderdog.challegram" />
+    <package android:name="ru.kinopoisk" />
+    <package android:name="ru.ok.android" />
+    <package android:name="ru.oneme.app" />
+    <package android:name="ru.pikabu.android" />
+    <package android:name="ru.rutube.app" />
+    <package android:name="ru.yandex.music" />
+    <package android:name="ru.zen.android" />
+    <package android:name="tv.twitch.android.app" />
+    <package android:name="xyz.blueskyweb.app" />
+    <!-- Любое не-браузерное приложение, которое открывает веб-ссылки (FLAG_ACTIVITY_REQUIRE_NON_BROWSER). -->
+    <intent>
+      <action android:name="android.intent.action.VIEW" />
+      <category android:name="android.intent.category.BROWSABLE" />
+      <data android:scheme="https" />
+    </intent>
+  </queries>
+</manifest>

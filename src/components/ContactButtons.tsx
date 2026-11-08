@@ -1,11 +1,19 @@
 import { Alert, Linking, Platform, Pressable, Text, View } from 'react-native';
 
+import { appTarget } from '@/lib/appLinks';
 import { phoneUrl, telegramUrl, viberUrl, whatsappUrl } from '@/lib/messengers';
+import { openInApp } from '../../modules/open-in-app';
 import type { Friend } from '@/lib/types';
 import { Icon, type IconName } from './Icon';
 import { useTheme } from './ui';
 
+/**
+ * Открыть ссылку. Ссылку на соцсеть или WhatsApp сначала пробуем открыть прямо в приложении (если оно установлено),
+ * и только если его нет — как обычно, в браузере. Звонки и tg:/viber: открываются системой напрямую.
+ */
 export async function openExternal(url: string, app: string) {
+  const apps = Platform.OS === 'android' ? appTarget(url) : null;
+  if (apps && (await openInApp(url, apps))) return;
   try {
     await Linking.openURL(url);
   } catch {
