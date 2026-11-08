@@ -99,30 +99,86 @@ export function bendPlace(d: number, bend: number, radius: number, perspective: 
   return { y: r * Math.sin(a) * scale, scale, angle: (-a * 180) / Math.PI };
 }
 
-/** Элемент списка на ходу: подзаголовок группы или друг. `real` — первый круг; повторы (друзей мало) видны, только пока список изогнут. */
+/** Элемент списка на ходу: подзаголовок группы или друг (`slot` — номер друга по порядку). */
 export type RunItem =
-  | { kind: 'label'; key: string; title: string; star?: boolean; real: boolean }
-  | { kind: 'row'; key: string; friend: Friend; first: boolean; last: boolean; real: boolean; slot: number };
+  | { kind: 'label'; key: string; title: string; star?: boolean }
+  | {
+      kind: 'row';
+      key: string;
+      friend: Friend;
+      first: boolean;
+      last: boolean;
+      slot: number;
+    };
 
 /**
- * Список «Друзья» для хода — с подзаголовками групп, как на экране. Очень много друзей — первые `max` (последняя
- * группа закрывается на последнем); мало — список повторяется целиком, пока друзей на круге не станет хотя бы `min`.
- * `slot` — номер друга в первом круге (у повторов тот же).
+ * Список «Друзья» для хода — с подзаголовками групп, как на экране. Очень много друзей — первые `max`: последняя
+ * группа закрывается на последнем, пустой подзаголовок в конце не остаётся. Повторов нет: короткий список просто
+ * уезжает вверх и возвращается снизу (см. runGeometry).
  */
-export function runItems(list: readonly FriendListItem[], min: number, max: number): RunItem[] {
-  const one: RunItem[] = [];
+export function runItems(list: readonly FriendListItem[], max: number): RunItem[] {
+  const out: RunItem[] = [];
   let friends = 0;
   for (const it of list) {
     if (friends >= max) break;
-    if (it.type === 'label') one.push({ kind: 'label', key: it.key, title: it.title, star: it.star, real: true });
-    else one.push({ kind: 'row', key: it.key, friend: it.friend, first: it.first, last: it.last, real: true, slot: friends++ });
+    if (it.type === 'label') out.push({ kind: 'label', key: it.key, title: it.title, star: it.star });
+    else
+      out.push({
+        kind: 'row',
+        key: it.key,
+        friend: it.friend,
+        first: it.first,
+        last: it.last,
+        slot: friends++,
+      });
   }
-  while (one.length && one[one.length - 1].kind === 'label') one.pop();
-  const tail = one[one.length - 1];
-  if (tail?.kind === 'row' && !tail.last) one[one.length - 1] = { ...tail, last: true };
-  if (!friends) return [];
-  const copies = Math.max(1, Math.ceil(min / friends));
-  const out: RunItem[] = [];
-  for (let c = 0; c < copies; c++) for (const it of one) out.push(c ? { ...it, key: `${it.key}~${c}`, real: false } : it);
+  while (out.length && out[out.length - 1].kind === 'label') out.pop();
+  const tail = out[out.length - 1];
+  if (tail?.kind === 'row' && !tail.last) out[out.length - 1] = { ...tail, last: true };
   return out;
+}
+
+/** Где что в списке, px от его верха: элементы, длина круга, рамка. */
+export interface RunGeo {
+  y: number[];
+  h: number[];
+  /** Длина круга: весь список, но не меньше экрана — короткий список уходит целиком и возвращается снизу. */
+  lap: number;
+  /** Середина рамки. */
+  mid: number;
+  bandTop: number;
+  bandH: number;
+  /** Высота строки друга — шаг для оттяжки, изгиба и проявления. */
+  row: number;
+}
+
+/**
+ * Геометрия списка из двух замеров: высота подзаголовка и строки друга в середине группы. Строки в группе-карточке:
+ * у первой — рамка сверху, у остальных — разделитель той же толщины, у последней ещё рамка снизу (+1).
+ * Рамка хода — на месте BEND.bandRow-го друга (друзей меньше — на последнем).
+ */
+export function runGeometry(items: readonly ({ kind: 'label' } | { kind: 'row'; last: boolean })[], labelH: number, rowH: number, viewH: number): RunGeo {
+  const y: number[] = [];
+  const h: number[] = [];
+  let at = 0;
+  let band = -1;
+  let rows = 0;
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
+    const size = it.kind === 'label' ? labelH : rowH + (it.last ? 1 : 0);
+    if (it.kind === 'row' && (rows++ <= BEND.bandRow || band < 0)) band = i;
+    y.push(at);
+    h.push(size);
+    at += size;
+  }
+  const b = Math.max(0, band);
+  return {
+    y,
+    h,
+    lap: Math.max(at, viewH + 2 * rowH),
+    mid: (y[b] ?? 0) + (h[b] ?? 0) / 2,
+    bandTop: y[b] ?? 0,
+    bandH: h[b] ?? rowH,
+    row: rowH,
+  };
 }

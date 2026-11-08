@@ -1,6 +1,5 @@
-import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { BackHandler, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import Animated, {
   Easing,
   FadeIn,
@@ -18,11 +17,10 @@ import { scheduleOnRN } from 'react-native-worklets';
 
 import { AiGradient, AiIcon } from '@/components/ai/AiIcon';
 import { RiddleCards } from '@/components/ai/RiddleCards';
-import { HIDDEN, RunList, type RunGeo } from '@/components/ai/RunList';
-import { FriendsHeader } from '@/components/FriendsHeader';
+import { HIDDEN, RunList, RunProbe } from '@/components/ai/RunList';
 import { Sheet, SheetHandle } from '@/components/Sheet';
 import { Fab, useTheme } from '@/components/ui';
-import { BEND, SPIN_START, flowBend, flowEnd, flowShift, runItems } from '@/lib/bendFlow';
+import { BEND, SPIN_START, flowBend, flowEnd, flowShift, runGeometry, runItems, type RunGeo } from '@/lib/bendFlow';
 import { plural, todayISO } from '@/lib/dates';
 import { buildFriendList } from '@/lib/friendList';
 import type { Gender } from '@/lib/gender';
@@ -38,36 +36,49 @@ type Stage = 'run' | 'done' | 'ask' | 'between' | 'cards' | 'bye';
 const SLIDE = { in: 460, out: 360 };
 
 /**
- * «Пол друзей» прямо в списке. Экран рисует «Друзей» точь-в-точь — шапку, поиск, подзаголовки групп, строки — и
- * подменяет их мгновенно, без проявления: глазу нечего заметить. Сверху выезжает плашка с фразой ИИ (поиск остаётся
- * на месте); список с группами как есть чуть изгибается сверху и снизу, его оттягивают и выдёргивают — полный круг
- * через рамку, у проехавших проявляется пол; список выпрямляется. В конце — всё обратно: пол гаснет, плашка уезжает
- * наверх, и экран уходит так же незаметно. Всё определилось — «Готово»; остались загадки — шторка «Помочь · Оставить так»,
- * «Помочь» — карточки «Кто это?».
+ * «Пол друзей» прямо на экране «Друзья»: слой поверх списка, шапка экрана остаётся настоящей.
+ *
+ * Слой рисует список точь-в-точь (подзаголовки, карточки групп, строки) и появляется, только когда всё измерено, —
+ * подмены не видно. Сверху выезжает плашка с фразой; список чуть изгибается сверху и снизу (середина с рамкой ровная),
+ * его оттягивают и выдёргивают — полный круг через рамку (медленно → очень быстро → медленно; ответа нет — крутится,
+ * пока не придёт, не дольше 20 с), у проехавших проявляется пол; список выпрямляется. Всё определилось — «Готово»;
+ * остались загадки — шторка «Помочь · Оставить так», «Помочь» — карточки «Кто это?». В конце пол гаснет, плашка
+ * уезжает наверх, слой исчезает — под ним тот же список.
+ *
+ * `listTop` — где на экране начинается список (высота шапки списка); список должен быть прокручен к началу и
+ * отсортирован по имени (это делает экран «Друзья» перед запуском).
  */
-export default function AiGenderScreen() {
-  const params = useLocalSearchParams<{ tab?: string }>();
+export function GenderRun({ listTop, onClose }: { listTop: number; onClose: () => void }) {
   const { data, detectGenders, saveFriend, genderBusy } = useStore();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const { height: screenH } = useWindowDimensions();
   const reduce = useReducedMotion();
   const today = todayISO();
   const total = data.friends.length;
-  const tabBar = Number(params.tab) || 0;
 
   // Кто едет: список «по имени», как в «Друзьях», с подзаголовками групп; очень много — первые WHEEL.maxRows друзей.
-  const [base] = useState(() => runItems(buildFriendList(data.friends, '', 'name', today), WHEEL.minRows, WHEEL.maxRows));
+  const [base] = useState(() => runItems(buildFriendList(data.friends, '', 'name', today), WHEEL.maxRows));
   const live = useMemo(() => new Map(data.friends.map((f) => [f.id, f])), [data.friends]);
   const items = useMemo(() => base.map((it) => (it.kind === 'row' ? { ...it, friend: live.get(it.friend.id) ?? it.friend } : it)), [base, live]);
-  const [onList] = useState(() => base.flatMap((it) => (it.kind === 'row' && it.real ? [it.friend.id] : [])));
+  const [onList] = useState(() => base.flatMap((it) => (it.kind === 'row' ? [it.friend.id] : [])));
+  const firstFriend = base.find((it) => it.kind === 'row');
+
+  // Геометрия — из двух замеров (подзаголовок и строка); пока не измерили, слой не виден и часы стоят.
+  const [viewH, setViewH] = useState(0);
+  const [sizes, setSizes] = useState<{ label: number; row: number } | null>(null);
+  const geoJs = useMemo(() => (sizes && viewH ? runGeometry(items, sizes.label, sizes.row, viewH) : null), [items, sizes, viewH]);
+  const geo = useSharedValue<RunGeo | null>(null);
+  useEffect(() => {
+    geo.set(geoJs);
+  }, [geoJs, geo]);
+  const ready = !!geoJs;
 
   // Ход списка (px вдоль списка) и когда у кого проявляется пол — в px «что сейчас в середине рамки».
   const shift = useSharedValue(0);
   const bend = useSharedValue(0);
   const outro = useSharedValue(0);
   const slide = useSharedValue(0);
-  const geo = useSharedValue<RunGeo | null>(null);
-  const [geoJs, setGeoJs] = useState<RunGeo | null>(null);
   const reveal = useSharedValue<number[]>([]);
   const revealRef = useRef<number[] | null>(null);
   const firstReveal = useSharedValue<number[]>([]);
@@ -102,14 +113,6 @@ export default function AiGenderScreen() {
     firstReveal.set(first);
   }, [geoJs, items, workDone, onList, shift, reveal, firstReveal]);
 
-  // Где что: шапка и плашка — меряем на себе, а пока не измерили, экран прозрачен (видно «Друзей»).
-  const [headH, setHeadH] = useState(0);
-  const bannerH = useSharedValue(0);
-  const ready = !!geoJs && headH > 0;
-  useEffect(() => {
-    if (!base.length) router.back();
-  }, [base]);
-
   // Что говорит ИИ.
   const [phrase, setPhrase] = useState(() => {
     voice.newFlow();
@@ -124,7 +127,10 @@ export default function AiGenderScreen() {
     if (reduce || !ready) return;
     const timers = [
       setTimeout(() => setPhrase((p) => voice.say('gender.spin') ?? p), (SPIN_START + 1.1) * 1000),
-      setTimeout(() => setPhrase((p) => (workDoneRef.current ? voice.say('gender.end') : voice.say('gender.slow')) ?? p), (SPIN_START + BEND.spin * 0.72) * 1000),
+      setTimeout(
+        () => setPhrase((p) => (workDoneRef.current ? voice.say('gender.end') : voice.say('gender.slow')) ?? p),
+        (SPIN_START + BEND.spin * 0.72) * 1000,
+      ),
     ];
     // ответ задерживается — изредка напоминаем, что работаем
     const slow = setInterval(() => {
@@ -163,19 +169,28 @@ export default function AiGenderScreen() {
   }, false);
   useEffect(() => {
     if (!ready) return;
-    slide.set(reduce ? 1 : withDelay(40, withTiming(1, { duration: SLIDE.in, easing: Easing.out(Easing.cubic) })));
+    slide.set(
+      reduce
+        ? 1
+        : withDelay(
+            40,
+            withTiming(1, {
+              duration: SLIDE.in,
+              easing: Easing.out(Easing.cubic),
+            }),
+          ),
+    );
     if (!reduce) frame.setActive(true);
   }, [ready, reduce, frame, slide]);
   useEffect(() => {
     if (stopped) frame.setActive(false);
   }, [stopped, frame]);
 
-  // Финал.
+  // Уход: пол гаснет, метки и стрелки возвращаются, плашка уезжает наверх — и слой исчезает. Один раз.
   const dataRef = useRef(data);
   useEffect(() => {
     dataRef.current = data;
   }, [data]);
-  // Уходим, когда всё вернулось как было: пол погас, плашка снова поиск. Экран уже закрыли кнопкой «назад» — молчим.
   const mounted = useRef(true);
   useEffect(
     () => () => {
@@ -187,8 +202,9 @@ export default function AiGenderScreen() {
   const leaveNow = useCallback(() => {
     if (gone.current || !mounted.current) return;
     gone.current = true;
-    router.back();
-  }, []);
+    frame.setActive(false);
+    onClose();
+  }, [onClose, frame]);
   const closing = useRef(false);
   const close = useCallback(() => {
     if (closing.current) return;
@@ -205,6 +221,10 @@ export default function AiGenderScreen() {
     );
     setTimeout(leaveNow, 140 + SLIDE.out + 400);
   }, [reduce, leaveNow, outro, slide]);
+  useEffect(() => {
+    if (!base.length) leaveNow();
+  }, [base, leaveNow]);
+
   const [final, setFinal] = useState<{ title: string; sub: string } | null>(null);
   const [ask, setAsk] = useState<Friend[]>([]);
   const [prompt, setPrompt] = useState<{ title: string; text: string } | null>(null);
@@ -218,13 +238,19 @@ export default function AiGenderScreen() {
     const unknown = friends.filter((f) => !f.gender).sort((a, b) => a.name.localeCompare(b.name, 'ru'));
     const n = friends.length;
     if (!unknown.length) {
-      setFinal({ title: voice.say('gender.done', { n }, doneBucket(n)) ?? `Готово! Все ${n} как на ладони`, sub: counts(friends) });
+      setFinal({
+        title: voice.say('gender.done', { n }, doneBucket(n)) ?? `Готово! Все ${n} как на ладони`,
+        sub: counts(friends),
+      });
       setStage('done');
       setTimeout(close, 2600);
       return;
     }
     const k = unknown.length;
-    setFinal({ title: voice.say('gender.left', { k }, leftBucket(k, n)) ?? 'Почти!', sub: `${n - k} из ${n}` });
+    setFinal({
+      title: voice.say('gender.left', { k }, leftBucket(k, n)) ?? 'Почти!',
+      sub: `${n - k} из ${n}`,
+    });
     setAsk(unknown);
     setPrompt({
       title: voice.say('gender.choice.title', { k }, k === 1 ? 'one' : undefined) ?? `${k} ${plural(k, 'загадка', 'загадки', 'загадок')}`,
@@ -240,115 +266,162 @@ export default function AiGenderScreen() {
     if (reduce && workDone && ready) setTimeout(finish, 0);
   }, [reduce, workDone, ready, finish]);
 
-  const leave = () => {
-    if (stage === 'bye') return;
+  const stageRef = useRef(stage);
+  useEffect(() => {
+    stageRef.current = stage;
+  }, [stage]);
+  const leave = useCallback(() => {
+    if (stageRef.current === 'bye') return;
     setStage('bye');
-    setFinal((f) => ({ title: voice.say('gender.choice.leave') ?? 'Ладно, оставим', sub: f?.sub ?? '' }));
+    setFinal((f) => ({
+      title: voice.say('gender.choice.leave') ?? 'Ладно, оставим',
+      sub: f?.sub ?? '',
+    }));
     setTimeout(close, 1900);
-  };
+  }, [close]);
   const help = () => {
     setStage('between');
     setTimeout(() => setStage('cards'), 300);
   };
   const solved = () => {
     setStage('bye');
-    setTimeout(() => setFinal({ title: voice.say('gender.solved') ?? 'Готово! Ни одной загадки', sub: counts(dataRef.current.friends) }), 250);
+    setTimeout(
+      () =>
+        setFinal({
+          title: voice.say('gender.solved') ?? 'Готово! Ни одной загадки',
+          sub: counts(dataRef.current.friends),
+        }),
+      250,
+    );
     setTimeout(close, 2300);
   };
   const [buttons] = useState(() => (voice.say('gender.choice.buttons') ?? 'Помочь · Оставить так').split(' · '));
+
+  // «Назад» на телефоне: пока список крутится — дождаться итога нельзя, поэтому уходим сразу, как «Оставить так».
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (stageRef.current === 'cards' || stageRef.current === 'ask') return false; // шторки закрываются сами
+      if (stageRef.current === 'run' || stageRef.current === 'done') close();
+      return true;
+    });
+    return () => sub.remove();
+  }, [close]);
 
   const busy = stage === 'run' && !stopped;
   const known = data.friends.filter((f) => f.gender).length;
   const glow = stage === 'done' || (stage === 'bye' && !!final && known === total);
 
   // Плашка выезжает сверху, над заголовком, и в конце уезжает обратно; поиск и сортировки остаются на месте.
+  const bannerH = useSharedValue(0);
   const topGap = insets.top + 6;
   const slideStyle = useAnimatedStyle(() => {
     const h = bannerH.get() || 160;
-    return { transform: [{ translateY: -(1 - slide.get()) * (h + topGap + 24) }] };
+    return {
+      transform: [{ translateY: -(1 - slide.get()) * (h + topGap + 24) }],
+    };
   });
 
   return (
-    <View style={{ flex: 1, opacity: ready ? 1 : 0 }}>
-      <View style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: tabBar, backgroundColor: colors.bg, overflow: 'hidden' }}>
-        <RunList
-          items={items}
-          top={headH}
-          clipTop={headH}
-          shift={shift}
-          bend={bend}
-          reveal={reveal}
-          outro={outro}
-          geo={geo}
-          onGeo={setGeoJs}
-          today={today}
-          zodiac={zodiacShown(data.settings)}
-          finished={workDone}
-        />
-        <View
-          style={{ position: 'absolute', left: 0, right: 0, top: 0 }}
-          onLayout={(e) => setHeadH(e.nativeEvent.layout.height)}
-          pointerEvents="none"
-          importantForAccessibility="no-hide-descendants"
-          accessibilityElementsHidden
-        >
-          <FriendsHeader
-            friends={data.friends}
+    <View style={StyleSheet.absoluteFill}>
+      {/* Слой списка: от верха списка до низа экрана, непрозрачный — под ним настоящий список. */}
+      <View
+        style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          top: listTop,
+          bottom: 0,
+          overflow: 'hidden',
+          backgroundColor: ready ? colors.bg : 'transparent',
+        }}
+        onLayout={(e) => setViewH(e.nativeEvent.layout.height || screenH - listTop)}
+      >
+        {firstFriend?.kind === 'row' && !sizes && (
+          <RunProbe friend={firstFriend.friend} today={today} zodiac={zodiacShown(data.settings)} onMeasure={(label, row) => setSizes({ label, row })} />
+        )}
+        {geoJs && (
+          <RunList
+            items={items}
+            geo={geoJs}
+            viewH={viewH}
+            shift={shift}
+            bend={bend}
+            reveal={reveal}
+            outro={outro}
             today={today}
-            aiBusy={busy || genderBusy}
-            onAi={noop}
-            onImport={noop}
-            onSettings={noop}
-            query=""
-            onQuery={noop}
-            sort="name"
-            onSort={noop}
+            zodiac={zodiacShown(data.settings)}
+            finished={workDone}
           />
-        </View>
+        )}
+      </View>
+      {ready && (
         <View style={StyleSheet.absoluteFill} pointerEvents="none" importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
           <Fab onPress={noop} label="Добавить друга" />
         </View>
-        <Animated.View
-          pointerEvents="none"
-          onLayout={(e) => bannerH.set(e.nativeEvent.layout.height)}
-          style={[
-            {
-              position: 'absolute',
-              left: 20,
-              right: 20,
-              top: topGap,
-              backgroundColor: colors.card,
-              borderRadius: 20,
-              borderWidth: glow ? 1.5 : 1,
-              borderColor: glow ? '#E0607E' : colors.hairline,
-              paddingVertical: 10,
-              paddingHorizontal: 14,
-              boxShadow: glow ? '0 0 28px rgba(224, 96, 126, 0.35)' : '0 12px 32px rgba(0, 0, 0, 0.35)',
-            },
-            slideStyle,
-          ]}
-        >
-          <BannerBody
-            phrase={final?.title ?? phrase}
-            sub={final?.sub}
-            shift={shift}
-            geo={geo}
-            firstReveal={firstReveal}
-            total={total}
-            known={known}
-            outsideKnown={data.friends.filter((f) => f.gender && !onList.includes(f.id)).length}
-            knownOnList={onList.filter((id) => live.get(id)?.gender).length}
-            stopped={stopped || !!final}
-            busy={busy}
-          />
-        </Animated.View>
-      </View>
+      )}
+      <Animated.View
+        pointerEvents="none"
+        onLayout={(e) => bannerH.set(e.nativeEvent.layout.height)}
+        style={[
+          {
+            position: 'absolute',
+            left: 20,
+            right: 20,
+            top: topGap,
+            backgroundColor: colors.card,
+            borderRadius: 20,
+            borderWidth: glow ? 1.5 : 1,
+            borderColor: glow ? '#E0607E' : colors.hairline,
+            paddingVertical: 10,
+            paddingHorizontal: 14,
+            boxShadow: glow ? '0 0 28px rgba(224, 96, 126, 0.35)' : '0 12px 32px rgba(0, 0, 0, 0.35)',
+          },
+          slideStyle,
+        ]}
+      >
+        <BannerBody
+          phrase={final?.title ?? phrase}
+          sub={final?.sub}
+          shift={shift}
+          geo={geo}
+          firstReveal={firstReveal}
+          total={total}
+          known={known}
+          outsideKnown={data.friends.filter((f) => f.gender && !onList.includes(f.id)).length}
+          knownOnList={onList.filter((id) => live.get(id)?.gender).length}
+          stopped={stopped || !!final}
+          busy={busy || genderBusy}
+        />
+      </Animated.View>
 
-      <Sheet visible={stage === 'ask'} onClose={leave} style={{ paddingTop: 10, paddingBottom: insets.bottom + 20, paddingHorizontal: 20 }}>
+      <Sheet
+        visible={stage === 'ask'}
+        onClose={leave}
+        style={{
+          paddingTop: 10,
+          paddingBottom: insets.bottom + 20,
+          paddingHorizontal: 20,
+        }}
+      >
         <SheetHandle />
-        {prompt && <AskBody title={prompt.title} text={prompt.text} help={buttons[0] ?? 'Помочь'} leaveLabel={buttons[1] ?? 'Оставить так'} onHelp={help} onLeave={leave} />}
+        {prompt && (
+          <AskBody
+            title={prompt.title}
+            text={prompt.text}
+            help={buttons[0] ?? 'Помочь'}
+            leaveLabel={buttons[1] ?? 'Оставить так'}
+            onHelp={help}
+            onLeave={leave}
+          />
+        )}
       </Sheet>
-      <RiddleCards visible={stage === 'cards'} friends={ask} onPick={(f, g: Gender) => saveFriend({ ...f, gender: g, genderBy: 'manual' })} onDone={solved} onClose={leave} />
+      <RiddleCards
+        visible={stage === 'cards'}
+        friends={ask}
+        onPick={(f, g: Gender) => saveFriend({ ...f, gender: g, genderBy: 'manual' })}
+        onDone={solved}
+        onClose={leave}
+      />
     </View>
   );
 }
@@ -406,7 +479,12 @@ function BannerBody({
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
         <AiIcon size={36} busy={busy} />
         <View style={{ flex: 1, gap: 2 }}>
-          <Animated.Text key={phrase} entering={FadeIn.duration(180)} style={[s.title, { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20 }]} numberOfLines={2}>
+          <Animated.Text
+            key={phrase}
+            entering={FadeIn.duration(180)}
+            style={[s.title, { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20 }]}
+            numberOfLines={2}
+          >
             {phrase}
           </Animated.Text>
           <Text style={s.muted} accessibilityLiveRegion={stopped ? 'polite' : 'none'}>
@@ -414,8 +492,23 @@ function BannerBody({
           </Text>
         </View>
       </View>
-      <View style={{ height: 4, borderRadius: 2, backgroundColor: colors.chip, marginTop: 10, overflow: 'hidden' }}>
-        <View style={{ height: 4, width: `${Math.round(share * 1000) / 10}%`, borderRadius: 2, overflow: 'hidden' }}>
+      <View
+        style={{
+          height: 4,
+          borderRadius: 2,
+          backgroundColor: colors.chip,
+          marginTop: 10,
+          overflow: 'hidden',
+        }}
+      >
+        <View
+          style={{
+            height: 4,
+            width: `${Math.round(share * 1000) / 10}%`,
+            borderRadius: 2,
+            overflow: 'hidden',
+          }}
+        >
           <AiGradient />
         </View>
       </View>
@@ -424,7 +517,21 @@ function BannerBody({
 }
 
 /** Шторка «остались загадки»: помочь или оставить так. */
-function AskBody({ title, text, help, leaveLabel, onHelp, onLeave }: { title: string; text: string; help: string; leaveLabel: string; onHelp: () => void; onLeave: () => void }) {
+function AskBody({
+  title,
+  text,
+  help,
+  leaveLabel,
+  onHelp,
+  onLeave,
+}: {
+  title: string;
+  text: string;
+  help: string;
+  leaveLabel: string;
+  onHelp: () => void;
+  onLeave: () => void;
+}) {
   const { s, colors, fonts } = useTheme();
   return (
     <View style={{ gap: 20, paddingTop: 16 }}>
@@ -439,17 +546,51 @@ function AskBody({ title, text, help, leaveLabel, onHelp, onLeave }: { title: st
         <Pressable
           onPress={onLeave}
           accessibilityRole="button"
-          style={({ pressed }) => ({ flex: 1, height: 52, borderRadius: 16, backgroundColor: colors.chip, borderWidth: 1, borderColor: colors.hairline, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.7 : 1 })}
+          style={({ pressed }) => ({
+            flex: 1,
+            height: 52,
+            borderRadius: 16,
+            backgroundColor: colors.chip,
+            borderWidth: 1,
+            borderColor: colors.hairline,
+            alignItems: 'center',
+            justifyContent: 'center',
+            opacity: pressed ? 0.7 : 1,
+          })}
         >
-          <Text style={{ fontFamily: fonts.semibold, fontSize: 16, color: colors.text }}>{leaveLabel}</Text>
+          <Text
+            style={{
+              fontFamily: fonts.semibold,
+              fontSize: 16,
+              color: colors.text,
+            }}
+          >
+            {leaveLabel}
+          </Text>
         </Pressable>
         <Pressable
           onPress={onHelp}
           accessibilityRole="button"
-          style={({ pressed }) => ({ flex: 1, height: 52, borderRadius: 16, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.8 : 1 })}
+          style={({ pressed }) => ({
+            flex: 1,
+            height: 52,
+            borderRadius: 16,
+            overflow: 'hidden',
+            alignItems: 'center',
+            justifyContent: 'center',
+            opacity: pressed ? 0.8 : 1,
+          })}
         >
           <AiGradient />
-          <Text style={{ fontFamily: fonts.semibold, fontSize: 16, color: '#17130F' }}>{help}</Text>
+          <Text
+            style={{
+              fontFamily: fonts.semibold,
+              fontSize: 16,
+              color: '#17130F',
+            }}
+          >
+            {help}
+          </Text>
         </Pressable>
       </View>
     </View>

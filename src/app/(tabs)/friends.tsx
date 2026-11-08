@@ -1,10 +1,10 @@
 import { router } from 'expo-router';
-import { useBottomTabBarHeight } from 'expo-router/tabs';
 import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
 import { FlatList, Pressable, Text, View } from 'react-native';
 import ReanimatedSwipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 
 import { AiSheet } from '@/components/ai/AiSheet';
+import { GenderRun } from '@/components/ai/GenderRun';
 import { AiToast } from '@/components/ai/AiToast';
 import { FRIEND_ROW_INSET, FriendGroupLabel, FriendRow } from '@/components/FriendRow';
 import { FriendsHeader } from '@/components/FriendsHeader';
@@ -23,9 +23,10 @@ import { zodiacShown } from '@/lib/zodiac';
 export default function FriendsScreen() {
   const { data, deleteFriends, updateFriends, genderBusy, genderNews, clearGenderNews, readNotes, notesBusy, notesNews, clearNotesNews } = useStore();
   const [aiOpen, setAiOpen] = useState(false);
-  // Для «Пола друзей»: экран ИИ рисует этот же список с начала и не закрывает нижнее меню.
+  // «Пол друзей» идёт прямо здесь, слоем поверх списка: ему нужно, где начинается список, и список — с начала.
   const listRef = useRef<FlatList<FriendListItem>>(null);
-  const tabBar = useBottomTabBarHeight();
+  const [headerH, setHeaderH] = useState(0);
+  const [genderRun, setGenderRun] = useState(false);
   const { s, colors } = useTheme();
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<FriendSort>('name');
@@ -43,7 +44,13 @@ export default function FriendsScreen() {
   // Тихий тост магии: сперва про пол, потом про соцсети из «О себе». Фраза выбирается один раз на новость.
   const toast = useMemo(() => {
     if (genderNews) return voice.say('gender.quiet', { k: genderNews });
-    if (notesNews) return notesNews.links ? voice.say('notes.quiet', { n: notesNews.links, k: notesNews.withLinks }) : voice.say('notes.tidy');
+    if (notesNews)
+      return notesNews.links
+        ? voice.say('notes.quiet', {
+            n: notesNews.links,
+            k: notesNews.withLinks,
+          })
+        : voice.say('notes.tidy');
     return null;
   }, [genderNews, notesNews]);
   const toastDone = useCallback(() => (genderNews ? clearGenderNews() : clearNotesNews()), [genderNews, clearGenderNews, clearNotesNews]);
@@ -91,19 +98,21 @@ export default function FriendsScreen() {
         onScroll={(e) => setScrolled(e.nativeEvent.contentOffset.y > 2)}
         scrollEventThrottle={32}
         ListHeaderComponent={
-          <FriendsHeader
-            friends={data.friends}
-            today={today}
-            selecting={selecting}
-            aiBusy={genderBusy}
-            onAi={() => setAiOpen(true)}
-            onImport={() => router.push('/import')}
-            onSettings={() => router.push('/settings')}
-            query={query}
-            onQuery={setQuery}
-            sort={sort}
-            onSort={setSort}
-          />
+          <View onLayout={(e) => setHeaderH(e.nativeEvent.layout.height)}>
+            <FriendsHeader
+              friends={data.friends}
+              today={today}
+              selecting={selecting}
+              aiBusy={genderBusy}
+              onAi={() => setAiOpen(true)}
+              onImport={() => router.push('/import')}
+              onSettings={() => router.push('/settings')}
+              query={query}
+              onQuery={setQuery}
+              sort={sort}
+              onSort={setSort}
+            />
+          </View>
         }
         renderItem={({ item }) =>
           item.type === 'label' ? (
@@ -129,11 +138,7 @@ export default function FriendsScreen() {
         ListEmptyComponent={
           n === 0 ? (
             <View style={{ gap: 10, padding: 20 }}>
-              <Empty
-                icon="people"
-                title="Пока никого"
-                text="Импортируй друзей из контактов телефона вместе с днями рождения — или добавь первого вручную."
-              />
+              <Empty icon="people" title="Пока никого" text="Импортируй друзей из контактов телефона вместе с днями рождения — или добавь первого вручную." />
               <Button title="Импорт из контактов" icon="import" onPress={() => router.push('/import')} />
               {telegramAvailable && <Button title="Импорт из Telegram" icon="send" variant="secondary" onPress={() => router.push('/telegram')} />}
             </View>
@@ -148,9 +153,24 @@ export default function FriendsScreen() {
           scrolled={scrolled}
           onClose={clear}
           actions={[
-            { icon: 'star', label: allFavorite ? 'Убрать из избранного' : 'В избранное', color: allFavorite ? colors.accent : undefined, fill: allFavorite ? colors.accent : undefined, onPress: toggleFavorites },
-            { icon: allMuted ? 'bell' : 'bellOff', label: allMuted ? 'Включить уведомления' : 'Выключить уведомления', onPress: toggleMuted },
-            { icon: 'trash', label: 'Удалить выбранных', color: colors.danger, onPress: () => remove([...selected]) },
+            {
+              icon: 'star',
+              label: allFavorite ? 'Убрать из избранного' : 'В избранное',
+              color: allFavorite ? colors.accent : undefined,
+              fill: allFavorite ? colors.accent : undefined,
+              onPress: toggleFavorites,
+            },
+            {
+              icon: allMuted ? 'bell' : 'bellOff',
+              label: allMuted ? 'Включить уведомления' : 'Выключить уведомления',
+              onPress: toggleMuted,
+            },
+            {
+              icon: 'trash',
+              label: 'Удалить выбранных',
+              color: colors.danger,
+              onPress: () => remove([...selected]),
+            },
           ]}
         />
       )}
@@ -158,20 +178,24 @@ export default function FriendsScreen() {
       <AiSheet
         visible={aiOpen}
         onClose={() => setAiOpen(false)}
-        gender={{ known: data.friends.filter((f) => f.gender).length, total: n }}
+        gender={{
+          known: data.friends.filter((f) => f.gender).length,
+          total: n,
+        }}
         notes={{ waiting: notesWaiting, busy: notesBusy }}
         onNotes={() => readNotes('all')}
         onGender={() => {
           setAiOpen(false);
-          // Список — к началу и «по имени»: экран ИИ рисует его точь-в-точь и подменяет незаметно.
+          // Список — к началу и «по имени»: слой «Пола друзей» рисует его точь-в-точь и встаёт поверх незаметно.
           setQuery('');
           setSort('name');
           listRef.current?.scrollToOffset({ offset: 0, animated: false });
           clearGenderNews();
-          setTimeout(() => router.push({ pathname: '/ai-gender', params: { tab: String(tabBar) } }), 230);
+          setTimeout(() => setGenderRun(true), 230);
         }}
       />
-      <AiToast text={toast} onDone={toastDone} bottom={selecting ? 90 : 96} />
+      {!genderRun && <AiToast text={toast} onDone={toastDone} bottom={selecting ? 90 : 96} />}
+      {genderRun && headerH > 0 && <GenderRun listTop={headerH} onClose={() => setGenderRun(false)} />}
     </View>
   );
 }
@@ -194,10 +218,25 @@ function SwipeToDelete({ enabled, onDelete, children }: { enabled: boolean; onDe
           onPress={async () => {
             if (!(await onDelete())) ref.current?.close();
           }}
-          style={({ pressed }) => ({ width: 92, backgroundColor: colors.danger, alignItems: 'center', justifyContent: 'center', gap: 4, opacity: pressed ? 0.85 : 1 })}
+          style={({ pressed }) => ({
+            width: 92,
+            backgroundColor: colors.danger,
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 4,
+            opacity: pressed ? 0.85 : 1,
+          })}
         >
           <Icon name="trash" size={22} color="#FFFFFF" strokeWidth={2} />
-          <Text style={{ fontFamily: fonts.semibold, fontSize: 12, color: '#FFFFFF' }}>Удалить</Text>
+          <Text
+            style={{
+              fontFamily: fonts.semibold,
+              fontSize: 12,
+              color: '#FFFFFF',
+            }}
+          >
+            Удалить
+          </Text>
         </Pressable>
       )}
     >

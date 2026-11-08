@@ -14,6 +14,11 @@ export interface Release {
  */
 export const CHANGELOG: Release[] = [
   {
+    version: '1.31.0',
+    date: '2026-11-08',
+    items: ['«Пол друзей» переписан заново: идёт прямо в списке «Друзья», плавнее и легче для телефона.'],
+  },
+  {
     version: '1.30.3',
     date: '2026-11-08',
     items: [

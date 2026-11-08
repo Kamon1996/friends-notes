@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
-import { BEND, SPIN_START, bendPlace, flowBend, flowEnd, flowShift, runItems, wrapPlace } from '../bendFlow';
+import { BEND, SPIN_START, bendPlace, flowBend, flowEnd, flowShift, runGeometry, runItems, wrapPlace } from '../bendFlow';
 import { buildFriendList } from '../friendList';
 import type { Friend } from '../types';
 
@@ -97,40 +97,53 @@ describe('место в списке', () => {
 
 describe('список для хода', () => {
   const friend = (name: string, favorite = false): Friend => ({ id: name, name, favorite }) as Friend;
-  const list = (names: string[], fav: string[] = []) => buildFriendList([...names.map((n) => friend(n)), ...fav.map((n) => friend(n, true))], '', 'name', '2026-11-08');
+  const list = (names: string[], fav: string[] = []) =>
+    buildFriendList([...names.map((n) => friend(n)), ...fav.map((n) => friend(n, true))], '', 'name', '2026-11-08');
   const shape = (items: ReturnType<typeof runItems>) => items.map((it) => (it.kind === 'label' ? `[${it.title}]` : it.friend.name)).join(' ');
 
-  test('как в «Друзьях»: избранные, потом буквы — с подзаголовками и рамками групп', () => {
-    const items = runItems(list(['Андрей', 'Аня', 'Борис'], ['Мама']), 1, 150);
+  test('как в «Друзьях»: избранные, потом буквы — с подзаголовками и рамками групп, без повторов', () => {
+    const items = runItems(list(['Андрей', 'Аня', 'Борис'], ['Мама']), 150);
     assert.equal(shape(items), '[Избранные] Мама [А] Андрей Аня [Б] Борис');
-    const rows = items.filter((it) => it.kind === 'row');
     assert.deepEqual(
-      rows.map((r) => r.kind === 'row' && [r.first, r.last]),
+      items.flatMap((r) => (r.kind === 'row' ? [[r.first, r.last, r.slot]] : [])),
       [
-        [true, true],
-        [true, false],
-        [false, true],
-        [true, true],
+        [true, true, 0],
+        [true, false, 1],
+        [false, true, 2],
+        [true, true, 3],
       ],
     );
-    assert.ok(items.every((it) => it.real));
-  });
-  test('друзей мало — список повторяется целиком, повторы не «настоящие» и с теми же номерами', () => {
-    const items = runItems(list(['Андрей', 'Аня', 'Борис']), 7, 150);
-    assert.equal(items.filter((it) => it.kind === 'row').length, 9);
-    assert.equal(shape(items), '[А] Андрей Аня [Б] Борис [А] Андрей Аня [Б] Борис [А] Андрей Аня [Б] Борис');
-    assert.equal(items.filter((it) => it.real).length, 5);
-    const slots = items.flatMap((it) => (it.kind === 'row' ? [it.slot] : []));
-    assert.deepEqual(slots, [0, 1, 2, 0, 1, 2, 0, 1, 2]);
-    assert.equal(new Set(items.map((it) => it.key)).size, items.length);
   });
   test('очень много — первые max, последняя группа закрыта, пустого подзаголовка в конце нет', () => {
     const names = Array.from({ length: 40 }, (_, i) => `${i < 20 ? 'А' : 'Б'}${String(i).padStart(2, '0')}`);
-    const items = runItems(list(names), 1, 20);
+    const items = runItems(list(names), 20);
     assert.equal(items.filter((it) => it.kind === 'row').length, 20);
     const tail = items[items.length - 1];
     assert.ok(tail.kind === 'row' && tail.last);
     assert.ok(!shape(items).includes('[Б]'));
   });
-  test('никого — пусто', () => assert.deepEqual(runItems([], 30, 150), []));
+  test('никого — пусто', () => assert.deepEqual(runItems([], 150), []));
+});
+
+describe('геометрия', () => {
+  const L = { kind: 'label' as const };
+  const R = (last = false) => ({ kind: 'row' as const, last });
+  test('подзаголовки и строки подряд; последняя строка группы на пиксель выше (рамка снизу)', () => {
+    const g = runGeometry([L, R(), R(true), L, R(true)], 34, 65, 400);
+    assert.deepEqual(g.y, [0, 34, 99, 165, 199]);
+    assert.deepEqual(g.h, [34, 65, 66, 34, 66]);
+  });
+  test('рамка — на пятом друге; друзей меньше — на последнем', () => {
+    const items = [L, R(), R(), R(), R(true), L, R(), R(), R(true)];
+    const g = runGeometry(items, 34, 65, 400);
+    assert.equal(g.bandTop, g.y[6], 'пятый друг — после второго подзаголовка');
+    assert.equal(g.mid, g.y[6] + 65 / 2);
+    const few = runGeometry([L, R(), R(true)], 34, 65, 400);
+    assert.equal(few.bandTop, few.y[2]);
+  });
+  test('круг — весь список, но не меньше экрана: короткий список уходит целиком и возвращается снизу', () => {
+    const long = Array.from({ length: 40 }, (_, i) => R(i === 39));
+    assert.equal(runGeometry(long, 34, 65, 700).lap, 40 * 65 + 1);
+    assert.equal(runGeometry([L, R(true)], 34, 65, 700).lap, 700 + 2 * 65);
+  });
 });

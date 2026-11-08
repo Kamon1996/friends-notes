@@ -1,10 +1,10 @@
 /// <reference types="node" />
-// Барабан ИИ-задач: плавный ход без рывков, остановка на первом друге, ожидание ответа на полной скорости
-// и проявление ответа только в полосе.
+// Ход колеса ИИ-задач: плавно, без рывков, остановка там, откуда начали, ожидание ответа на полной скорости;
+// ответ проявляется, когда строка проезжает рамку.
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
-import { WHEEL, WHEEL_STEP, revealAt, wheelAt as wheelAtFull, wheelDelta, wheelEnd as wheelEndFull, wheelPlace, wheelRows } from '../wheel';
+import { WHEEL, revealAt, wheelAt as wheelAtFull, wheelEnd as wheelEndFull } from '../wheel';
 
 const wheelAt = (t: number, doneAt: number, rows: number) => wheelAtFull(t, doneAt, rows, WHEEL.spin, WHEEL.delay, WHEEL.maxCruise);
 const wheelEnd = (doneAt: number, rows: number) => wheelEndFull(doneAt, rows, WHEEL.spin, WHEEL.delay, WHEEL.maxCruise);
@@ -12,23 +12,6 @@ const wheelEnd = (doneAt: number, rows: number) => wheelEndFull(doneAt, rows, WH
 const near = (a: number, b: number, eps = 1e-6) => assert.ok(Math.abs(a - b) < eps, `${a} ≈ ${b}`);
 const half = WHEEL.spin / 2;
 const tA = WHEEL.delay + half;
-
-describe('строки колеса', () => {
-  test('мало друзей — повторяем целыми кругами', () => {
-    const rows = wheelRows(['А', 'Б', 'В', 'Г', 'Д', 'Е', 'Ж']);
-    assert.ok(rows.length >= WHEEL.minRows);
-    assert.equal(rows.length % 7, 0);
-    assert.deepEqual(rows.slice(7, 14), ['А', 'Б', 'В', 'Г', 'Д', 'Е', 'Ж']);
-  });
-  test('один друг — тоже колесо, а не пустота', () => assert.equal(wheelRows(['А']).length, WHEEL.minRows));
-  test('много — первые maxRows', () => {
-    const many = Array.from({ length: 400 }, (_, i) => i);
-    assert.equal(wheelRows(many).length, WHEEL.maxRows);
-    assert.equal(wheelRows(many)[0], 0);
-  });
-  test('ровно в меру — как есть', () => assert.equal(wheelRows(Array.from({ length: 60 }, (_, i) => i)).length, 60));
-  test('никого — пусто', () => assert.deepEqual(wheelRows([]), []));
-});
 
 describe('ход колеса', () => {
   const rows = 100;
@@ -42,9 +25,9 @@ describe('ход колеса', () => {
     near(wheelAt(wheelEnd(0, rows) + 5, 0, rows), rows);
     near(wheelEnd(0, rows), WHEEL.delay + WHEEL.spin);
   });
-  test('вся анимация с «Готово» — около 4 секунд', () => {
-    const total = wheelEnd(0, rows) + WHEEL.settle;
-    assert.ok(total >= 3.6 && total <= 4.3, `${total} с`);
+  test('вся анимация — около 3,5 секунды', () => {
+    const total = wheelEnd(0, rows);
+    assert.ok(total >= 3.4 && total <= 4, `${total} с`);
   });
   test('медленно → очень быстро → медленно', () => {
     const speed = (t: number) => (wheelAt(t + 0.01, 0, rows) - wheelAt(t, 0, rows)) / 0.01;
@@ -107,36 +90,5 @@ describe('проявление ответа', () => {
   test('ответ пришёл, когда строка уже проехала, — на следующем круге', () => {
     assert.equal(revealAt(37, 100, 37.2), 137);
     assert.equal(revealAt(37, 100, 160), 237);
-  });
-});
-
-describe('цилиндр', () => {
-  test('смещение замкнуто по кругу', () => {
-    assert.equal(wheelDelta(0, 0, 100), 0);
-    assert.equal(wheelDelta(5, 0, 100), 5);
-    assert.equal(wheelDelta(0, 1, 100), -1);
-    assert.equal(wheelDelta(0, 99, 100), 1);
-    assert.equal(wheelDelta(250, 49, 100), 1);
-  });
-  test('строка в полосе — по центру, ровно и без прозрачности', () => {
-    const p = wheelPlace(0);
-    assert.equal(p.angle, 0);
-    assert.equal(p.opacity, 1);
-    assert.ok(Math.abs(p.y) < 1e-9);
-  });
-  test('проехавшие — выше и наклонены, едущие снизу — ниже', () => {
-    const up = wheelPlace(2);
-    const down = wheelPlace(-2);
-    assert.ok(up.y < 0 && down.y > 0);
-    near(up.angle, 2 * WHEEL_STEP);
-    assert.ok(up.opacity < 1 && up.opacity > 0.5);
-  });
-  test('за краем цилиндра — не видно', () => {
-    assert.equal(wheelPlace(9).visible, false);
-    assert.equal(wheelPlace(-9).opacity, 0);
-  });
-  test('строки видно примерно по 7 с каждой стороны', () => {
-    assert.equal(wheelPlace(7).visible, true);
-    assert.equal(wheelPlace(8).visible, false);
   });
 });
