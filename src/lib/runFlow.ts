@@ -3,9 +3,10 @@ import type { Friend } from './types';
 import { wheelAt, wheelEnd } from './wheel';
 
 /**
- * Ход «пола друзей» прямо по списку: список оттягивают вниз и выдёргивают — полный круг через рамку (медленно → очень
- * быстро → медленно; ответа нет — крутится на полной скорости, пока не придёт), у проехавших рамку проявляется пол,
- * потом список встаёт, как стоял. Без изгиба и перспективы: только сдвиг — одинаково на любом телефоне.
+ * Ход «пола друзей» прямо по списку: список оттягивают вниз и выдёргивают — ровно один круг через рамку (медленно →
+ * очень быстро → медленно), у проехавших рамку проявляется пол, потом список встаёт, как стоял. Ответ про кого-то
+ * запоздал — список не крутится второй раз: стоит и ждёт, а пол у опоздавших проявляется на месте (GenderRun).
+ * Без изгиба и перспективы: только сдвиг — одинаково на любом телефоне.
  *
  * Время — секунды от старта; расстояния — px вдоль списка (список такой же, как в «Друзьях»: с подзаголовками групп).
  * Чистые функции с пометкой 'worklet': на телефоне считаются на UI-потоке каждый кадр, в тестах — как обычные.
@@ -29,7 +30,8 @@ export const RUN = {
   bandAt: 0.5,
   /** Выше верха списка — не дальше стольких строк (дальше строка уже за краем). */
   above: 3,
-  maxCruise: 20,
+  /** Круг закончился, а ответа ещё нет — столько ждём на месте, потом подводим итог с тем, что есть, с. */
+  wait: 12,
 };
 
 export const SPIN_START = RUN.lead + RUN.focusIn + RUN.pull;
@@ -40,34 +42,32 @@ function easeInOut(u: number): number {
 }
 
 /** Когда список снова стоит (конец анимации), с. `lap` — длина круга (в чём угодно: строках, px). */
-export function flowEnd(doneAt: number, lap: number): number {
+export function flowEnd(lap: number): number {
   'worklet';
-  const da = Number.isFinite(doneAt) ? doneAt - SPIN_START : Infinity;
-  return SPIN_START + wheelEnd(da, lap, RUN.spin, 0, RUN.maxCruise) + RUN.focusOut;
+  return SPIN_START + wheelEnd(0, lap, RUN.spin, 0, 0) + RUN.focusOut;
 }
 
 /**
  * Сдвиг списка в момент t: 0 → оттянули на `pull` → полный круг, кратно `lap`. Единицы — те же, что у `lap` и `pull`
  * (на телефоне — px: список с подзаголовками групп, строки разной высоты).
  */
-export function flowShift(t: number, doneAt: number, lap: number, pull: number): number {
+export function flowShift(t: number, lap: number, pull: number): number {
   'worklet';
   const p0 = RUN.lead + RUN.focusIn;
   if (t <= p0) return 0;
   if (t <= SPIN_START) return -pull * Math.sin(((t - p0) / RUN.pull) * (Math.PI / 2));
   const tt = t - SPIN_START;
-  const da = Number.isFinite(doneAt) ? doneAt - SPIN_START : Infinity;
-  const s = wheelAt(tt, da, lap, RUN.spin, 0, RUN.maxCruise);
+  const s = wheelAt(tt, 0, lap, RUN.spin, 0, 0);
   const r = Math.min(1, tt / RUN.release);
   return s - pull * (1 - easeInOut(r));
 }
 
 /** Насколько видны рамка и затемнение вокруг неё в момент t: 0 — обычный список, 1 — ход. */
-export function flowFocus(t: number, doneAt: number, lap: number): number {
+export function flowFocus(t: number, lap: number): number {
   'worklet';
   if (t <= RUN.lead) return 0;
   if (t < RUN.lead + RUN.focusIn) return easeInOut((t - RUN.lead) / RUN.focusIn);
-  const out0 = flowEnd(doneAt, lap) - RUN.focusOut;
+  const out0 = flowEnd(lap) - RUN.focusOut;
   if (t <= out0) return 1;
   return 1 - easeInOut(Math.min(1, (t - out0) / RUN.focusOut));
 }

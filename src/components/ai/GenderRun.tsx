@@ -17,7 +17,7 @@ import { scheduleOnRN } from 'react-native-worklets';
 
 import { AiGradient, AiIcon } from '@/components/ai/AiIcon';
 import { RiddleCards } from '@/components/ai/RiddleCards';
-import { HIDDEN, RunList, RunProbe } from '@/components/ai/RunList';
+import { HIDDEN, LATE, RunList, RunProbe } from '@/components/ai/RunList';
 import { Sheet, SheetHandle } from '@/components/Sheet';
 import { Fab, useTheme } from '@/components/ui';
 import { RUN, SPIN_START, flowEnd, flowFocus, flowShift, runGeometry, runItems, type RunGeo } from '@/lib/runFlow';
@@ -92,26 +92,38 @@ export function GenderRun({ listTop, onClose }: { listTop: number; onClose: () =
     };
   }, [detectGenders]);
 
-  // Ответ пришёл — строка проявится, когда в следующий раз подъедет к рамке; «загадка» — когда всё готово.
-  // Кто на старте в рамке или выше, проявится на втором проходе — в самом начале список чист, как в «Друзьях».
+  // Ответ пришёл — строка проявится, когда подъедет к рамке; «загадка» — когда всё готово. Кто на старте в рамке
+  // или выше, проявится, когда список, сделав круг, снова его привезёт. Ответ запоздал и список уже стоит — пол
+  // проявляется на месте, все опоздавшие разом.
+  const [stopped, setStopped] = useState(false);
+  const late = useSharedValue(0);
   useEffect(() => {
     if (!geoJs) return;
     const { y, h, lap, mid, row } = geoJs;
     const at = mid + shift.get() + 0.5 * row;
     const prev = revealRef.current ?? items.map(() => HIDDEN);
+    let lateOnes = 0;
     const next = prev.map((r, i) => {
       const it = items[i];
       if (r !== HIDDEN || it?.kind !== 'row' || !(it.friend.gender || workDone)) return r;
+      if (stopped) {
+        lateOnes++;
+        return LATE;
+      }
       return revealAt(y[i] + h[i] / 2, lap, at);
     });
     revealRef.current = next;
     reveal.set(next);
+    if (lateOnes) {
+      late.set(0);
+      late.set(withDelay(120, withTiming(1, { duration: 360, easing: Easing.out(Easing.cubic) })));
+    }
     const first = onList.map(() => HIDDEN);
     items.forEach((it, i) => {
       if (it.kind === 'row' && it.friend.gender) first[it.slot] = Math.min(first[it.slot], next[i]);
     });
     firstReveal.set(first);
-  }, [geoJs, items, workDone, onList, shift, reveal, firstReveal]);
+  }, [geoJs, items, workDone, stopped, onList, shift, reveal, late, firstReveal]);
 
   // Что говорит ИИ.
   const [phrase, setPhrase] = useState(() => {
@@ -142,15 +154,9 @@ export function GenderRun({ listTop, onClose }: { listTop: number; onClose: () =
     };
   }, [reduce, ready]);
 
-  // Часы — на UI-потоке, каждый кадр; идут, как только всё измерено.
-  const [stopped, setStopped] = useState(false);
-  const doneFlag = useSharedValue(0);
+  // Часы — на UI-потоке, каждый кадр; идут, как только всё измерено. Круг всегда один.
   const start = useSharedValue(-1);
-  const doneAt = useSharedValue(HIDDEN);
   const ended = useSharedValue(0);
-  useEffect(() => {
-    if (workDone) doneFlag.set(1);
-  }, [workDone, doneFlag]);
   const onEnd = useCallback(() => setStopped(true), []);
   const frame = useFrameCallback((f) => {
     'worklet';
@@ -158,11 +164,9 @@ export function GenderRun({ listTop, onClose }: { listTop: number; onClose: () =
     if (!g) return;
     if (start.get() < 0) start.set(f.timestamp);
     const t = (f.timestamp - start.get()) / 1000;
-    if (doneFlag.get() && doneAt.get() >= HIDDEN) doneAt.set(t);
-    const da = doneAt.get() >= HIDDEN ? Infinity : doneAt.get();
-    shift.set(flowShift(t, da, g.lap, RUN.pullRows * g.row));
-    focus.set(flowFocus(t, da, g.lap));
-    if (!ended.get() && t >= flowEnd(da, g.lap)) {
+    shift.set(flowShift(t, g.lap, RUN.pullRows * g.row));
+    focus.set(flowFocus(t, g.lap));
+    if (!ended.get() && t >= flowEnd(g.lap)) {
       ended.set(1);
       scheduleOnRN(onEnd);
     }
@@ -258,9 +262,20 @@ export function GenderRun({ listTop, onClose }: { listTop: number; onClose: () =
     });
     setTimeout(() => setStage('ask'), 450);
   }, [close]);
+  // Круг закончился: ответ есть — итог; нет — ждём на месте (опоздавшие проявятся сами), но не дольше RUN.wait.
   useEffect(() => {
-    if (stopped) finish();
-  }, [stopped, finish]);
+    if (!stopped) return;
+    if (workDone) {
+      const t = setTimeout(finish, 0);
+      return () => clearTimeout(t);
+    }
+    const say = setTimeout(() => setPhrase((p) => voice.say('gender.slow') ?? p), 0);
+    const t = setTimeout(finish, RUN.wait * 1000);
+    return () => {
+      clearTimeout(say);
+      clearTimeout(t);
+    };
+  }, [stopped, workDone, finish]);
   // Без анимаций (так настроен телефон) — сразу итог, как только ответ готов.
   useEffect(() => {
     if (reduce && workDone && ready) setTimeout(finish, 0);
@@ -347,6 +362,7 @@ export function GenderRun({ listTop, onClose }: { listTop: number; onClose: () =
             shift={shift}
             focus={focus}
             reveal={reveal}
+            late={late}
             outro={outro}
             today={today}
             zodiac={zodiacShown(data.settings)}

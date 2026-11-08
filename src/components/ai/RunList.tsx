@@ -12,6 +12,8 @@ import { AI_STOPS, genderTone } from './palette';
 
 /** Ещё не проявилось. */
 export const HIDDEN = 1e9;
+/** Ответ пришёл, когда список уже стоял: пол проявляется на месте, по общему таймеру `late`. */
+export const LATE = -1e9;
 
 // Неизменные значения: стиль, который не поменялся, Reanimated не отправляет в натив — строки за экраном не стоят ничего.
 const OFF = [{ translateY: 0 }];
@@ -38,6 +40,7 @@ export function RunList({
   shift,
   focus,
   reveal,
+  late,
   outro,
   today,
   zodiac,
@@ -51,6 +54,8 @@ export function RunList({
   /** 0 → 1: рамка и затемнение вокруг неё. */
   focus: SharedValue<number>;
   reveal: SharedValue<number[]>;
+  /** 0 → 1: проявление тех, чей ответ пришёл после остановки (reveal = LATE). */
+  late: SharedValue<number>;
   /** 0 → 1: пол гаснет, метки и стрелки возвращаются — перед тем как слой уйдёт. */
   outro: SharedValue<number>;
   today: string;
@@ -68,7 +73,7 @@ export function RunList({
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none" importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
       {items.map((it, i) => (
-        <RunEntry key={it.key} index={i} item={it} geo={geo} viewH={viewH} shift={shift} reveal={reveal} outro={outro} today={today} zodiac={zodiac} finished={finished} />
+        <RunEntry key={it.key} index={i} item={it} geo={geo} viewH={viewH} shift={shift} reveal={reveal} late={late} outro={outro} today={today} zodiac={zodiac} finished={finished} />
       ))}
       <Animated.View style={[{ position: 'absolute', left: 0, right: 0, top: 0, height: Math.max(0, geo.bandTop - 2), backgroundColor: colors.bg }, dimStyle]} />
       <Animated.View style={[{ position: 'absolute', left: 0, right: 0, top: geo.bandTop + geo.bandH + 2, bottom: 0, backgroundColor: colors.bg }, dimStyle]} />
@@ -131,6 +136,7 @@ const RunEntry = memo(function RunEntry({
   viewH,
   shift,
   reveal,
+  late,
   outro,
   today,
   zodiac,
@@ -142,6 +148,7 @@ const RunEntry = memo(function RunEntry({
   viewH: number;
   shift: SharedValue<number>;
   reveal: SharedValue<number[]>;
+  late: SharedValue<number>;
   outro: SharedValue<number>;
   today: string;
   zodiac: boolean;
@@ -160,11 +167,13 @@ const RunEntry = memo(function RunEntry({
     return { opacity: 1, transform: [{ translateY: p - mid }] };
   });
   const chip = useAnimatedStyle(() => {
-    const v = revealed(reveal.get()[index] ?? HIDDEN, mid, row, shift.get());
+    const at = reveal.get()[index] ?? HIDDEN;
+    const v = at === LATE ? late.get() : revealed(at, mid, row, shift.get());
     return { opacity: v * (1 - outro.get()), transform: v <= 0 ? CHIP_OFF : v >= 1 ? CHIP_ON : [{ scale: 0.6 + 0.4 * v }] };
   });
   const trailing = useAnimatedStyle(() => {
-    const v = revealed(reveal.get()[index] ?? HIDDEN, mid, row, shift.get());
+    const at = reveal.get()[index] ?? HIDDEN;
+    const v = at === LATE ? late.get() : revealed(at, mid, row, shift.get());
     return { opacity: Math.max(1 - v, outro.get()) };
   });
 

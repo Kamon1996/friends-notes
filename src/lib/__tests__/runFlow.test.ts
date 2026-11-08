@@ -1,5 +1,5 @@
 /// <reference types="node" />
-// «Пол друзей» по списку: оттяжка, полный круг через рамку и возврат — плавно, без скачков, и список встаёт как стоял.
+// «Пол друзей» по списку: оттяжка, ровно один круг через рамку и возврат — плавно, без скачков, и список встаёт как стоял.
 // Расстояния — px: круг — весь список с подзаголовками групп.
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
@@ -14,43 +14,39 @@ const PULL = 26;
 
 describe('ход', () => {
   test('сначала стоит, потом оттягивается вниз', () => {
-    assert.equal(flowShift(0, 0, LAP, PULL), 0);
-    assert.equal(flowShift(RUN.lead + RUN.focusIn, 0, LAP, PULL), 0);
-    near(flowShift(SPIN_START, 0, LAP, PULL), -PULL);
+    assert.equal(flowShift(0, LAP, PULL), 0);
+    assert.equal(flowShift(RUN.lead + RUN.focusIn, LAP, PULL), 0);
+    near(flowShift(SPIN_START, LAP, PULL), -PULL);
   });
-  test('полный круг — и встаёт ровно как стоял', () => {
+  test('ровно один круг — и встаёт как стоял, сколько бы ни ждали ответа', () => {
     for (const lap of [900, LAP, 12000]) {
-      const end = flowEnd(0, lap);
-      near(flowShift(end, 0, lap, PULL), lap);
-      near(flowShift(end + 3, 0, lap, PULL), lap);
-      near(flowFocus(end, 0, lap), 0);
+      const end = flowEnd(lap);
+      near(flowShift(end, lap, PULL), lap);
+      near(flowShift(end + 3, lap, PULL), lap);
+      near(flowShift(end + 30, lap, PULL), lap, 1e-6);
+      near(flowFocus(end, lap), 0);
     }
   });
-  test('длина круга не меняет ритм: короткий и длинный список идут одно и то же время', () => near(flowEnd(0, 900), flowEnd(0, 12000)));
-  test('около 4,5 секунды, если ответ готов сразу', () => {
-    const end = flowEnd(0, LAP);
+  test('длина круга не меняет ритм: короткий и длинный список идут одно и то же время', () => near(flowEnd(900), flowEnd(12000)));
+  test('около 4,5 секунды — всегда', () => {
+    const end = flowEnd(LAP);
     assert.ok(end > 4 && end < 5.2, `${end}`);
   });
   test('без скачков назад и рывков — после оттяжки', () => {
-    for (const doneAt of [0, SPIN_START + 3, Infinity]) {
-      let prev = flowShift(SPIN_START, doneAt, LAP, PULL);
-      const end = flowEnd(doneAt, LAP);
-      for (let t = SPIN_START; t <= end; t += 0.004) {
-        const s = flowShift(t, doneAt, LAP, PULL);
-        assert.ok(s >= prev - 1e-9, `назад при t=${t.toFixed(3)}, doneAt=${doneAt}`);
-        assert.ok(s - prev < 65, `скачок ${s - prev} при t=${t.toFixed(3)}`);
-        prev = s;
-      }
+    let prev = flowShift(SPIN_START, LAP, PULL);
+    const end = flowEnd(LAP);
+    for (let t = SPIN_START; t <= end; t += 0.004) {
+      const s = flowShift(t, LAP, PULL);
+      assert.ok(s >= prev - 1e-9, `назад при t=${t.toFixed(3)}`);
+      assert.ok(s - prev < 65, `скачок ${s - prev} при t=${t.toFixed(3)}`);
+      prev = s;
     }
   });
-  test('ответ пришёл во время кружения — путь до этого момента тот же', () => {
-    for (let t = SPIN_START + 2; t < SPIN_START + 8; t += 0.41) near(flowShift(t, Infinity, LAP, PULL), flowShift(t, t, LAP, PULL));
-  });
   test('рамка и затемнение: плавно проявляются до оттяжки и гаснут в конце', () => {
-    assert.equal(flowFocus(0, 0, LAP), 0);
-    near(flowFocus(RUN.lead + RUN.focusIn, 0, LAP), 1);
-    near(flowFocus(SPIN_START + 1, 0, LAP), 1);
-    const mid = flowFocus(flowEnd(0, LAP) - RUN.focusOut / 2, 0, LAP);
+    assert.equal(flowFocus(0, LAP), 0);
+    near(flowFocus(RUN.lead + RUN.focusIn, LAP), 1);
+    near(flowFocus(SPIN_START + 1, LAP), 1);
+    const mid = flowFocus(flowEnd(LAP) - RUN.focusOut / 2, LAP);
     assert.ok(mid > 0.2 && mid < 0.8);
   });
 });
