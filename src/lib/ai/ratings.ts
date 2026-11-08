@@ -160,20 +160,20 @@ export const RATINGS: Ratings = {
         ]
       },
       "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free": {
-        "correct": 45,
-        "correctUnknown": 5,
+        "correct": 77,
+        "correctUnknown": 21,
         "missed": 0,
         "wrong": 0,
-        "guessed": 0,
-        "omitted": 50,
-        "harmful": 0,
-        "score": 50,
+        "guessed": 2,
+        "omitted": 0,
+        "harmful": 2,
+        "score": 92,
         "provider": "openrouter",
         "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
         "testedAt": "2026-11-08",
         "cases": 100,
-        "medianMs": 23701,
-        "parsedShare": 0.5,
+        "medianMs": 92522,
+        "parsedShare": 1,
         "status": "ok",
         "history": [
           {
@@ -181,23 +181,29 @@ export const RATINGS: Ratings = {
             "score": 50,
             "harmful": 0,
             "medianMs": 23701
+          },
+          {
+            "testedAt": "2026-11-08",
+            "score": 92,
+            "harmful": 2,
+            "medianMs": 92522
           }
         ]
       },
       "openrouter:cohere/north-mini-code:free": {
-        "correct": 76,
-        "correctUnknown": 11,
+        "correct": 77,
+        "correctUnknown": 14,
         "missed": 0,
-        "wrong": 1,
-        "guessed": 12,
+        "wrong": 0,
+        "guessed": 9,
         "omitted": 0,
-        "harmful": 13,
-        "score": 48,
+        "harmful": 9,
+        "score": 64,
         "provider": "openrouter",
         "model": "cohere/north-mini-code:free",
         "testedAt": "2026-11-08",
         "cases": 100,
-        "medianMs": 8308,
+        "medianMs": 24043,
         "parsedShare": 1,
         "status": "ok",
         "history": [
@@ -206,6 +212,12 @@ export const RATINGS: Ratings = {
             "score": 48,
             "harmful": 13,
             "medianMs": 8308
+          },
+          {
+            "testedAt": "2026-11-08",
+            "score": 64,
+            "harmful": 9,
+            "medianMs": 24043
           }
         ]
       },
@@ -260,20 +272,20 @@ export const RATINGS: Ratings = {
         ]
       },
       "openrouter:dots-studio/dots-3-note-preview:free": {
-        "correct": 32,
+        "correct": 76,
         "correctUnknown": 10,
         "missed": 0,
-        "wrong": 0,
-        "guessed": 8,
-        "omitted": 50,
-        "harmful": 8,
-        "score": 18,
+        "wrong": 1,
+        "guessed": 13,
+        "omitted": 0,
+        "harmful": 14,
+        "score": 44,
         "provider": "openrouter",
         "model": "dots-studio/dots-3-note-preview:free",
         "testedAt": "2026-11-08",
         "cases": 100,
-        "medianMs": 18265,
-        "parsedShare": 0.5,
+        "medianMs": 24994,
+        "parsedShare": 1,
         "status": "ok",
         "history": [
           {
@@ -281,24 +293,30 @@ export const RATINGS: Ratings = {
             "score": 18,
             "harmful": 8,
             "medianMs": 18265
+          },
+          {
+            "testedAt": "2026-11-08",
+            "score": 44,
+            "harmful": 14,
+            "medianMs": 24994
           }
         ]
       },
       "openrouter:liquid/lfm-2.5-2.6b:free": {
-        "correct": 0,
-        "correctUnknown": 0,
+        "correct": 40,
+        "correctUnknown": 2,
         "missed": 0,
-        "wrong": 0,
-        "guessed": 0,
-        "omitted": 100,
-        "harmful": 0,
-        "score": 0,
+        "wrong": 5,
+        "guessed": 3,
+        "omitted": 50,
+        "harmful": 8,
+        "score": 18,
         "provider": "openrouter",
         "model": "liquid/lfm-2.5-2.6b:free",
         "testedAt": "2026-11-08",
         "cases": 100,
-        "medianMs": 4931,
-        "parsedShare": 0,
+        "medianMs": 20280,
+        "parsedShare": 0.5,
         "status": "ok",
         "history": [
           {
@@ -306,6 +324,12 @@ export const RATINGS: Ratings = {
             "score": 0,
             "harmful": 0,
             "medianMs": 4931
+          },
+          {
+            "testedAt": "2026-11-08",
+            "score": 18,
+            "harmful": 8,
+            "medianMs": 20280
           }
         ]
       },
@@ -322,7 +346,7 @@ export const RATINGS: Ratings = {
         "model": "liquid/lfm-3-1.7b:free",
         "testedAt": "2026-11-08",
         "cases": 100,
-        "medianMs": 9617,
+        "medianMs": 31277,
         "parsedShare": 0,
         "status": "ok",
         "history": [
@@ -331,6 +355,12 @@ export const RATINGS: Ratings = {
             "score": 0,
             "harmful": 0,
             "medianMs": 9617
+          },
+          {
+            "testedAt": "2026-11-08",
+            "score": 0,
+            "harmful": 0,
+            "medianMs": 31277
           }
         ]
       },
@@ -347,7 +377,7 @@ export const RATINGS: Ratings = {
         "model": "recursive/flint-v1.0:free",
         "testedAt": "2026-11-08",
         "cases": 100,
-        "medianMs": 10384,
+        "medianMs": 34758,
         "parsedShare": 0,
         "status": "ok",
         "history": [
@@ -356,24 +386,30 @@ export const RATINGS: Ratings = {
             "score": 0,
             "harmful": 0,
             "medianMs": 10384
+          },
+          {
+            "testedAt": "2026-11-08",
+            "score": 0,
+            "harmful": 0,
+            "medianMs": 34758
           }
         ]
       },
       "openrouter:nvidia/nemotron-3.5-super-vl:free": {
-        "correct": 0,
-        "correctUnknown": 0,
+        "correct": 76,
+        "correctUnknown": 22,
         "missed": 0,
-        "wrong": 0,
-        "guessed": 0,
-        "omitted": 100,
-        "harmful": 0,
-        "score": 0,
+        "wrong": 1,
+        "guessed": 1,
+        "omitted": 0,
+        "harmful": 2,
+        "score": 92,
         "provider": "openrouter",
         "model": "nvidia/nemotron-3.5-super-vl:free",
         "testedAt": "2026-11-08",
         "cases": 100,
-        "medianMs": 10850,
-        "parsedShare": 0,
+        "medianMs": 22823,
+        "parsedShare": 1,
         "status": "ok",
         "history": [
           {
@@ -381,6 +417,12 @@ export const RATINGS: Ratings = {
             "score": 0,
             "harmful": 0,
             "medianMs": 10850
+          },
+          {
+            "testedAt": "2026-11-08",
+            "score": 92,
+            "harmful": 2,
+            "medianMs": 22823
           }
         ]
       },
@@ -397,7 +439,7 @@ export const RATINGS: Ratings = {
         "model": "nvidia/nemotron-3.5-lightning:free",
         "testedAt": "2026-11-08",
         "cases": 100,
-        "medianMs": 15189,
+        "medianMs": 56148,
         "parsedShare": 0,
         "status": "ok",
         "history": [
@@ -406,24 +448,30 @@ export const RATINGS: Ratings = {
             "score": 0,
             "harmful": 0,
             "medianMs": 15189
+          },
+          {
+            "testedAt": "2026-11-08",
+            "score": 0,
+            "harmful": 0,
+            "medianMs": 56148
           }
         ]
       },
       "openrouter:nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free": {
-        "correct": 0,
-        "correctUnknown": 0,
+        "correct": 32,
+        "correctUnknown": 5,
         "missed": 0,
         "wrong": 0,
-        "guessed": 0,
-        "omitted": 100,
-        "harmful": 0,
-        "score": 0,
+        "guessed": 13,
+        "omitted": 50,
+        "harmful": 13,
+        "score": -2,
         "provider": "openrouter",
         "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
         "testedAt": "2026-11-08",
         "cases": 100,
-        "medianMs": 18707,
-        "parsedShare": 0,
+        "medianMs": 48598,
+        "parsedShare": 0.5,
         "status": "ok",
         "history": [
           {
@@ -431,24 +479,30 @@ export const RATINGS: Ratings = {
             "score": 0,
             "harmful": 0,
             "medianMs": 18707
+          },
+          {
+            "testedAt": "2026-11-08",
+            "score": -2,
+            "harmful": 13,
+            "medianMs": 48598
           }
         ]
       },
       "openrouter:xingchen-agi/xing4.0-29b-a4b:free": {
-        "correct": 0,
-        "correctUnknown": 0,
-        "missed": 0,
-        "wrong": 0,
-        "guessed": 0,
-        "omitted": 100,
-        "harmful": 0,
-        "score": 0,
+        "correct": 67,
+        "correctUnknown": 17,
+        "missed": 8,
+        "wrong": 2,
+        "guessed": 6,
+        "omitted": 0,
+        "harmful": 8,
+        "score": 60,
         "provider": "openrouter",
         "model": "xingchen-agi/xing4.0-29b-a4b:free",
         "testedAt": "2026-11-08",
         "cases": 100,
-        "medianMs": 42250,
-        "parsedShare": 0,
+        "medianMs": 48146,
+        "parsedShare": 1,
         "status": "ok",
         "history": [
           {
@@ -456,6 +510,12 @@ export const RATINGS: Ratings = {
             "score": 0,
             "harmful": 0,
             "medianMs": 42250
+          },
+          {
+            "testedAt": "2026-11-08",
+            "score": 60,
+            "harmful": 8,
+            "medianMs": 48146
           }
         ]
       },
