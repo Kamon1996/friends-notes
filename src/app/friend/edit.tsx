@@ -11,6 +11,7 @@ import { cleanupAvatars, deleteOwnedFiles } from '@/lib/avatars';
 import { confirm, notify } from '@/lib/confirm';
 import { linkSubtitle, linkTitle, mergeLinks } from '@/lib/socials';
 import { newId, useFriend, useStore } from '@/lib/store';
+import { GENDER_SOURCE_LABEL, genderFromName, type Gender } from '@/lib/gender';
 import type { Friend, ImportantDate } from '@/lib/types';
 
 const blankFriend = (): Friend => ({
@@ -40,6 +41,13 @@ function FriendForm() {
   const [f, setF] = useState<Friend>(() => existing ?? blankFriend());
   const [addSocial, setAddSocial] = useState(false);
   const set = <K extends keyof Friend>(key: K, value: Friend[K]) => setF((prev) => ({ ...prev, [key]: value }));
+  // Пол: пока его не выбирали вручную, подсказываем по имени прямо при вводе (сохранится так же).
+  const shownGender = !f.genderBy || f.genderBy === 'names' ? (genderFromName(f.name) ?? undefined) : f.gender;
+  const setGender = (g: Gender | undefined) =>
+    setF((prev) => {
+      const { gender: _g, ...rest } = prev;
+      return g ? { ...rest, gender: g, genderBy: 'manual' } : { ...rest, genderBy: 'manual' };
+    });
   // Поля дат, где набранное нельзя сохранить, и где они на экране — чтобы не сохранить молча другую дату и показать, что поправить.
   const [invalid, setInvalid] = useState<Record<string, boolean>>({});
   const [attempted, setAttempted] = useState(false);
@@ -121,6 +129,19 @@ function FriendForm() {
         </View>
 
         <Field label="Телефон" value={f.phone} onChangeText={(v) => set('phone', v)} placeholder="+7…" keyboardType="phone-pad" />
+        <View style={{ marginBottom: 14 }}>
+          <Label>Пол</Label>
+          <View style={s.chips}>
+            <Chip label="Женщина" selected={shownGender === 'f'} onPress={() => setGender('f')} />
+            <Chip label="Мужчина" selected={shownGender === 'm'} onPress={() => setGender('m')} />
+            <Chip label="Не указан" selected={!shownGender} onPress={() => setGender(undefined)} />
+          </View>
+          {shownGender && f.genderBy !== 'manual' && (
+            <Text style={[s.caption, { marginTop: 6, paddingHorizontal: 4 }]}>
+              {`Определено ${f.genderBy && f.genderBy !== 'names' ? `через ${GENDER_SOURCE_LABEL[f.genderBy]}` : 'по имени'} — можно поправить. Нужно для поздравлений с 8 Марта и 23 Февраля.`}
+            </Text>
+          )}
+        </View>
         <Card style={{ paddingVertical: 4, marginBottom: 14 }}>
           <SwitchRow icon="star" label="В избранном" sub="Выше остальных в списке друзей" value={!!f.favorite} onChange={(v) => set('favorite', v)} />
           <SwitchRow icon="bell" label="Уведомлять о событиях" sub="День рождения и важные даты" value={!f.muted} onChange={(v) => set('muted', !v)} />

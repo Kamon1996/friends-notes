@@ -4,7 +4,7 @@
     "slug": "friends-notes",
     "owner": "kamon1996",
     "scheme": "friendsnotes",
-    "version": "1.25.0",
+    "version": "1.26.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -80,6 +80,14 @@
         "expo-calendar",
         {
           "calendarPermission": "Чтобы показывать дни рождения друзей в календаре телефона."
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 26
+          }
         }
       ]
     ],

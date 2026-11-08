@@ -33,8 +33,10 @@ function normalizeFriend(v: unknown): Friend | null {
   const dates = Array.isArray(v.dates)
     ? v.dates.filter((d): d is ImportantDate => isObject(d) && typeof d.id === 'string' && typeof d.date === 'string').map((d) => ({ ...d, title: str(d.title), yearly: d.yearly !== false }))
     : [];
+  // Пол берём только из проверенных полей ниже, а не из исходной записи как есть.
+  const { gender: _gender, genderBy: _genderBy, ...rest } = v;
   return {
-    ...(v as unknown as Friend),
+    ...(rest as unknown as Friend),
     emoji: str(v.emoji),
     birthday: typeof v.birthday === 'string' ? v.birthday : null,
     phone: str(v.phone),
@@ -45,7 +47,16 @@ function normalizeFriend(v: unknown): Friend | null {
     dates,
     socials: Array.isArray(v.socials) ? v.socials.filter((l) => isObject(l) && typeof l.id === 'string' && typeof l.network === 'string') as Friend['socials'] : undefined,
     createdAt: typeof v.createdAt === 'number' ? v.createdAt : 0,
+    ...genderFields(v),
   };
+}
+
+/** Пол и его источник — только допустимые значения; иначе полей нет вовсе. */
+function genderFields(v: Record<string, unknown>): Pick<Friend, 'gender' | 'genderBy'> {
+  const out: Pick<Friend, 'gender' | 'genderBy'> = {};
+  if (v.gender === 'f' || v.gender === 'm') out.gender = v.gender;
+  if (typeof v.genderBy === 'string' && ['manual', 'names', 'genderize', 'device-ai', 'gemini'].includes(v.genderBy)) out.genderBy = v.genderBy as Friend['genderBy'];
+  return out;
 }
 
 function normalizeReminder(v: unknown): Reminder | null {

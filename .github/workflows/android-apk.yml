@@ -6,7 +6,8 @@ name: Android APK
 #  - коммитом со словом «[aab]» — то же, но Android App Bundle для Google Play (профиль production);
 #  - коммитом со словом «[apk-cloud]» — облачная сборка в EAS, как раньше;
 #  - вручную: вкладка Actions → «Android APK» → Run workflow, там же выбирается режим.
-# Нужны секреты репозитория EXPO_TOKEN (подпись и проект EAS), TG_API_ID и TG_API_HASH
+# Нужны секреты репозитория EXPO_TOKEN (подпись и проект EAS), TG_API_ID и TG_API_HASH; по желанию GEMINI_API_KEY
+# (бесплатный ключ из Google AI Studio — для определения пола по имени, когда другие способы не справились)
 # (Settings → Secrets and variables → Actions).
 on:
   workflow_dispatch:
@@ -98,6 +99,7 @@ jobs:
           TG_API_ID: ${{ secrets.TG_API_ID }}
           TG_API_HASH: ${{ secrets.TG_API_HASH }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           node -e '
             const fs = require("fs");
@@ -105,9 +107,10 @@ jobs:
             const apiId = Number(process.env.TG_API_ID || 0);
             const apiHash = process.env.TG_API_HASH || "";
             const dsn = process.env.SENTRY_DSN || (a.expo.extra && a.expo.extra.sentry && a.expo.extra.sentry.dsn) || "";
-            a.expo.extra = { ...a.expo.extra, telegram: { apiId, apiHash }, sentry: { dsn } };
+            const geminiKey = process.env.GEMINI_API_KEY || "";
+            a.expo.extra = { ...a.expo.extra, telegram: { apiId, apiHash }, sentry: { dsn }, gemini: { apiKey: geminiKey } };
             fs.writeFileSync("app.json", JSON.stringify(a, null, 2));
-            console.log("Telegram keys:", apiId && apiHash ? "set" : "MISSING", "· Sentry DSN:", dsn ? "set" : "MISSING");
+            console.log("Telegram keys:", apiId && apiHash ? "set" : "MISSING", "· Sentry DSN:", dsn ? "set" : "MISSING", "· Gemini key:", geminiKey ? "set" : "нет (третья ступень определения пола — только встроенный ИИ)");
           '
 
       - name: Build on this machine
@@ -246,6 +249,7 @@ jobs:
           TG_API_ID: ${{ secrets.TG_API_ID }}
           TG_API_HASH: ${{ secrets.TG_API_HASH }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           node -e '
             const fs = require("fs");
@@ -253,9 +257,10 @@ jobs:
             const apiId = Number(process.env.TG_API_ID || 0);
             const apiHash = process.env.TG_API_HASH || "";
             const dsn = process.env.SENTRY_DSN || (a.expo.extra && a.expo.extra.sentry && a.expo.extra.sentry.dsn) || "";
-            a.expo.extra = { ...a.expo.extra, telegram: { apiId, apiHash }, sentry: { dsn } };
+            const geminiKey = process.env.GEMINI_API_KEY || "";
+            a.expo.extra = { ...a.expo.extra, telegram: { apiId, apiHash }, sentry: { dsn }, gemini: { apiKey: geminiKey } };
             fs.writeFileSync("app.json", JSON.stringify(a, null, 2));
-            console.log("Telegram keys:", apiId && apiHash ? "set" : "MISSING", "· Sentry DSN:", dsn ? "set" : "MISSING");
+            console.log("Telegram keys:", apiId && apiHash ? "set" : "MISSING", "· Sentry DSN:", dsn ? "set" : "MISSING", "· Gemini key:", geminiKey ? "set" : "нет (третья ступень определения пола — только встроенный ИИ)");
           '
       - name: Start Android build
         env:

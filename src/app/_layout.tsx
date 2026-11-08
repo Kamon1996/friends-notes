@@ -65,6 +65,7 @@ function AppShell() {
         <Stack.Screen name="reminder/edit" options={{ presentation: 'modal', title: 'Напоминание' }} />
         <Stack.Screen name="settings" options={{ title: 'Настройки' }} />
         <Stack.Screen name="appearance" options={{ title: 'Оформление' }} />
+        <Stack.Screen name="genders" options={{ title: 'Пол друзей' }} />
         <Stack.Screen name="import" options={{ presentation: 'modal', title: 'Импорт контактов' }} />
         <Stack.Screen name="telegram" options={{ presentation: 'modal', title: 'Импорт из Telegram' }} />
         <Stack.Screen name="diagnostics" options={{ title: 'Сообщить о проблеме' }} />

@@ -8,6 +8,7 @@ import { markCalendarStale, syncDeviceCalendar } from './deviceCalendar';
 import { syncNotifications } from './notifications';
 import { parseStored } from './storage';
 import { EMPTY_DATA, type AppData, type Friend, type Reminder, type Settings } from './types';
+import { withNameGender } from './gender';
 
 const STORAGE_KEY = 'friends-notes/data/v1';
 
@@ -94,7 +95,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return () => sub.remove();
   }, []);
 
-  const saveFriend = useCallback((f: Friend) => {
+  const saveFriend = useCallback((input: Friend) => {
+    const f = withNameGender(input);
     setData((d) => {
       const exists = d.friends.some((x) => x.id === f.id);
       const friends = exists ? d.friends.map((x) => (x.id === f.id ? f : x)) : [...d.friends, f];
@@ -103,7 +105,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const addFriends = useCallback((list: Friend[]) => {
-    setData((d) => ({ ...d, friends: [...d.friends, ...list] }));
+    setData((d) => ({ ...d, friends: [...d.friends, ...list.map(withNameGender)] }));
   }, []);
 
   const updateFriends = useCallback((update: (f: Friend) => Friend) => {

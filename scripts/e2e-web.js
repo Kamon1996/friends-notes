@@ -674,6 +674,59 @@ scenario('Календарь: без дат выгружать нечего', as
   assert.match(ui.dialogs.join('\n'), /Пока нечего выгружать/);
 }, { data: seed({ friends: [F({ id: 'x', name: 'Маша' })], reminders: [] }) });
 
+// ===== Пол друзей =====
+const GENDER_FRIENDS = [ANYA, IGOR, MAMA, F({ id: 's', name: 'Саша' }), F({ id: 'k', name: 'Алуашка', phone: '+7 707 606 39 03' })];
+
+scenario('Пол друзей: без интернета — своя база, остальных выбираю вручную', async ({ ui, page }) => {
+  await ui.go('/settings');
+  await ui.see('Для 8 Марта и 23 Февраля · определено 0 из 5');
+  await ui.tap('Пол друзей');
+  await ui.see('Определено 0 из 5');
+  ui.dismissNextDialog(); // «Только на телефоне»
+  await ui.tap('Определить автоматически');
+  await ui.see('Определено: 3. Осталось выбрать вручную: 2.');
+  assert.match(ui.dialogs.join('\n'), /Своя база имён не узнаёт 2 человек\. Их имена — без фамилий и телефонов/);
+  const data = await ui.waitData((x) => x.friends.filter((f) => f.gender).length === 3, 'своя база не сработала');
+  assert.deepEqual(data.friends.map((f) => [f.id, f.gender ?? null, f.genderBy ?? null]), [['a', 'f', 'names'], ['b', 'm', 'names'], ['c', 'f', 'names'], ['s', null, null], ['k', null, null]]);
+  await ui.tap('Саша: мужчина');
+  await ui.waitData((x) => x.friends.find((f) => f.id === 's').gender === 'm' && x.friends.find((f) => f.id === 's').genderBy === 'manual', 'ручной выбор не сохранился');
+  await ui.see('Определено 4 из 5');
+  await ui.tap('Мужчины · 2');
+  await ui.see('Игорь Ветров');
+  await ui.see('вручную');
+}, { data: seed({ friends: GENDER_FRIENDS }) });
+
+scenario('Пол друзей: с согласием — Genderize получает только имя и страну', async ({ ui, page }) => {
+  const asked = [];
+  await page.context().route(/api\.genderize\.io/, (route) => {
+    asked.push(decodeURIComponent(route.request().url()));
+    route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify([{ name: 'Алуашка', gender: 'female', probability: 0.97, count: 40 }]) });
+  });
+  await ui.go('/genders');
+  await ui.tap('Определить автоматически'); // вопрос подтверждён — через интернет
+  await ui.see('Определено: 4. Осталось выбрать вручную: 1.');
+  const data = await ui.data();
+  assert.deepEqual(data.friends.find((f) => f.id === 'k').genderBy, 'genderize');
+  assert.ok(asked.length >= 1);
+  assert.ok(asked.some((u) => u.includes('name[]=Алуашка') && u.endsWith('country_id=KZ')), asked.join('\n'));
+  assert.ok(!asked.some((u) => /Смирнова|707|606/.test(u)), 'ни фамилий, ни номеров');
+}, { data: seed({ friends: GENDER_FRIENDS }) });
+
+scenario('Пол в форме друга: подсказка по имени при вводе, ручной выбор главнее', async ({ ui, page }) => {
+  await ui.go('/friend/edit');
+  await ui.fill('Например, Аня', 'Вероника');
+  await ui.see('Определено по имени', { exact: false });
+  await ui.tap('Сохранить');
+  const data = await ui.waitData((x) => x.friends.some((f) => f.name === 'Вероника'), 'друг не сохранился');
+  const v = data.friends.find((f) => f.name === 'Вероника');
+  assert.deepEqual([v.gender, v.genderBy], ['f', 'names']);
+  await ui.go(`/friend/edit?id=${v.id}`);
+  await ui.tap('Не указан');
+  await ui.tap('Сохранить');
+  const after = await ui.waitData((x) => x.friends.find((f) => f.id === v.id).genderBy === 'manual', 'ручной выбор не сохранился');
+  assert.equal(after.friends.find((f) => f.id === v.id).gender, undefined, '«Не указан» вручную — и база имён его не перезаписывает');
+});
+
 // ===== Резервная копия =====
 const PNG_1PX = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
 const backupFile = (patch = {}) => Buffer.from(JSON.stringify({

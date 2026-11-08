@@ -60,12 +60,15 @@
       (Functional Software, Inc.): текст и стек ошибки, версию приложения, версию Android и модель телефона.
       В отчёт не попадают имена, номера, заметки, фото и логи Telegram. Отправку можно выключить в настройках
       («Отправлять отчёты о сбоях»). Отчёты хранятся у Sentry 90 дней.</p>
+    <h2>Пол друзей</h2>
+    <p>Чтобы напоминать о 8 Марта и 23 Февраля, приложение определяет пол друзей. Сначала — по своей базе имён прямо на телефоне. Для тех, кого база не узнала, и только если ты согласишься, имя (без фамилии и номера телефона) отправляется в сервис Genderize.io (Demografix ApS), а если он не узнает — в Google Gemini API; на бесплатном тарифе Google может использовать такие запросы для улучшения своих моделей. Если в телефоне есть встроенный ИИ (Gemini Nano), он используется вместо Gemini и работает без интернета. Пол можно выбрать или изменить вручную в карточке друга.</p>
+
     <h2>Резервная копия</h2>
     <p>По кнопке «Сохранить копию» приложение собирает все записи, напоминания, настройки и фото (уменьшенные) в один файл и открывает меню «Поделиться». Куда положить файл — в Google Диск, себе в Telegram или в память телефона, — выбираешь ты. Файл не зашифрован: храни его там, куда нет доступа у посторонних. «Восстановить из копии» заменяет данные в приложении данными из файла; файл проверяется, посторонние файлы не принимаются.</p>
     <p>Кроме того, Android может сам сохранять данные приложения в твоём аккаунте Google, если в настройках телефона включено резервное копирование, и вернуть их при установке на новый телефон. Это делает система, а не приложение; данные входа в Telegram в эту копию не попадают.</p>
 
     <h2>Передача и хранение</h2>
-    <p>Данные не отправляются разработчику и не хранятся на серверах разработчика: их просто нет. Данные покидают телефон, только когда ты сам входишь в Telegram для импорта или сохраняешь резервную копию туда, куда выберешь, а также через резервное копирование Android в твой аккаунт Google, если оно включено.</p>
+    <p>Данные не отправляются разработчику и не хранятся на серверах разработчика: их просто нет. Данные покидают телефон, только когда ты сам входишь в Telegram для импорта, сохраняешь резервную копию туда, куда выберешь, соглашаешься определить пол друзей через интернет (уходят только имена), а также через резервное копирование Android в твой аккаунт Google, если оно включено.</p>
 
     <h2>Удаление данных</h2>
     <p>Удали друга или напоминание в приложении, и запись исчезнет вместе с фото. Удаление приложения стирает все его данные с устройства.</p>
@@ -117,12 +120,15 @@
       the error text and stack trace, the app version, the Android version and the phone model. Names, numbers,
       notes, photos and Telegram logs are never included. You can turn this off in Settings (“Send crash reports”).
       Sentry keeps reports for 90 days.</p>
+    <h2>Friends' gender</h2>
+    <p>To remind you about 8 March and 23 February, the app determines your friends' gender. First it uses its own list of names on the phone. For the people it does not recognise, and only if you agree, the first name (no surname, no phone number) is sent to Genderize.io (Demografix ApS) and, if that does not help, to the Google Gemini API; on the free tier Google may use such requests to improve its models. If the phone has a built-in AI model (Gemini Nano), it is used instead of Gemini and works offline. You can set or change the gender manually in the friend's card.</p>
+
     <h2>Backup</h2>
     <p>"Save a copy" ("Сохранить копию") collects all records, reminders, settings and (downsized) photos into a single file and opens the share menu; you choose where to keep it — Google Drive, your own Telegram chat or the phone's storage. The file is not encrypted: keep it where others cannot access it. "Restore from a copy" replaces the app's data with the data from the file; the file is validated and unrelated files are rejected.</p>
     <p>In addition, Android may back up the app's data to your Google account if backup is turned on in the phone settings, and restore it when the app is installed on a new phone. This is done by the system, not by the app; Telegram sign-in data is not included.</p>
 
     <h2>Transfer and storage</h2>
-    <p>No data is sent to or stored by the developer: there are no developer servers. Data leaves the phone only when you sign in to Telegram for the import, when you save a backup wherever you choose, and through Android backup to your Google account if it is enabled.</p>
+    <p>No data is sent to or stored by the developer: there are no developer servers. Data leaves the phone only when you sign in to Telegram for the import, when you save a backup wherever you choose, when you agree to determine friends' gender online (first names only), and through Android backup to your Google account if it is enabled.</p>
 
     <h2>Deleting data</h2>
     <p>Delete a friend or a reminder in the app and the record disappears together with its photo. Uninstalling the app removes all of its data from the device.</p>

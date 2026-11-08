@@ -1,0 +1,20 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'expo.modules.deviceai'
+version = '0.1.0'
+
+android {
+  namespace "expo.modules.deviceai"
+  defaultConfig {
+    versionCode 1
+    versionName '0.1.0'
+  }
+}
+
+dependencies {
+  // Встроенный ИИ Android (Gemini Nano через AICore). Есть не на всех телефонах — модуль это проверяет.
+  implementation 'com.google.mlkit:genai-prompt:1.0.0-beta5'
+}
