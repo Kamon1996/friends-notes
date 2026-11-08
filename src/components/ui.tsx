@@ -389,25 +389,26 @@ export function IconCircle({ icon, tone = 'neutral', size = 36 }: { icon: IconNa
 export function GroupedRow({ first, last, inset = 66, children }: { first: boolean; last: boolean; inset?: number; children: ReactNode }) {
   const { colors } = useTheme();
   return (
-    <View
-      style={{
-        backgroundColor: colors.card,
-        borderColor: colors.hairline,
-        borderLeftWidth: 1,
-        borderRightWidth: 1,
-        borderTopWidth: first ? 1 : 0,
-        borderBottomWidth: last ? 1 : 0,
-        borderTopLeftRadius: first ? 20 : 0,
-        borderTopRightRadius: first ? 20 : 0,
-        borderBottomLeftRadius: last ? 20 : 0,
-        borderBottomRightRadius: last ? 20 : 0,
-        overflow: 'hidden',
-      }}
-    >
+    <View style={[groupedRowStyle(first, last), { backgroundColor: colors.card, borderColor: colors.hairline }]}>
       {!first && <Separator inset={inset} />}
       {children}
     </View>
   );
+}
+
+/** Форма строки в группе-карточке (рамка и скругления), без цветов: их задаёт тот, кто рисует. */
+export function groupedRowStyle(first: boolean, last: boolean): ViewStyle {
+  return {
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderTopWidth: first ? 1 : 0,
+    borderBottomWidth: last ? 1 : 0,
+    borderTopLeftRadius: first ? 20 : 0,
+    borderTopRightRadius: first ? 20 : 0,
+    borderBottomLeftRadius: last ? 20 : 0,
+    borderBottomRightRadius: last ? 20 : 0,
+    overflow: 'hidden',
+  };
 }
 
 /** Текстовое поле поиска с иконкой. */

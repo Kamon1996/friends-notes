@@ -1,3 +1,5 @@
+import type { FriendListItem } from './friendList';
+import type { Friend } from './types';
 import { wheelAt, wheelEnd } from './wheel';
 
 /**
@@ -5,17 +7,17 @@ import { wheelAt, wheelEnd } from './wheel';
  * вниз и выдёргивают — полный круг через рамку (медленно → очень быстро → медленно; ответа нет — крутится на полной
  * скорости, пока не придёт), потом список выпрямляется и стоит, как стоял.
  *
- * Время — секунды от старта, строки — в строках списка. `band` — какая строка сейчас в рамке (BAND.row + сдвиг).
+ * Время — секунды от старта; расстояния — px вдоль списка (список такой же, как в «Друзьях»: с подзаголовками групп).
  * Чистые функции с пометкой 'worklet': на телефоне считаются на UI-потоке каждый кадр, в тестах — как обычные.
  */
 export const BEND = {
-  /** Пока экран проявляется и уходит поиск. */
-  lead: 0.25,
+  /** Пока поиск становится плашкой. */
+  lead: 0.35,
   /** Список изгибается. */
   bendIn: 0.45,
   /** Оттянули вниз. */
   pull: 0.22,
-  /** На сколько строк оттягиваем. */
+  /** На сколько оттягиваем, в долях строки. */
   pullRows: 0.4,
   /** За сколько отпускаем оттяжку, уже двигаясь. */
   release: 0.35,
@@ -25,10 +27,10 @@ export const BEND = {
   bendOut: 0.5,
   /** Радиус изгиба, px: строка в пяти от рамки наклонена примерно на 25°. */
   radius: 700,
-  /** Шаг строки списка, px. */
-  row: 65,
-  /** Рамка — на месте пятой строки сверху. */
-  band: 4,
+  /** Рамка — на месте пятого друга сверху. */
+  bandRow: 4,
+  /** Выше верха списка — не дальше стольких строк (дальше строка уже за краем). */
+  above: 3,
   maxCruise: 20,
 };
 
@@ -39,53 +41,88 @@ function easeInOut(u: number): number {
   return u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2;
 }
 
-/** Когда список снова ровный (конец анимации), с. */
-export function flowEnd(doneAt: number, rows: number): number {
+/** Когда список снова ровный (конец анимации), с. `lap` — длина круга (в чём угодно: строках, px). */
+export function flowEnd(doneAt: number, lap: number): number {
   'worklet';
   const da = Number.isFinite(doneAt) ? doneAt - SPIN_START : Infinity;
-  return SPIN_START + wheelEnd(da, rows, BEND.spin, 0, BEND.maxCruise) + BEND.bendOut;
+  return SPIN_START + wheelEnd(da, lap, BEND.spin, 0, BEND.maxCruise) + BEND.bendOut;
 }
 
-/** Сдвиг списка в строках в момент t (0 → оттянули → полный круг кратно rows). */
-export function flowShift(t: number, doneAt: number, rows: number): number {
+/**
+ * Сдвиг списка в момент t: 0 → оттянули на `pull` → полный круг, кратно `lap`. Единицы — те же, что у `lap` и `pull`
+ * (на телефоне — px: список с подзаголовками групп, строки разной высоты).
+ */
+export function flowShift(t: number, doneAt: number, lap: number, pull: number): number {
   'worklet';
   const p0 = BEND.lead + BEND.bendIn;
   if (t <= p0) return 0;
-  if (t <= SPIN_START) return -BEND.pullRows * Math.sin(((t - p0) / BEND.pull) * (Math.PI / 2));
+  if (t <= SPIN_START) return -pull * Math.sin(((t - p0) / BEND.pull) * (Math.PI / 2));
   const tt = t - SPIN_START;
   const da = Number.isFinite(doneAt) ? doneAt - SPIN_START : Infinity;
-  const s = wheelAt(tt, da, rows, BEND.spin, 0, BEND.maxCruise);
+  const s = wheelAt(tt, da, lap, BEND.spin, 0, BEND.maxCruise);
   const r = Math.min(1, tt / BEND.release);
-  return s - BEND.pullRows * (1 - easeInOut(r));
+  return s - pull * (1 - easeInOut(r));
 }
 
 /** Насколько список изогнут в момент t: 0 — ровный, 1 — изогнут. */
-export function flowBend(t: number, doneAt: number, rows: number): number {
+export function flowBend(t: number, doneAt: number, lap: number): number {
   'worklet';
   if (t <= BEND.lead) return 0;
   if (t < BEND.lead + BEND.bendIn) return easeInOut((t - BEND.lead) / BEND.bendIn);
-  const out0 = flowEnd(doneAt, rows) - BEND.bendOut;
+  const out0 = flowEnd(doneAt, lap) - BEND.bendOut;
   if (t <= out0) return 1;
   return 1 - easeInOut(Math.min(1, (t - out0) / BEND.bendOut));
 }
 
-/** Место строки от верха списка (в строках) при сдвиге: замкнуто по кругу, «выше верха» — до трёх строк. */
-export function rowPlace(row: number, shift: number, rows: number): number {
+/**
+ * Где верх элемента списка (от верха списка) при сдвиге `shift`: круг замкнут, «выше верха» — не дальше `above`.
+ * `y` — где элемент стоит в ровном списке, `lap` — длина всего круга.
+ */
+export function wrapPlace(y: number, shift: number, lap: number, above: number): number {
   'worklet';
-  return ((((row - shift + 3) % rows) + rows) % rows) - 3;
+  if (lap <= 0) return y - shift;
+  return ((((y - shift + above) % lap) + lap) % lap) - above;
 }
 
 /**
- * Строка на изгибе: середина (рамка) ровная, края уходят назад. Возвращает сдвиг от рамки по вертикали (с учётом
- * перспективы), масштаб и наклон. При bend = 0 — обычный ровный список.
+ * Элемент на изгибе: середина (рамка) ровная, края уходят назад. `d` — от середины рамки до середины элемента, px.
+ * Возвращает, где середина элемента окажется (от середины рамки, с учётом перспективы), масштаб и наклон.
+ * При bend = 0 — обычный ровный список.
  */
-export function bendPlace(place: number, bend: number, perspective = 900): { y: number; scale: number; angle: number } {
+export function bendPlace(d: number, bend: number, radius: number, perspective: number): { y: number; scale: number; angle: number } {
   'worklet';
-  const d = (place - BEND.band) * BEND.row;
   if (bend < 1e-4) return { y: d, scale: 1, angle: 0 };
-  const r = BEND.radius / bend;
+  const r = radius / bend;
   const a = d / r;
   const z = -r * (1 - Math.cos(a));
   const scale = perspective / (perspective - z);
   return { y: r * Math.sin(a) * scale, scale, angle: (-a * 180) / Math.PI };
+}
+
+/** Элемент списка на ходу: подзаголовок группы или друг. `real` — первый круг; повторы (друзей мало) видны, только пока список изогнут. */
+export type RunItem =
+  | { kind: 'label'; key: string; title: string; star?: boolean; real: boolean }
+  | { kind: 'row'; key: string; friend: Friend; first: boolean; last: boolean; real: boolean; slot: number };
+
+/**
+ * Список «Друзья» для хода — с подзаголовками групп, как на экране. Очень много друзей — первые `max` (последняя
+ * группа закрывается на последнем); мало — список повторяется целиком, пока друзей на круге не станет хотя бы `min`.
+ * `slot` — номер друга в первом круге (у повторов тот же).
+ */
+export function runItems(list: readonly FriendListItem[], min: number, max: number): RunItem[] {
+  const one: RunItem[] = [];
+  let friends = 0;
+  for (const it of list) {
+    if (friends >= max) break;
+    if (it.type === 'label') one.push({ kind: 'label', key: it.key, title: it.title, star: it.star, real: true });
+    else one.push({ kind: 'row', key: it.key, friend: it.friend, first: it.first, last: it.last, real: true, slot: friends++ });
+  }
+  while (one.length && one[one.length - 1].kind === 'label') one.pop();
+  const tail = one[one.length - 1];
+  if (tail?.kind === 'row' && !tail.last) one[one.length - 1] = { ...tail, last: true };
+  if (!friends) return [];
+  const copies = Math.max(1, Math.ceil(min / friends));
+  const out: RunItem[] = [];
+  for (let c = 0; c < copies; c++) for (const it of one) out.push(c ? { ...it, key: `${it.key}~${c}`, real: false } : it);
+  return out;
 }

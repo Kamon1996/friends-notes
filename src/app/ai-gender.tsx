@@ -1,68 +1,76 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
-import Animated, { FadeIn, useAnimatedReaction, useAnimatedStyle, useFrameCallback, useReducedMotion, useSharedValue, withDelay, withTiming, type SharedValue } from 'react-native-reanimated';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, {
+  Easing,
+  FadeIn,
+  useAnimatedReaction,
+  useAnimatedStyle,
+  useFrameCallback,
+  useReducedMotion,
+  useSharedValue,
+  withDelay,
+  withTiming,
+  type SharedValue,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { scheduleOnRN } from 'react-native-worklets';
 
-import { AiButton, AiGradient, AiIcon } from '@/components/ai/AiIcon';
+import { AiGradient, AiIcon } from '@/components/ai/AiIcon';
 import { RiddleCards } from '@/components/ai/RiddleCards';
-import { HIDDEN, RunList, type RunRowData } from '@/components/ai/RunList';
-import { friendSubtitle } from '@/components/FriendRow';
+import { HIDDEN, RunList, type RunGeo } from '@/components/ai/RunList';
+import { FriendsHeader } from '@/components/FriendsHeader';
 import { Sheet, SheetHandle } from '@/components/Sheet';
-import { Chip, IconButton, ScreenHeader, SearchField, useTheme } from '@/components/ui';
-import { BEND, SPIN_START, flowBend, flowEnd, flowShift } from '@/lib/bendFlow';
-import { daysBetween, nextAnniversary, plural, todayISO } from '@/lib/dates';
+import { Fab, SearchField, useTheme } from '@/components/ui';
+import { BEND, SPIN_START, flowBend, flowEnd, flowShift, runItems } from '@/lib/bendFlow';
+import { plural, todayISO } from '@/lib/dates';
 import { buildFriendList } from '@/lib/friendList';
 import type { Gender } from '@/lib/gender';
 import { useStore } from '@/lib/store';
 import type { Friend } from '@/lib/types';
 import { doneBucket, leftBucket, startBucket, voice } from '@/lib/voice';
-import { WHEEL, revealAt, wheelRows } from '@/lib/wheel';
+import { WHEEL, revealAt } from '@/lib/wheel';
+import { zodiacShown } from '@/lib/zodiac';
 
 type Stage = 'run' | 'done' | 'ask' | 'between' | 'cards' | 'bye';
 
+const EASE = Easing.inOut(Easing.cubic);
+/** Поиск становится плашкой и обратно, мс. */
+const MORPH = 420;
+
 /**
- * «Пол друзей» прямо в списке: экран проявляется поверх «Друзей» и выглядит как они же. Поиск уходит, вместо него —
- * плашка с фразой ИИ; список чуть изгибается сверху и снизу, его оттягивают и выдёргивают — полный круг через рамку,
- * у проехавших проявляется пол; список выпрямляется. Всё определилось — «Готово» и назад; остались загадки — шторка
- * «Помочь · Оставить так», «Помочь» — карточки «Кто это?».
+ * «Пол друзей» прямо в списке. Экран рисует «Друзей» точь-в-точь — шапку, поиск, подзаголовки групп, строки — и
+ * подменяет их мгновенно, без проявления: глазу нечего заметить. Поле поиска вырастает в плашку с фразой ИИ; список
+ * с группами как есть чуть изгибается сверху и снизу, его оттягивают и выдёргивают — полный круг через рамку, у
+ * проехавших проявляется пол; список выпрямляется. В конце — всё обратно: пол гаснет, плашка сворачивается в поиск,
+ * и экран уходит так же незаметно. Всё определилось — «Готово»; остались загадки — шторка «Помочь · Оставить так»,
+ * «Помочь» — карточки «Кто это?».
  */
 export default function AiGenderScreen() {
-  const params = useLocalSearchParams<{ top?: string; tab?: string }>();
+  const params = useLocalSearchParams<{ tab?: string }>();
   const { data, detectGenders, saveFriend, genderBusy } = useStore();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const reduce = useReducedMotion();
   const today = todayISO();
   const total = data.friends.length;
-  const inMonth = data.friends.filter((f) => f.birthday && daysBetween(today, nextAnniversary(f.birthday, today)) <= 30).length;
-  const subtitle = total ? `${total} ${plural(total, 'человек', 'человека', 'человек')}${inMonth ? ` · ${inMonth} ${plural(inMonth, 'день рождения', 'дня рождения', 'дней рождения')} в ближайший месяц` : ''}` : undefined;
   const tabBar = Number(params.tab) || 0;
 
-  // Кто едет: как в списке «по имени» (избранные сверху); очень много — первые WHEEL.maxRows.
-  const [order] = useState(() =>
-    buildFriendList(data.friends, '', 'name', today)
-      .flatMap((i) => (i.type === 'friend' ? [i.friend] : []))
-      .slice(0, WHEEL.maxRows),
-  );
+  // Кто едет: список «по имени», как в «Друзьях», с подзаголовками групп; очень много — первые WHEEL.maxRows друзей.
+  const [base] = useState(() => runItems(buildFriendList(data.friends, '', 'name', today), WHEEL.minRows, WHEEL.maxRows));
   const live = useMemo(() => new Map(data.friends.map((f) => [f.id, f])), [data.friends]);
-  const rows: RunRowData[] = useMemo(
-    () =>
-      wheelRows(order).map((f, i) => {
-        const lf = live.get(f.id) ?? f;
-        return { friend: lf, subtitle: friendSubtitle(lf, today), gender: lf.gender, real: i < order.length };
-      }),
-    [order, live, today],
-  );
-  const R = rows.length;
+  const items = useMemo(() => base.map((it) => (it.kind === 'row' ? { ...it, friend: live.get(it.friend.id) ?? it.friend } : it)), [base, live]);
+  const [onList] = useState(() => base.flatMap((it) => (it.kind === 'row' && it.real ? [it.friend.id] : [])));
 
-  // Ход списка и когда у какой строки проявляется пол (в «какая строка в рамке»).
+  // Ход списка (px вдоль списка) и когда у кого проявляется пол — в px «что сейчас в середине рамки».
   const shift = useSharedValue(0);
   const bend = useSharedValue(0);
-  const [initialReveal] = useState(() => rows.map((r, i) => (r.gender ? revealAt(i, R, BEND.band) : HIDDEN)));
-  const revealRef = useRef<number[]>(initialReveal);
-  const reveal = useSharedValue<number[]>(initialReveal);
+  const outro = useSharedValue(0);
+  const morph = useSharedValue(0);
+  const geo = useSharedValue<RunGeo | null>(null);
+  const [geoJs, setGeoJs] = useState<RunGeo | null>(null);
+  const reveal = useSharedValue<number[]>([]);
+  const revealRef = useRef<number[] | null>(null);
   const firstReveal = useSharedValue<number[]>([]);
 
   const [workDone, setWorkDone] = useState(false);
@@ -74,21 +82,35 @@ export default function AiGenderScreen() {
     };
   }, [detectGenders]);
 
-  // Ответ пришёл — строка проявится, когда в следующий раз проедет рамку; «загадка» — когда всё готово.
+  // Ответ пришёл — строка проявится, когда в следующий раз подъедет к рамке; «загадка» — когда всё готово.
+  // Кто на старте в рамке или выше, проявится на втором проходе — в самом начале список чист, как в «Друзьях».
   useEffect(() => {
-    const at = BEND.band + shift.get() + 0.5;
-    const next = revealRef.current.map((r, i) => (r === HIDDEN && (rows[i]?.gender || workDone) ? revealAt(i, R, at) : r));
+    if (!geoJs) return;
+    const { y, h, lap, mid, row } = geoJs;
+    const at = mid + shift.get() + 0.5 * row;
+    const prev = revealRef.current ?? items.map(() => HIDDEN);
+    const next = prev.map((r, i) => {
+      const it = items[i];
+      if (r !== HIDDEN || it?.kind !== 'row' || !(it.friend.gender || workDone)) return r;
+      return revealAt(y[i] + h[i] / 2, lap, at);
+    });
     revealRef.current = next;
     reveal.set(next);
-    firstReveal.set(
-      order.map((_, j) => {
-        if (!rows[j]?.gender) return HIDDEN;
-        let m = HIDDEN;
-        for (let i = j; i < R; i += order.length) m = Math.min(m, next[i]);
-        return m;
-      }),
-    );
-  }, [rows, workDone, R, order, shift, reveal, firstReveal]);
+    const first = onList.map(() => HIDDEN);
+    items.forEach((it, i) => {
+      if (it.kind === 'row' && it.friend.gender) first[it.slot] = Math.min(first[it.slot], next[i]);
+    });
+    firstReveal.set(first);
+  }, [geoJs, items, workDone, onList, shift, reveal, firstReveal]);
+
+  // Где что: шапка, поле поиска и плашка — меряем на себе, а пока не измерили, экран прозрачен (видно «Друзей»).
+  const [headH, setHeadH] = useState(0);
+  const [search, setSearch] = useState({ y: 0, height: 0 });
+  const bannerH = useSharedValue(0);
+  const ready = !!geoJs && headH > 0 && search.height > 0;
+  useEffect(() => {
+    if (!base.length) router.back();
+  }, [base]);
 
   // Что говорит ИИ.
   const [phrase, setPhrase] = useState(() => {
@@ -101,7 +123,7 @@ export default function AiGenderScreen() {
   }, [workDone]);
   const [stage, setStage] = useState<Stage>('run');
   useEffect(() => {
-    if (reduce) return;
+    if (reduce || !ready) return;
     const timers = [
       setTimeout(() => setPhrase((p) => voice.say('gender.spin') ?? p), (SPIN_START + 1.1) * 1000),
       setTimeout(() => setPhrase((p) => (workDoneRef.current ? voice.say('gender.end') : voice.say('gender.slow')) ?? p), (SPIN_START + BEND.spin * 0.72) * 1000),
@@ -114,9 +136,9 @@ export default function AiGenderScreen() {
       timers.forEach(clearTimeout);
       clearInterval(slow);
     };
-  }, [reduce]);
+  }, [reduce, ready]);
 
-  // Часы — на UI-потоке, каждый кадр.
+  // Часы — на UI-потоке, каждый кадр; идут, как только всё измерено.
   const [stopped, setStopped] = useState(false);
   const doneFlag = useSharedValue(0);
   const start = useSharedValue(-1);
@@ -128,40 +150,63 @@ export default function AiGenderScreen() {
   const onEnd = useCallback(() => setStopped(true), []);
   const frame = useFrameCallback((f) => {
     'worklet';
+    const g = geo.get();
+    if (!g) return;
     if (start.get() < 0) start.set(f.timestamp);
     const t = (f.timestamp - start.get()) / 1000;
     if (doneFlag.get() && doneAt.get() >= HIDDEN) doneAt.set(t);
     const da = doneAt.get() >= HIDDEN ? Infinity : doneAt.get();
-    shift.set(flowShift(t, da, R));
-    bend.set(flowBend(t, da, R));
-    if (!ended.get() && t >= flowEnd(da, R)) {
+    shift.set(flowShift(t, da, g.lap, BEND.pullRows * g.row));
+    bend.set(flowBend(t, da, g.lap));
+    if (!ended.get() && t >= flowEnd(da, g.lap)) {
       ended.set(1);
       scheduleOnRN(onEnd);
     }
-  }, !reduce);
+  }, false);
+  useEffect(() => {
+    if (!ready) return;
+    morph.set(reduce ? 1 : withDelay(40, withTiming(1, { duration: MORPH, easing: EASE })));
+    if (!reduce) frame.setActive(true);
+  }, [ready, reduce, frame, morph]);
   useEffect(() => {
     if (stopped) frame.setActive(false);
   }, [stopped, frame]);
-
-  // Поиск уходит, плашка приходит.
-  const searchOut = useSharedValue(0);
-  useEffect(() => {
-    searchOut.set(withDelay(120, withTiming(1, { duration: 260 })));
-  }, [searchOut]);
-  const searchStyle = useAnimatedStyle(() => ({ opacity: 1 - searchOut.get(), transform: [{ translateY: -8 * searchOut.get() }] }));
-  const bannerStyle = useAnimatedStyle(() => ({ opacity: searchOut.get(), transform: [{ translateY: -8 * (1 - searchOut.get()) }] }));
 
   // Финал.
   const dataRef = useRef(data);
   useEffect(() => {
     dataRef.current = data;
   }, [data]);
-  const closed = useRef(false);
-  const close = useCallback(() => {
-    if (closed.current) return;
-    closed.current = true;
+  // Уходим, когда всё вернулось как было: пол погас, плашка снова поиск. Экран уже закрыли кнопкой «назад» — молчим.
+  const mounted = useRef(true);
+  useEffect(
+    () => () => {
+      mounted.current = false;
+    },
+    [],
+  );
+  const gone = useRef(false);
+  const leaveNow = useCallback(() => {
+    if (gone.current || !mounted.current) return;
+    gone.current = true;
     router.back();
   }, []);
+  const closing = useRef(false);
+  const close = useCallback(() => {
+    if (closing.current) return;
+    closing.current = true;
+    if (reduce) return leaveNow();
+    outro.set(withTiming(1, { duration: 260 }));
+    morph.set(
+      withDelay(
+        140,
+        withTiming(0, { duration: MORPH, easing: EASE }, (fin) => {
+          if (fin) scheduleOnRN(leaveNow);
+        }),
+      ),
+    );
+    setTimeout(leaveNow, 140 + MORPH + 400);
+  }, [reduce, leaveNow, outro, morph]);
   const [final, setFinal] = useState<{ title: string; sub: string } | null>(null);
   const [ask, setAsk] = useState<Friend[]>([]);
   const [prompt, setPrompt] = useState<{ title: string; text: string } | null>(null);
@@ -194,8 +239,8 @@ export default function AiGenderScreen() {
   }, [stopped, finish]);
   // Без анимаций (так настроен телефон) — сразу итог, как только ответ готов.
   useEffect(() => {
-    if (reduce && workDone) setTimeout(finish, 0);
-  }, [reduce, workDone, finish]);
+    if (reduce && workDone && ready) setTimeout(finish, 0);
+  }, [reduce, workDone, ready, finish]);
 
   const leave = () => {
     if (stage === 'bye') return;
@@ -214,51 +259,107 @@ export default function AiGenderScreen() {
   };
   const [buttons] = useState(() => (voice.say('gender.choice.buttons') ?? 'Помочь · Оставить так').split(' · '));
 
-  // Где что: шапка и поиск — как в «Друзьях», список — с той же высоты.
-  const [headerBottom, setHeaderBottom] = useState(0);
-  const listTop = Number(params.top) || headerBottom + 122;
   const busy = stage === 'run' && !stopped;
   const known = data.friends.filter((f) => f.gender).length;
+  const glow = stage === 'done' || (stage === 'bye' && !!final && known === total);
+
+  // Поле поиска растёт в плашку: сперва гаснут сортировки и подсказка поиска, потом проявляется фраза.
+  const searchH = search.height;
+  const boxStyle = useAnimatedStyle(() => {
+    const k = morph.get();
+    const bh = bannerH.get() || searchH;
+    return { height: searchH + (bh - searchH) * k, borderRadius: 12 + 8 * k };
+  });
+  const edgeStyle = useAnimatedStyle(() => ({ borderRadius: 12 + 8 * morph.get() }));
+  const searchCopy = useAnimatedStyle(() => ({ opacity: Math.max(0, 1 - morph.get() / 0.35) }));
+  const bannerIn = useAnimatedStyle(() => ({ opacity: Math.min(1, Math.max(0, (morph.get() - 0.45) / 0.55)) }));
+  const chipsStyle = useAnimatedStyle(() => {
+    const k = Math.min(1, morph.get() / 0.25);
+    return { opacity: 1 - k, transform: [{ translateY: -8 * k }] };
+  });
+  const measured = useRef(false);
+  const onBanner = (h: number) => {
+    if (!measured.current) {
+      measured.current = true;
+      bannerH.set(h);
+    } else bannerH.set(withTiming(h, { duration: 200 }));
+  };
 
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, opacity: ready ? 1 : 0 }}>
       <View style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: tabBar, backgroundColor: colors.bg, overflow: 'hidden' }}>
-        <RunList rows={rows} top={listTop} clipTop={headerBottom + 100} shift={shift} bend={bend} reveal={reveal} finished={workDone} />
-        <View onLayout={(e) => setHeaderBottom(e.nativeEvent.layout.y + e.nativeEvent.layout.height)}>
-          <ScreenHeader
-            title="Друзья"
-            subtitle={subtitle}
-            right={
-              <>
-                <AiButton busy={busy || genderBusy} onPress={() => {}} />
-                <IconButton icon="import" label="Импорт друзей" onPress={() => {}} />
-                <IconButton icon="sliders" label="Настройки" onPress={() => {}} />
-              </>
-            }
+        <RunList
+          items={items}
+          top={headH}
+          clipTop={search.y}
+          shift={shift}
+          bend={bend}
+          reveal={reveal}
+          outro={outro}
+          geo={geo}
+          onGeo={setGeoJs}
+          today={today}
+          zodiac={zodiacShown(data.settings)}
+          finished={workDone}
+        />
+        <View
+          style={{ position: 'absolute', left: 0, right: 0, top: 0 }}
+          onLayout={(e) => setHeadH(e.nativeEvent.layout.height)}
+          pointerEvents="none"
+          importantForAccessibility="no-hide-descendants"
+          accessibilityElementsHidden
+        >
+          <FriendsHeader
+            friends={data.friends}
+            today={today}
+            aiBusy={busy || genderBusy}
+            onAi={noop}
+            onImport={noop}
+            onSettings={noop}
+            query=""
+            onQuery={noop}
+            sort="name"
+            onSort={noop}
+            chipsStyle={chipsStyle}
+            onSearchLayout={(f) => setSearch((p) => (p.y === f.y && p.height === f.height ? p : f))}
           />
         </View>
-        <Animated.View style={[{ position: 'absolute', left: 0, right: 0, top: headerBottom, padding: 20, paddingTop: 14, paddingBottom: 16, gap: 10 }, searchStyle]} pointerEvents="none">
-          <SearchField value="" onChangeText={() => {}} placeholder="Поиск по имени" />
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <Chip label="По имени" selected onPress={() => {}} />
-            <Chip label="Скоро день рождения" icon="cake" onPress={() => {}} />
-          </View>
-        </Animated.View>
-        <Animated.View style={[{ position: 'absolute', left: 20, right: 20, top: headerBottom + 10 }, bannerStyle]}>
-          <Banner
-            phrase={final?.title ?? phrase}
-            sub={final?.sub}
-            shift={shift}
-            firstReveal={firstReveal}
-            total={total}
-            known={known}
-            outsideKnown={data.friends.filter((f) => f.gender && !order.some((o) => o.id === f.id)).length}
-            knownOnList={order.filter((f) => live.get(f.id)?.gender).length}
-            stopped={stopped || !!final}
-            busy={busy}
-            glow={stage === 'done' || (stage === 'bye' && !!final && known === total)}
-          />
-        </Animated.View>
+        <View style={StyleSheet.absoluteFill} pointerEvents="none" importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
+          <Fab onPress={noop} label="Добавить друга" />
+        </View>
+        {searchH > 0 && (
+          <Animated.View
+            pointerEvents="none"
+            style={[{ position: 'absolute', left: 20, right: 20, top: search.y, boxShadow: glow ? '0 0 28px rgba(224, 96, 126, 0.35)' : undefined }, boxStyle]}
+          >
+            <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: colors.card, overflow: 'hidden' }, edgeStyle]}>
+              <Animated.View style={[{ position: 'absolute', left: 0, right: 0, top: 0 }, searchCopy]} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
+                <SearchField value="" onChangeText={noop} placeholder="Поиск по имени" />
+              </Animated.View>
+              <Animated.View
+                style={[{ position: 'absolute', left: 0, right: 0, top: 0, paddingVertical: 12, paddingHorizontal: 16 }, bannerIn]}
+                onLayout={(e) => onBanner(e.nativeEvent.layout.height)}
+              >
+                <BannerBody
+                  phrase={final?.title ?? phrase}
+                  sub={final?.sub}
+                  shift={shift}
+                  geo={geo}
+                  firstReveal={firstReveal}
+                  total={total}
+                  known={known}
+                  outsideKnown={data.friends.filter((f) => f.gender && !onList.includes(f.id)).length}
+                  knownOnList={onList.filter((id) => live.get(id)?.gender).length}
+                  stopped={stopped || !!final}
+                  busy={busy}
+                />
+              </Animated.View>
+            </Animated.View>
+            <Animated.View
+              style={[StyleSheet.absoluteFill, { borderWidth: glow ? 1.5 : 1, borderColor: glow ? '#E0607E' : colors.hairline }, edgeStyle]}
+            />
+          </Animated.View>
+        )}
       </View>
 
       <Sheet visible={stage === 'ask'} onClose={leave} style={{ paddingTop: 10, paddingBottom: insets.bottom + 20, paddingHorizontal: 20 }}>
@@ -270,11 +371,14 @@ export default function AiGenderScreen() {
   );
 }
 
+function noop() {}
+
 /** Плашка над списком: фраза ИИ, счётчик и полоска хода. Перерисовывается сама — список её не ждёт. */
-function Banner({
+function BannerBody({
   phrase,
   sub,
   shift,
+  geo,
   firstReveal,
   total,
   known,
@@ -282,11 +386,11 @@ function Banner({
   knownOnList,
   stopped,
   busy,
-  glow,
 }: {
   phrase: string;
   sub?: string;
   shift: SharedValue<number>;
+  geo: SharedValue<RunGeo | null>;
   firstReveal: SharedValue<number[]>;
   total: number;
   known: number;
@@ -294,14 +398,15 @@ function Banner({
   knownOnList: number;
   stopped: boolean;
   busy: boolean;
-  glow: boolean;
 }) {
   const { s, colors, fonts } = useTheme();
   const [shown, setShown] = useState(0);
   useAnimatedReaction(
     () => {
+      const g = geo.get();
+      if (!g) return 0;
       const fr = firstReveal.get();
-      const at = BEND.band + shift.get() + 0.2;
+      const at = g.mid + shift.get() + 0.4 * g.row;
       let c = 0;
       for (let j = 0; j < fr.length; j++) if (fr[j] <= at) c++;
       return c;
@@ -315,17 +420,7 @@ function Banner({
   const line = sub ?? `Разобралась с ${counted} из ${total}`;
   const share = total ? (stopped ? known : counted) / total : 0;
   return (
-    <View
-      style={{
-        backgroundColor: colors.card,
-        borderWidth: glow ? 1.5 : 1,
-        borderColor: glow ? '#E0607E' : colors.hairline,
-        borderRadius: 20,
-        paddingVertical: 12,
-        paddingHorizontal: 16,
-        boxShadow: glow ? '0 0 28px rgba(224, 96, 126, 0.35)' : undefined,
-      }}
-    >
+    <View>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
         <AiIcon size={36} busy={busy} />
         <View style={{ flex: 1, gap: 2 }}>

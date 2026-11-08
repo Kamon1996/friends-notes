@@ -1,4 +1,6 @@
+import type { ComponentProps } from 'react';
 import { Text, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 
 import { Avatar } from '@/components/Avatar';
 import { Icon } from '@/components/Icon';
@@ -16,6 +18,20 @@ export function friendSubtitle(friend: Friend, today: string): string {
     : [friend.flowers, friend.food].filter(Boolean).join(' · ') || 'Без дня рождения';
 }
 
+/** Отступ разделителя между строками друзей в группе — под аватаркой не тянется. */
+export const FRIEND_ROW_INSET = 70;
+
+/** Подзаголовок группы в списке «Друзья»: «Избранные» со звёздочкой или буква. */
+export function FriendGroupLabel({ title, star }: { title: string; star?: boolean }) {
+  const { s, colors } = useTheme();
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 24, paddingTop: 10, paddingBottom: 6 }}>
+      {star && <Icon name="star" size={13} color={colors.accent} fill={colors.accent} />}
+      <Text style={[s.name, { fontSize: 13, color: star ? colors.accentText : s.caption.color }]}>{title}</Text>
+    </View>
+  );
+}
+
 /** Строка друга в списке «Друзья». */
 export function FriendRow({
   friend,
@@ -25,6 +41,7 @@ export function FriendRow({
   zodiac,
   onPress,
   onLongPress,
+  trailingStyle,
 }: {
   friend: Friend;
   today: string;
@@ -34,6 +51,8 @@ export function FriendRow({
   selecting: boolean;
   onPress: () => void;
   onLongPress: () => void;
+  /** Стиль правой части (метки и стрелка) — «Пол друзей» прячет её, когда на её месте проявляется пол. */
+  trailingStyle?: ComponentProps<typeof Animated.View>['style'];
 }) {
   const { s, colors } = useTheme();
   const next = friend.birthday ? nextAnniversary(friend.birthday, today) : null;
@@ -78,12 +97,19 @@ export function FriendRow({
         </View>
       }
       trailing={
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          {friend.muted && <Icon name="bellOff" size={16} color={colors.text3} />}
-          {diff === 0 ? <Tag text="сегодня" tone="solid" /> : diff !== null && diff <= 7 ? <Tag text={relativeDay(next!, today)} tone="accent" /> : null}
-        </View>
+        // Стрелка — соседом меток, как у ListRow, но со своим стилем: так её можно спрятать вместе с метками.
+        <>
+          <Animated.View style={[{ flexDirection: 'row', alignItems: 'center', gap: 8 }, trailingStyle]}>
+            {friend.muted && <Icon name="bellOff" size={16} color={colors.text3} />}
+            {diff === 0 ? <Tag text="сегодня" tone="solid" /> : diff !== null && diff <= 7 ? <Tag text={relativeDay(next!, today)} tone="accent" /> : null}
+          </Animated.View>
+          {!selecting && (diff === null || diff > 7) && (
+            <Animated.View style={trailingStyle}>
+              <Icon name="chevronRight" size={18} color={colors.checkbox} strokeWidth={2} />
+            </Animated.View>
+          )}
+        </>
       }
-      chevron={!selecting && (diff === null || diff > 7)}
       style={{ paddingVertical: 10, backgroundColor: selected ? colors.soft : undefined }}
     />
   );

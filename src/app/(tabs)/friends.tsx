@@ -4,16 +4,15 @@ import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { FlatList, Pressable, Text, View } from 'react-native';
 import ReanimatedSwipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 
-import { AiButton } from '@/components/ai/AiIcon';
 import { AiSheet } from '@/components/ai/AiSheet';
 import { AiToast } from '@/components/ai/AiToast';
-import { FriendRow } from '@/components/FriendRow';
+import { FRIEND_ROW_INSET, FriendGroupLabel, FriendRow } from '@/components/FriendRow';
+import { FriendsHeader } from '@/components/FriendsHeader';
 import { Icon } from '@/components/Icon';
 import { SelectionBar } from '@/components/SelectionBar';
-import { TelegramImportCard } from '@/components/TelegramImportCard';
-import { Button, Chip, Empty, Fab, GroupedRow, IconButton, ScreenHeader, SearchField, useTheme } from '@/components/ui';
+import { Button, Empty, Fab, GroupedRow, useTheme } from '@/components/ui';
 import { confirm } from '@/lib/confirm';
-import { daysBetween, nextAnniversary, plural, todayISO } from '@/lib/dates';
+import { plural, todayISO } from '@/lib/dates';
 import { buildFriendList, type FriendListItem, type FriendSort } from '@/lib/friendList';
 import { useStore } from '@/lib/store';
 import { telegramAvailable } from '@/lib/telegramClient';
@@ -22,10 +21,8 @@ import { zodiacShown } from '@/lib/zodiac';
 export default function FriendsScreen() {
   const { data, deleteFriends, updateFriends, genderBusy, genderNews, clearGenderNews } = useStore();
   const [aiOpen, setAiOpen] = useState(false);
-  // Для «Пола друзей»: экран ИИ рисует список с той же высоты, что здесь, и не закрывает нижнее меню.
+  // Для «Пола друзей»: экран ИИ рисует этот же список с начала и не закрывает нижнее меню.
   const listRef = useRef<FlatList<FriendListItem>>(null);
-  const headerH = useRef(0);
-  const labelH = useRef(0);
   const tabBar = useBottomTabBarHeight();
   const { s, colors } = useTheme();
   const [query, setQuery] = useState('');
@@ -39,7 +36,6 @@ export default function FriendsScreen() {
   const items = useMemo(() => buildFriendList(data.friends, query, sort, today), [data.friends, query, sort, today]);
 
   const n = data.friends.length;
-  const inMonth = data.friends.filter((f) => f.birthday && daysBetween(today, nextAnniversary(f.birthday, today)) <= 30).length;
 
   const toggle = (id: string) =>
     setSelected((prev) => {
@@ -84,45 +80,26 @@ export default function FriendsScreen() {
         onScroll={(e) => setScrolled(e.nativeEvent.contentOffset.y > 2)}
         scrollEventThrottle={32}
         ListHeaderComponent={
-          <View onLayout={(e) => (headerH.current = e.nativeEvent.layout.height)}>
-            {/* В режиме выбора шапка остаётся на месте, но прячется: панель действий ложится поверх, и список не прыгает. */}
-            <View style={{ opacity: selecting ? 0 : 1, pointerEvents: selecting ? 'none' : 'auto' }} importantForAccessibility={selecting ? 'no-hide-descendants' : 'auto'}>
-              <ScreenHeader
-                title="Друзья"
-                subtitle={n ? `${n} ${plural(n, 'человек', 'человека', 'человек')}${inMonth ? ` · ${inMonth} ${plural(inMonth, 'день рождения', 'дня рождения', 'дней рождения')} в ближайший месяц` : ''}` : undefined}
-                right={
-                  <>
-                    {n > 0 && <AiButton busy={genderBusy} onPress={() => setAiOpen(true)} />}
-                    <IconButton icon="import" label="Импорт друзей" onPress={() => router.push('/import')} />
-                    <IconButton icon="sliders" label="Настройки" onPress={() => router.push('/settings')} />
-                  </>
-                }
-              />
-            </View>
-            {n > 0 && (
-              <View style={{ padding: 20, paddingTop: 14, paddingBottom: 16, gap: 10 }}>
-                <SearchField value={query} onChangeText={setQuery} placeholder="Поиск по имени" />
-                <View style={s.chips}>
-                  <Chip label="По имени" selected={sort === 'name'} onPress={() => setSort('name')} />
-                  <Chip label="Скоро день рождения" icon="cake" selected={sort === 'date'} onPress={() => setSort('date')} />
-                </View>
-              </View>
-            )}
-            <TelegramImportCard style={{ marginHorizontal: 20, marginBottom: 12 }} />
-          </View>
+          <FriendsHeader
+            friends={data.friends}
+            today={today}
+            selecting={selecting}
+            aiBusy={genderBusy}
+            onAi={() => setAiOpen(true)}
+            onImport={() => router.push('/import')}
+            onSettings={() => router.push('/settings')}
+            query={query}
+            onQuery={setQuery}
+            sort={sort}
+            onSort={setSort}
+          />
         }
-        renderItem={({ item, index }) =>
+        renderItem={({ item }) =>
           item.type === 'label' ? (
-            <View
-              onLayout={index === 0 ? (e) => (labelH.current = e.nativeEvent.layout.height) : undefined}
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 24, paddingTop: 10, paddingBottom: 6 }}
-            >
-              {item.star && <Icon name="star" size={13} color={colors.accent} fill={colors.accent} />}
-              <Text style={[s.name, { fontSize: 13, color: item.star ? colors.accentText : s.caption.color }]}>{item.title}</Text>
-            </View>
+            <FriendGroupLabel title={item.title} star={item.star} />
           ) : (
             <View style={{ paddingHorizontal: 20 }}>
-              <GroupedRow first={item.first} last={item.last} inset={70}>
+              <GroupedRow first={item.first} last={item.last} inset={FRIEND_ROW_INSET}>
                 <SwipeToDelete enabled={!selecting} onDelete={() => remove([item.friend.id])}>
                   <FriendRow
                     friend={item.friend}
@@ -173,13 +150,12 @@ export default function FriendsScreen() {
         gender={{ known: data.friends.filter((f) => f.gender).length, total: n }}
         onGender={() => {
           setAiOpen(false);
-          // Список — к началу и «по имени»: экран ИИ начинает с того же вида и плавно проявляется поверх.
+          // Список — к началу и «по имени»: экран ИИ рисует его точь-в-точь и подменяет незаметно.
           setQuery('');
           setSort('name');
           listRef.current?.scrollToOffset({ offset: 0, animated: false });
-          const first = items[0]?.type === 'label' ? labelH.current : 0;
           clearGenderNews();
-          setTimeout(() => router.push({ pathname: '/ai-gender', params: { top: String(Math.round(headerH.current + first)), tab: String(Math.round(tabBar)) } }), 230);
+          setTimeout(() => router.push({ pathname: '/ai-gender', params: { tab: String(tabBar) } }), 230);
         }}
       />
       <AiToast news={genderNews} onDone={clearGenderNews} bottom={selecting ? 90 : 96} />
