@@ -19,8 +19,11 @@ on:
   push:
     branches: [main, claude/mobile-project-creation-pgqs46]
 
+# Сборки одной ветки идут по очереди. GitHub держит в очереди только одну ждущую сборку группы и отменяет прежнюю,
+# поэтому коммит без [apk]/[aab] (сборки не будет) получает свою группу — иначе он отменил бы ждущую сборку.
 concurrency:
-  group: apk-${{ github.ref }}
+  group: >-
+    apk-${{ github.ref }}-${{ (github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[apk]') || contains(github.event.head_commit.message, '[aab]')) && 'build' || github.sha }}
   cancel-in-progress: false
 
 permissions:
