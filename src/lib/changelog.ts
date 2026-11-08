@@ -14,7 +14,7 @@ export interface Release {
  */
 export const CHANGELOG: Release[] = [
   {
-    version: '1.23.0',
+    version: '1.23.1',
     date: '2026-11-08',
     items: [
       'Еду, цветы, подарки и заметки можно поправить прямо в карточке друга: нажми на блок.',

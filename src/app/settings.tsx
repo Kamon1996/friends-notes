@@ -188,7 +188,7 @@ export default function SettingsScreen() {
             />
             {calendarLine && (
               <View
-                style={{ flexDirection: 'row', gap: 8, alignItems: 'flex-start', borderTopWidth: 1, borderTopColor: colors.separator, marginLeft: 48, paddingVertical: 10 }}
+                style={{ flexDirection: 'row', gap: 8, alignItems: 'flex-start', borderTopWidth: 1, borderTopColor: colors.separator, paddingVertical: 10 }}
                 accessibilityLiveRegion="polite"
               >
                 <View style={{ marginTop: 1 }}>
