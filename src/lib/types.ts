@@ -105,6 +105,8 @@ export interface Settings {
   crashReports: boolean;
   /** Показывать дни рождения и важные даты в календаре телефона (свой локальный календарь «Друзья»). */
   calendarSync?: boolean;
+  /** Когда последний раз сохраняли резервную копию в файл (ISO). */
+  lastBackupAt?: string;
 }
 
 export interface AppData {

@@ -12,7 +12,7 @@ const THUMB = 128;
 
 const isWeb = Platform.OS === 'web';
 
-function avatarsDir(): Directory {
+export function avatarsDir(): Directory {
   const dir = new Directory(Paths.document, DIR);
   dir.create({ idempotent: true, intermediates: true });
   return dir;
@@ -88,5 +88,21 @@ export function deleteOwnedFiles(uris: (string | null | undefined)[]): void {
     } catch {
       // уже удалён
     }
+  }
+}
+
+/**
+ * Удаляет из папки аватаров всё, на что не ссылается ни один друг (например, фото прежних данных после
+ * восстановления из копии). Чужие файлы (из контактов) не в этой папке и не затрагиваются.
+ */
+export function pruneAvatars(keep: (string | null | undefined)[]): void {
+  if (isWeb) return;
+  const used = new Set(keep.filter(Boolean));
+  try {
+    for (const item of avatarsDir().list()) {
+      if (item instanceof File && !used.has(item.uri)) item.delete();
+    }
+  } catch {
+    // Нет папки или нет доступа — ничего страшного.
   }
 }

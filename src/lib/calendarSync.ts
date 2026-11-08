@@ -150,11 +150,23 @@ export function createCalendarSync(deps: CalendarSyncDeps) {
     for (const c of await port.calendars()) if (c.name === CALENDAR_NAME) await port.deleteCalendar(c.id).catch(() => {});
   }
 
+  /**
+   * Наш календарь по сохранённому номеру — или ничего. Номер календаря — это номер строки в базе телефона: после
+   * восстановления данных на другом телефоне (резервная копия Android) под ним может оказаться Google-календарь
+   * пользователя. Его нельзя ни заполнять, ни перекрашивать, ни удалять — поэтому сверяем внутреннее имя.
+   */
+  async function ownCalendar(id: string): Promise<PortCalendar | null> {
+    const found = await port.calendar(id).catch(() => null);
+    return found?.name === CALENDAR_NAME ? found : null;
+  }
+
   async function run(data: AppData) {
     const state = await deps.load();
     if (!data.settings.calendarSync) {
       if (state) {
-        await port.deleteCalendar(state.calendarId).catch(() => {});
+        // Удаляем только свой календарь: после восстановления на другом телефоне под этим номером может быть чужой.
+        const own = await ownCalendar(state.calendarId);
+        if (own) await port.deleteCalendar(own.id).catch(() => {});
         await deps.save(null);
         deps.onSummary?.(null);
       }
@@ -164,7 +176,7 @@ export function createCalendarSync(deps: CalendarSyncDeps) {
     if (!(await port.permission())) return;
 
     const color = deps.color(data);
-    let calendar = state ? await port.calendar(state.calendarId).catch(() => null) : null;
+    let calendar = state ? await ownCalendar(state.calendarId) : null;
     let events = calendar && state ? state.events : {};
     if (!calendar) {
       await removeOrphans().catch(() => {});

@@ -30,6 +30,8 @@ interface Store {
   /** Отметить несколько сделанными (повторяющиеся переносятся на следующий раз) или вернуть в активные. */
   setRemindersDone: (ids: string[], done: boolean) => void;
   updateSettings: (patch: Partial<Settings>) => void;
+  /** Заменить все данные (восстановление из копии). Прежние откладываются в хранилище — на случай, если копия не та. */
+  replaceData: (next: AppData) => Promise<void>;
 }
 
 const StoreContext = createContext<Store | null>(null);
@@ -164,9 +166,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setData((d) => ({ ...d, settings: { ...d.settings, ...patch } }));
   }, []);
 
+  const replaceData = useCallback(async (next: AppData) => {
+    await AsyncStorage.setItem(`${STORAGE_KEY}.before-restore`, JSON.stringify(dataRef.current));
+    setData(next);
+  }, []);
+
   const value = useMemo(
-    () => ({ ready, data, saveFriend, addFriends, updateFriends, deleteFriend, deleteFriends, saveReminder, deleteReminder, deleteReminders, toggleReminderDone, setRemindersDone, updateSettings }),
-    [ready, data, saveFriend, addFriends, updateFriends, deleteFriend, deleteFriends, saveReminder, deleteReminder, deleteReminders, toggleReminderDone, setRemindersDone, updateSettings],
+    () => ({ ready, data, saveFriend, addFriends, updateFriends, deleteFriend, deleteFriends, saveReminder, deleteReminder, deleteReminders, toggleReminderDone, setRemindersDone, updateSettings, replaceData }),
+    [ready, data, saveFriend, addFriends, updateFriends, deleteFriend, deleteFriends, saveReminder, deleteReminder, deleteReminders, toggleReminderDone, setRemindersDone, updateSettings, replaceData],
   );
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

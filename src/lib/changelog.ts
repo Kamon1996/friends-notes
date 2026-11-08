@@ -14,6 +14,11 @@ export interface Release {
  */
 export const CHANGELOG: Release[] = [
   {
+    version: '1.24.0',
+    date: '2026-11-08',
+    items: ['Резервная копия: сохрани друзей, даты и фото в файл и восстанови на любом телефоне.'],
+  },
+  {
     version: '1.23.2',
     date: '2026-11-08',
     items: [

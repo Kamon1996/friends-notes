@@ -647,6 +647,108 @@ scenario('Календарь: без дат выгружать нечего', as
   assert.match(ui.dialogs.join('\n'), /Пока нечего выгружать/);
 }, { data: seed({ friends: [F({ id: 'x', name: 'Маша' })], reminders: [] }) });
 
+// ===== Резервная копия =====
+const PNG_1PX = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+const backupFile = (patch = {}) => Buffer.from(JSON.stringify({
+  kind: 'friends-notes-backup', format: 1, createdAt: '2026-11-08T09:00:00.000Z', appVersion: '1.24.0',
+  data: { version: 1, settings: { ...SETTINGS, accentLight: 'plum' }, friends: [F({ id: 'v', name: 'Вера Новая', birthday: '1990-06-20', gifts: 'Книги' })], reminders: [R({ id: 'rv', title: 'Позвонить Вере', friendId: 'v', date: d(2) })] },
+  photos: { v: PNG_1PX },
+  ...patch,
+}));
+
+scenario('Резервная копия: сохранить — в файле друзья, напоминания и фото; в настройках дата последней копии', async ({ ui, page }) => {
+  await ui.go('/settings');
+  await ui.see('Друзья, даты, напоминания и фото');
+  const download = page.waitForEvent('download', { timeout: 10000 });
+  await ui.tap('Сохранить копию');
+  const file = await download;
+  assert.equal(file.suggestedFilename(), 'druzya-kopiya-2026-06-10.json');
+  const backup = JSON.parse(require('fs').readFileSync(await file.path(), 'utf8'));
+  assert.equal(backup.kind, 'friends-notes-backup');
+  assert.deepEqual(backup.data.friends.map((f) => f.name), ['Аня Смирнова', 'Игорь Ветров', 'Мама']);
+  assert.equal(backup.data.reminders.length, 3);
+  assert.ok(backup.data.friends.every((f) => !('photoUri' in f)), 'пути к фото в файл не попадают');
+  assert.match(backup.photos.a || '', /^\/9j\//, 'фото Ани — JPEG внутри файла');
+  assert.deepEqual(Object.keys(backup.photos), ['a']);
+  await ui.see('Последняя — 10 июня');
+  await ui.waitData((x) => typeof x.settings.lastBackupAt === 'string', 'дата копии не запомнилась');
+}, { data: seed({ friends: [{ ...ANYA, photoUri: `data:image/png;base64,${PNG_1PX}`, thumbUri: `data:image/png;base64,${PNG_1PX}` }, IGOR, MAMA] }) });
+
+scenario('Резервная копия: восстановить — вопрос с содержимым, данные заменены, прежние отложены', async ({ ui, page }) => {
+  await ui.go('/settings');
+  const chooser = page.waitForEvent('filechooser', { timeout: 5000 });
+  await ui.tap('Восстановить из копии');
+  await (await chooser).setFiles({ name: 'druzya-kopiya-2026-11-08.json', mimeType: 'application/json', buffer: backupFile() });
+  await ui.waitData((x) => x.friends.length === 1, 'данные не заменились');
+  assert.match(ui.dialogs.join('\n'), /Восстановить копию\?\n\nКопия от 8 ноября 2026: 1 друг, 1 напоминание и 1 фото\.\nВсё, что сейчас в приложении, заменится\./);
+  await ui.pause(300);
+  assert.match(ui.dialogs.join('\n'), /Копия восстановлена/);
+  const data = await ui.data();
+  assert.deepEqual([data.friends[0].name, data.reminders[0].title, data.settings.accentLight, data.settings.lastSeenVersion], ['Вера Новая', 'Позвонить Вере', 'plum', VERSION]);
+  assert.match(data.friends[0].photoUri, /^data:image\/png;base64,iVBOR/);
+  const before = JSON.parse(await page.evaluate((k) => localStorage.getItem(`${k}.before-restore`), KEY));
+  assert.equal(before.friends.length, 3, 'прежние данные отложены');
+  await ui.go('/friends');
+  await ui.see('Вера Новая');
+  await ui.notSee('Аня Смирнова');
+});
+
+scenario('Резервная копия: туда и обратно — сохранил, поменял, восстановил тот же файл — всё как было', async ({ ui, page }) => {
+  await ui.go('/settings');
+  const download = page.waitForEvent('download', { timeout: 10000 });
+  await ui.tap('Сохранить копию');
+  const saved = await (await download).path();
+  const original = await ui.waitData((x) => !!x.settings.lastBackupAt, 'копия не сохранилась');
+  // Меняем данные: удаляем друга через карточку.
+  await ui.go('/friend/c');
+  await ui.tap('Изменить');
+  await ui.tap('Удалить друга');
+  await ui.waitData((x) => x.friends.length === 2, 'друг не удалился');
+  await ui.go('/settings');
+  const chooser = page.waitForEvent('filechooser', { timeout: 5000 });
+  await ui.tap('Восстановить из копии');
+  await (await chooser).setFiles(saved);
+  const restored = await ui.waitData((x) => x.friends.length === 3, 'копия не восстановилась');
+  const strip = (x) => ({ friends: x.friends.map(({ photoUri, thumbUri, ...f }) => f), reminders: x.reminders });
+  assert.deepEqual(strip(restored), strip(original));
+  assert.match(restored.friends.find((f) => f.id === 'a').photoUri, /^data:image\/jpeg;base64,\/9j\//, 'фото вернулось');
+}, { data: seed({ friends: [{ ...ANYA, photoUri: `data:image/png;base64,${PNG_1PX}`, thumbUri: `data:image/png;base64,${PNG_1PX}` }, IGOR, MAMA] }) });
+
+scenario('Резервная копия: чужой файл — понятная ошибка, данные не тронуты', async ({ ui, page }) => {
+  await ui.go('/settings');
+  const chooser = page.waitForEvent('filechooser', { timeout: 5000 });
+  await ui.tap('Восстановить из копии');
+  await (await chooser).setFiles({ name: 'calendar.ics', mimeType: 'text/calendar', buffer: Buffer.from('BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n') });
+  await ui.pause(600);
+  assert.match(ui.dialogs.join('\n'), /Не получилось восстановить\n\nЭто не копия «Друзей»: файл не читается\./);
+  assert.ok(!ui.dialogs.some((x) => /Восстановить копию\?/.test(x)), 'до вопроса дело не дошло');
+  assert.equal((await ui.data()).friends.length, 3);
+});
+
+scenario('Резервная копия: отказался в вопросе — ничего не меняется', async ({ ui, page }) => {
+  await ui.go('/settings');
+  const chooser = page.waitForEvent('filechooser', { timeout: 5000 });
+  ui.dismissNextDialog();
+  await ui.tap('Восстановить из копии');
+  await (await chooser).setFiles({ name: 'kopiya.json', mimeType: 'application/json', buffer: backupFile() });
+  await ui.pause(600);
+  assert.match(ui.dialogs.join('\n'), /Восстановить копию\?/);
+  assert.ok(!ui.dialogs.some((x) => /Копия восстановлена/.test(x)));
+  assert.deepEqual((await ui.data()).friends.map((f) => f.name), ['Аня Смирнова', 'Игорь Ветров', 'Мама']);
+});
+
+scenario('Резервная копия: без друзей и напоминаний сохранять нечего', async ({ ui }) => {
+  await ui.go('/settings');
+  await ui.tap('Сохранить копию');
+  await ui.pause(300);
+  assert.match(ui.dialogs.join('\n'), /Пока нечего сохранять/);
+}, { data: seed({ friends: [], reminders: [] }) });
+
+scenario('Резервная копия: пять друзей и ни одной копии — подсказка сохранить', async ({ ui }) => {
+  await ui.go('/settings');
+  await ui.see('Ещё ни разу — стоит сохранить');
+}, { data: seed({ friends: [ANYA, IGOR, MAMA, ...MORE_FRIENDS.slice(0, 2)] }) });
+
 scenario('Экраны Telegram и «Сообщить о проблеме»', async ({ ui }) => {
   await ui.go('/telegram');
   await ui.see('Вход доступен только в Android-приложении');

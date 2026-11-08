@@ -377,6 +377,24 @@ describe('сбои и прошлые установки', () => {
     assert.deepEqual(p.android.titles(), anyaTitles);
   });
 
+  test('данные восстановили на другом телефоне, а под старым номером там чужой календарь — его не трогаем', async () => {
+    const p = phone();
+    const google = p.android.addCalendar({ name: 'anya@gmail.com', color: '#039BE5' });
+    const work = p.android.addEvent(google.id, { title: 'Планёрка', date: '2026-11-10' });
+    // Состояние «приехало» из резервной копии: номер календаря совпал с Google-календарём на новом телефоне.
+    p.state = { calendarId: google.id, color: '#C4502F', events: { 'b-a-2026': { id: work.id, sig: 'старая' } } };
+    await p.sync(appData([ANYA]));
+    assert.equal(p.android.cals.find((c) => c.id === google.id)?.color, '#039BE5', 'чужой календарь не перекрашен');
+    assert.ok(p.android.evs.some((e) => e.id === work.id), 'событие пользователя на месте');
+    assert.deepEqual(p.android.titles(google.id), ['2026-11-10 Планёрка'], 'в чужой календарь ничего не добавили');
+    assert.equal(p.android.ours().length, 1, 'завели свой календарь');
+    assert.deepEqual(p.android.titles(), anyaTitles);
+
+    p.state = { ...p.state!, calendarId: google.id };
+    await p.sync(appData([ANYA], { calendarSync: false }));
+    assert.ok(p.android.cals.some((c) => c.id === google.id), 'выключение не удаляет чужой календарь');
+  });
+
   test('переход с версии 1.22.0: событие с повтором «каждый год» меняется на события по годам', async () => {
     const p = phone();
     const cal = p.android.addCalendar({ name: CALENDAR_NAME, color: '#C4502F' });

@@ -8,9 +8,11 @@ import { Icon } from '@/components/Icon';
 import { Button, Card, Group, IconCircle, ListRow, SectionTitle, SwitchRow, useTheme } from '@/components/ui';
 import { calendarItems } from '@/lib/calendarPlan';
 import { APP_VERSION } from '@/lib/changelog';
-import { notify } from '@/lib/confirm';
+import { confirm, notify } from '@/lib/confirm';
 import { sendTestReport } from '@/lib/crashReports';
 import { loadEnrichment } from '@/lib/contacts';
+import { describeBackup, restoredData } from '@/lib/backup';
+import { cleanupAfterRestore, pickBackup, saveBackup, writeRestoredPhotos } from '@/lib/backupFiles';
 import { calendarStatus, type CalendarSummary } from '@/lib/calendarSync';
 import {
   calendarPermissionGranted,
@@ -23,6 +25,7 @@ import {
 import { applyEnrichment } from '@/lib/enrich';
 import { exportDates } from '@/lib/exportDates';
 import { notificationsAllowed, setupNotifications } from '@/lib/notifications';
+import { daysBetween, formatDate, toISODate, todayISO } from '@/lib/dates';
 import { useStore } from '@/lib/store';
 import { accentById } from '@/lib/theme';
 import type { ThemeMode } from '@/lib/types';
@@ -37,7 +40,7 @@ function accentNames(light: string, dark: string): string {
 }
 
 export default function SettingsScreen() {
-  const { data, updateSettings, updateFriends } = useStore();
+  const { data, updateSettings, updateFriends, replaceData } = useStore();
   const { s, colors } = useTheme();
   const [enrichStatus, setEnrichStatus] = useState<string | null>(null);
 
@@ -112,6 +115,70 @@ export default function SettingsScreen() {
   const fixCalendarAccess = async () => {
     if (await askCalendarAccess()) syncDeviceCalendar(data);
   };
+
+  // Резервная копия: сохранить в файл и восстановить из файла.
+  const [backupProgress, setBackupProgress] = useState<{ done: number; total: number } | null>(null);
+  const [restoring, setRestoring] = useState(false);
+  const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+  const saveCopy = async () => {
+    if (backupProgress || restoring) return;
+    if (!data.friends.length && !data.reminders.length) {
+      notify('Пока нечего сохранять', 'Добавь друзей или напоминания.');
+      return;
+    }
+    setBackupProgress({ done: 0, total: 0 });
+    try {
+      await saveBackup(data, (done, total) => setBackupProgress({ done, total }));
+      updateSettings({ lastBackupAt: new Date().toISOString() });
+    } catch (e) {
+      notify('Не получилось сохранить копию', errorText(e));
+    } finally {
+      setBackupProgress(null);
+    }
+  };
+
+  const restoreCopy = async () => {
+    if (backupProgress || restoring) return;
+    let backup;
+    try {
+      backup = await pickBackup();
+    } catch (e) {
+      notify('Не получилось открыть файл', errorText(e));
+      return;
+    }
+    if (!backup) return;
+    if (!backup.ok) {
+      notify('Не получилось восстановить', backup.error);
+      return;
+    }
+    const from = backup.createdAt ? `Копия от ${formatDate(toISODate(backup.createdAt))}` : 'В копии';
+    if (!(await confirm('Восстановить копию?', `${from}: ${describeBackup(backup)}.\nВсё, что сейчас в приложении, заменится.`, 'Восстановить'))) return;
+    setRestoring(true);
+    try {
+      const next = restoredData(data, { ...backup, data: await writeRestoredPhotos(backup) });
+      await replaceData(next);
+      // Фото прежних данных удаляем чуть позже — когда новые данные уже записаны.
+      setTimeout(() => cleanupAfterRestore(next), 3000);
+      notify('Копия восстановлена', `${describeBackup(backup)}.`);
+    } catch (e) {
+      notify('Не получилось восстановить', errorText(e));
+    } finally {
+      setRestoring(false);
+    }
+  };
+
+  const lastBackup = settings.lastBackupAt ? toISODate(new Date(settings.lastBackupAt)) : null;
+  const today = todayISO();
+  // Друзей уже немало, а копии нет или она старше трёх месяцев — подсвечиваем строку.
+  const backupDue = data.friends.length >= 5 && (!lastBackup || daysBetween(lastBackup, today) > 90);
+  const backupSubtitle = backupProgress
+    ? backupProgress.total
+      ? `Собираю фото: ${backupProgress.done} из ${backupProgress.total}…`
+      : 'Готовлю файл…'
+    : lastBackup
+      ? `Последняя — ${formatDate(lastBackup, lastBackup.slice(0, 4) !== today.slice(0, 4))}`
+      : 'Друзья, даты, напоминания и фото';
 
   const exportFile = async () => {
     if (!calendarItems(data).length) {
@@ -235,6 +302,29 @@ export default function SettingsScreen() {
         <Group inset={62}>
           <ListRow leading={<IconCircle icon="share" />} title="Выгрузить даты" subtitle="Файл .ics для любого календаря" chevron onPress={exportFile} />
         </Group>
+      </View>
+
+      <View style={{ gap: 8 }}>
+        <SectionTitle style={{ marginBottom: 0 }}>Резервная копия</SectionTitle>
+        <Group inset={62}>
+          <ListRow
+            leading={<IconCircle icon="archive" />}
+            title="Сохранить копию"
+            subtitle={<Text style={[s.muted, backupDue && !backupProgress && { color: colors.warn }]}>{backupDue && !lastBackup && !backupProgress ? 'Ещё ни разу — стоит сохранить' : backupSubtitle}</Text>}
+            chevron
+            onPress={saveCopy}
+          />
+          <ListRow
+            leading={<IconCircle icon="import" />}
+            title="Восстановить из копии"
+            subtitle={restoring ? 'Восстанавливаю…' : 'Заменит данные в приложении'}
+            chevron
+            onPress={restoreCopy}
+          />
+        </Group>
+        {Platform.OS === 'android' && (
+          <Text style={[s.muted, { paddingHorizontal: 4, lineHeight: 18 }]}>Android тоже хранит копию в Google, если это включено в настройках телефона.</Text>
+        )}
       </View>
 
       {Platform.OS === 'android' && (
