@@ -1,11 +1,21 @@
 name: Sentry issues
 
-# Свежие ошибки приложения из Sentry — со стеком, устройством и последними шагами — в итог запуска.
-# Запуск: вручную (Actions → Sentry issues) или коммитом с «[sentry]» в первой строке.
-# Нужен секрет репозитория SENTRY_READ_TOKEN — личный токен Sentry только для чтения (event:read, project:read, org:read).
+# Ошибки приложения в Sentry: посмотреть (со стеком, устройством и последними шагами — в итог запуска) и отметить:
+# «починено» с комментарием (коммит и версия), просто комментарий или вернуть в открытые.
+# Запуск: вручную (Actions → Sentry issues) или коммитом с «[sentry]» в первой строке (только просмотр).
+# Нужен секрет репозитория SENTRY_READ_TOKEN — личный токен Sentry: Project: Read, Organization: Read,
+# Issue & Event: Read & Write.
 on:
   workflow_dispatch:
     inputs:
+      action:
+        description: 'Что сделать'
+        type: choice
+        default: list
+        options: [list, resolve, note, reopen]
+      note:
+        description: 'Комментарий (для resolve / note / reopen)'
+        default: ''
       query:
         description: 'Фильтр Sentry'
         default: 'is:unresolved'
@@ -27,11 +37,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Fetch issues
+      - name: Sentry
         env:
           SENTRY_READ_TOKEN: ${{ secrets.SENTRY_READ_TOKEN }}
           # Поля запуска — через переменные, а не вставкой в команду.
           QUERY: ${{ github.event.inputs.query || 'is:unresolved' }}
           DAYS: ${{ github.event.inputs.days || '14' }}
           ISSUE: ${{ github.event.inputs.issue || '' }}
-        run: python3 scripts/sentry/issues.py --query "$QUERY" --days "$DAYS" --issue "$ISSUE"
+          ACTION: ${{ github.event.inputs.action || 'list' }}
+          NOTE: ${{ github.event.inputs.note || '' }}
+        run: python3 scripts/sentry/issues.py "$ACTION" --query "$QUERY" --days "$DAYS" --issue "$ISSUE" --note "$NOTE"

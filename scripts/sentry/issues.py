@@ -1,22 +1,35 @@
-"""Свежие ошибки из Sentry с полным контекстом — для разбора и починки.
+"""Ошибки приложения в Sentry: посмотреть с полным контекстом и отметить, что починено.
 
-    SENTRY_READ_TOKEN=... python3 scripts/sentry/issues.py [--query "is:unresolved"] [--limit 10] [--days 14] [--issue ID]
+    python3 scripts/sentry/issues.py list    [--query "is:unresolved"] [--days 14] [--limit 10] [--issue ID]
+    python3 scripts/sentry/issues.py resolve --issue ID --note "Починено в abc1234, выйдет в 1.29.1"
+    python3 scripts/sentry/issues.py note    --issue ID --note "Причина: …"
+    python3 scripts/sentry/issues.py reopen  --issue ID --note "Повторилось на …"
 
-Токен — личный, только для чтения (event:read, project:read, org:read); хранится как секрет репозитория и в чат не попадает.
-Печатает для каждой проблемы: заголовок, где, сколько раз и у скольких, в какой версии, стек последнего события
-(с пометкой «наш код»), теги устройства и последние шаги (breadcrumbs). В GitHub Actions пишет то же в итог запуска.
+Токен — в переменной SENTRY_READ_TOKEN: личный токен Sentry с правами Project: Read, Organization: Read и
+Issue & Event: Read & Write (чтобы отмечать). Хранится секретом репозитория и в чат не попадает.
+list печатает для каждой проблемы: статус, заголовок, где, сколько раз и у скольких, первый и последний раз, стек
+последнего события (▶ — наш код), устройство и последние шаги. «Починено» — статус resolved плюс комментарий с
+коммитом и версией: если ошибка повторится в новой версии, Sentry сам вернёт её в открытые (regression).
+В GitHub Actions всё пишется и в итог запуска.
 """
-import argparse, json, os, sys, urllib.parse, urllib.request
+import argparse, json, os, sys, urllib.error, urllib.parse, urllib.request
 
 ORG, PROJECT = 'testorg-oz', 'friends-notes'
 API = os.environ.get('SENTRY_API', 'https://sentry.io/api/0')
 
 
-def get(path, params=None):
+def call(method, path, params=None, body=None):
     url = f'{API}{path}' + (('?' + urllib.parse.urlencode(params)) if params else '')
-    req = urllib.request.Request(url, headers={'Authorization': f'Bearer {os.environ["SENTRY_READ_TOKEN"]}'})
+    data = json.dumps(body).encode() if body is not None else None
+    req = urllib.request.Request(url, data=data, method=method,
+                                 headers={'Authorization': f'Bearer {os.environ["SENTRY_READ_TOKEN"]}', 'Content-Type': 'application/json'})
     with urllib.request.urlopen(req, timeout=30) as r:
-        return json.load(r)
+        raw = r.read()
+        return json.loads(raw) if raw else {}
+
+
+def get(path, params=None):
+    return call('GET', path, params)
 
 
 def frames_md(entry):
@@ -49,23 +62,42 @@ def event_md(ev):
     return lines
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument('--query', default='is:unresolved')
-    ap.add_argument('--limit', type=int, default=10)
-    ap.add_argument('--days', type=int, default=14)
-    ap.add_argument('--issue', default='')
-    a = ap.parse_args()
-    if not os.environ.get('SENTRY_READ_TOKEN'):
-        print('Нет SENTRY_READ_TOKEN — добавь секрет репозитория (Settings → Secrets and variables → Actions).')
-        sys.exit(2)
+STATUS = {'unresolved': 'открыта', 'resolved': 'починено', 'ignored': 'отложена', 'reprocessing': 'обрабатывается'}
+
+
+def out(text):
+    print(text)
+    summary = os.environ.get('GITHUB_STEP_SUMMARY')
+    if summary:
+        with open(summary, 'a', encoding='utf-8') as f:
+            f.write(text + '\n')
+
+
+def comment(issue, text):
+    """Комментарий к проблеме (в Sentry — «Activity → Comment»)."""
+    for path in (f'/organizations/{ORG}/issues/{issue}/comments/', f'/issues/{issue}/comments/'):
+        try:
+            return call('POST', path, body={'text': text, 'mentions': []})
+        except urllib.error.HTTPError as e:
+            if e.code != 404:
+                raise
+    raise RuntimeError('комментарий не принят')
+
+
+def set_status(issue, status):
+    return call('PUT', f'/organizations/{ORG}/issues/{issue}/', body={'status': status, 'statusDetails': {}})
+
+
+def list_issues(a):
     if a.issue:
         issues = [get(f'/organizations/{ORG}/issues/{a.issue}/')]
     else:
         issues = get(f'/projects/{ORG}/{PROJECT}/issues/', {'query': a.query, 'statsPeriod': f'{a.days}d', 'limit': a.limit, 'sort': 'date'})
-    md = [f'# Sentry · {PROJECT}: {len(issues)} проблем ({a.query}, {a.days} дн.)', '']
+    md = [f'# Sentry · {PROJECT}: {len(issues)} проблем ({a.query if not a.issue else a.issue}, {a.days} дн.)', '']
     for it in issues:
-        md.append(f"## {it.get('shortId')} · {it.get('title')}")
+        st = STATUS.get(it.get('status'), it.get('status'))
+        sub = (it.get('substatus') or '').replace('_', ' ')
+        md.append(f"## {it.get('shortId')} (id {it.get('id')}) · {st}{f' · {sub}' if sub else ''} · {it.get('title')}")
         md.append(f"Где: {it.get('culprit')} · событий {it.get('count')} · людей {it.get('userCount')} · "
                   f"первый раз {it.get('firstSeen', '')[:16]} · последний {it.get('lastSeen', '')[:16]} · {it.get('permalink')}")
         try:
@@ -74,12 +106,39 @@ def main():
         except Exception as e:  # одно событие не прочиталось — остальные всё равно покажем
             md.append(f'(последнее событие не прочиталось: {e})')
         md.append('')
-    text = '\n'.join(md)
-    print(text)
-    summary = os.environ.get('GITHUB_STEP_SUMMARY')
-    if summary:
-        with open(summary, 'a', encoding='utf-8') as f:
-            f.write(text + '\n')
+    out('\n'.join(md))
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument('action', nargs='?', default='list', choices=['list', 'resolve', 'note', 'reopen'])
+    ap.add_argument('--query', default='is:unresolved')
+    ap.add_argument('--limit', type=int, default=10)
+    ap.add_argument('--days', type=int, default=14)
+    ap.add_argument('--issue', default='')
+    ap.add_argument('--note', default='')
+    a = ap.parse_args()
+    if not os.environ.get('SENTRY_READ_TOKEN'):
+        out('Нет SENTRY_READ_TOKEN — добавь секрет репозитория (Settings → Secrets and variables → Actions).')
+        sys.exit(2)
+    if a.action == 'list':
+        return list_issues(a)
+    if not a.issue:
+        out('Укажи --issue')
+        sys.exit(2)
+    try:
+        if a.action == 'resolve':
+            set_status(a.issue, 'resolved')
+        elif a.action == 'reopen':
+            set_status(a.issue, 'unresolved')
+        if a.note:
+            comment(a.issue, a.note)
+    except urllib.error.HTTPError as e:
+        hint = ' — у токена нет права Issue & Event: Write' if e.code == 403 else ''
+        out(f'Sentry ответил {e.code} на «{a.action}» для {a.issue}{hint}')
+        sys.exit(1)
+    it = get(f'/organizations/{ORG}/issues/{a.issue}/')
+    out(f"{it.get('shortId')} · {STATUS.get(it.get('status'), it.get('status'))} · {it.get('title')}" + (f'\nКомментарий: {a.note}' if a.note else ''))
 
 
 if __name__ == '__main__':
