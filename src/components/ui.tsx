@@ -1,5 +1,6 @@
-import { Children, type ComponentProps, type ReactNode } from 'react';
+import { Children, useState, type ComponentProps, type ReactNode } from 'react';
 import {
+  Platform,
   Pressable,
   Switch,
   Text,
@@ -60,16 +61,59 @@ export function Label({ children }: { children: ReactNode }) {
 }
 
 /** Многострочные поля растут вместе с текстом сами (так работает нативный TextInput без фиксированной высоты). */
-export function Field({ label, ...props }: TextInputProps & { label: string }) {
+type GrowProps = {
+  /** Сколько строк видно, пока поле пустое. */
+  minLines?: number;
+  /** Дальше этого поле не растёт, а прокручивается внутри. Нет — растёт с текстом. */
+  maxLines?: number;
+  /** Текст без переносов (название, имя): Enter закрывает клавиатуру, вставленные переносы становятся пробелами. */
+  singleLine?: boolean;
+};
+
+const LINE = 22;
+const PAD_Y = 12;
+
+/**
+ * Поле, которое растёт вместе с текстом: длинное название видно целиком, а не уезжает за край. На телефоне растёт само
+ * (многострочное поле с minHeight/maxHeight), в браузере — по высоте содержимого.
+ */
+export function GrowingInput({ minLines = 1, maxLines, singleLine = false, style, onChangeText, onContentSizeChange, ...props }: TextInputProps & GrowProps) {
+  const { s, colors } = useTheme();
+  const minH = Math.max(50, minLines * LINE + PAD_Y * 2 + 2);
+  const maxH = maxLines ? maxLines * LINE + PAD_Y * 2 + 2 : undefined;
+  const [webH, setWebH] = useState(minH);
+  const web = Platform.OS === 'web';
+  return (
+    <TextInput
+      placeholderTextColor={colors.placeholder}
+      multiline
+      submitBehavior={singleLine ? 'blurAndSubmit' : undefined}
+      returnKeyType={singleLine ? 'done' : undefined}
+      onChangeText={onChangeText && singleLine ? (v) => onChangeText(v.replace(/\s*\n\s*/g, ' ')) : onChangeText}
+      onContentSizeChange={(e) => {
+        if (web) setWebH(Math.min(maxH ?? Infinity, Math.max(minH, Math.ceil(e.nativeEvent.contentSize.height))));
+        onContentSizeChange?.(e);
+      }}
+      {...props}
+      style={[s.input, { lineHeight: LINE, textAlignVertical: 'top', minHeight: minH, maxHeight: maxH }, web && { height: webH }, style]}
+    />
+  );
+}
+
+/**
+ * Поле с подписью. `grow` — растёт с текстом (см. GrowingInput); многострочное (`multiline`) растёт всегда, от трёх
+ * строк.
+ */
+export function Field({ label, grow, minLines, maxLines, singleLine, ...props }: TextInputProps & GrowProps & { label: string; grow?: boolean }) {
   const { s, colors } = useTheme();
   return (
     <View style={s.field}>
       <Label>{label}</Label>
-      <TextInput
-        placeholderTextColor={colors.placeholder}
-        {...props}
-        style={[s.input, props.multiline && s.inputMultiline, props.style]}
-      />
+      {grow || props.multiline ? (
+        <GrowingInput minLines={minLines ?? (props.multiline ? 3 : 1)} maxLines={maxLines} singleLine={singleLine} {...props} />
+      ) : (
+        <TextInput placeholderTextColor={colors.placeholder} {...props} style={[s.input, props.style]} />
+      )}
     </View>
   );
 }
@@ -188,7 +232,16 @@ export function Chip({
 }
 
 /** Переключатель из нескольких вариантов в одну строку: «До срока / Дата и время / Повторять». */
-export function Segmented<T extends string | number>({ options, value, onChange }: { options: readonly { value: T; label: string }[]; value: T; onChange: (v: T) => void }) {
+/** Переключатель «один из». У варианта может быть значок (`icon`) своего цвета (`iconColor`); у выбранного — цвета подписи. */
+export function Segmented<T extends string | number>({
+  options,
+  value,
+  onChange,
+}: {
+  options: readonly { value: T; label: string; icon?: IconName; iconColor?: string }[];
+  value: T;
+  onChange: (v: T) => void;
+}) {
   const { colors, fonts } = useTheme();
   return (
     <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', backgroundColor: colors.chip, borderRadius: 14, padding: 3, gap: 3 }}>
@@ -207,12 +260,15 @@ export function Segmented<T extends string | number>({ options, value, onChange 
               borderRadius: 11,
               alignItems: 'center',
               justifyContent: 'center',
+              flexDirection: 'row',
+              gap: 3,
               paddingHorizontal: 4,
               backgroundColor: on ? colors.text : 'transparent',
               opacity: pressed && !on ? 0.6 : 1,
             })}
           >
-            <Text numberOfLines={1} style={{ fontFamily: on ? fonts.semibold : fonts.medium, fontSize: 14, color: on ? colors.bg : colors.text2 }}>
+            {o.icon && <Icon name={o.icon} size={14} strokeWidth={2.8} color={on ? colors.bg : (o.iconColor ?? colors.text2)} />}
+            <Text numberOfLines={1} style={{ flexShrink: 1, fontFamily: on ? fonts.semibold : fonts.medium, fontSize: 14, color: on ? colors.bg : colors.text2 }}>
               {o.label}
             </Text>
           </Pressable>

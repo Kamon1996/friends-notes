@@ -14,7 +14,7 @@ export const THEME_MODES: { key: ThemeMode; label: string }[] = [
   { key: 'dark', label: 'Тёмная' },
 ];
 
-/** Оформление: живой предпросмотр «Скоро» сверху, под ним тема и цвет для каждой темы. */
+/** Оформление: живой предпросмотр «Напоминаний» сверху, под ним тема и цвет для каждой темы. */
 export default function AppearanceScreen() {
   const { data, updateSettings } = useStore();
   const { s, scheme } = useTheme();

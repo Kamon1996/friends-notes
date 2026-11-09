@@ -1,12 +1,12 @@
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useRef, useState, type ComponentRef } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { AvatarPicker } from '@/components/AvatarPicker';
 import { BirthdayField } from '@/components/BirthdayField';
 import { NetworkBadge } from '@/components/NetworkBadge';
 import { SocialLinkSheet } from '@/components/SocialLinkSheet';
-import { Button, Card, Chip, Field, IconButton, Label, ListRow, SectionTitle, SwitchRow, useTheme } from '@/components/ui';
+import { Button, Card, Chip, Field, GrowingInput, IconButton, Label, ListRow, SectionTitle, SwitchRow, useTheme } from '@/components/ui';
 import { cleanupAvatars, deleteOwnedFiles } from '@/lib/avatars';
 import { confirm, notify } from '@/lib/confirm';
 import { linkSubtitle, linkTitle, mergeLinks } from '@/lib/socials';
@@ -121,7 +121,7 @@ function FriendForm() {
             onChange={(uris) => setF((prev) => ({ ...prev, photoUri: uris?.photoUri ?? null, thumbUri: uris?.thumbUri ?? null }))}
           />
           <View style={{ flex: 1 }}>
-            <Field label="Имя" value={f.name} onChangeText={(v) => set('name', v)} placeholder="Например, Аня" autoFocus={!existing} style={{ marginBottom: 0 }} />
+            <Field label="Имя" grow singleLine maxLines={3} value={f.name} onChangeText={(v) => set('name', v)} placeholder="Например, Аня" autoFocus={!existing} style={{ marginBottom: 0 }} />
           </View>
         </View>
         <Text style={[s.caption, { marginTop: -8, marginBottom: 14, paddingHorizontal: 4 }]}>
@@ -187,12 +187,13 @@ function FriendForm() {
           <View key={d.id} onLayout={(e) => (positions.current[`date-${d.id}`] = e.nativeEvent.layout.y)}>
           <Card style={{ paddingBottom: 4, marginBottom: 10 }}>
             <Label>Название</Label>
-            <TextInput
+            <GrowingInput
+              singleLine
+              maxLines={3}
               value={d.title}
               onChangeText={(v) => updateDate(d.id, { title: v })}
               placeholder="Например, годовщина знакомства"
-              placeholderTextColor={colors.placeholder}
-              style={[s.input, { marginBottom: attempted && d.date && !d.title.trim() ? 4 : 14 }, attempted && !!d.date && !d.title.trim() && { borderColor: colors.danger, borderWidth: 1.5 }]}
+              style={[{ marginBottom: attempted && d.date && !d.title.trim() ? 4 : 14 }, attempted && !!d.date && !d.title.trim() && { borderColor: colors.danger, borderWidth: 1.5 }]}
             />
             {attempted && !!d.date && !d.title.trim() && (
               <Text style={[s.caption, { color: colors.danger, marginBottom: 14, paddingHorizontal: 4 }]}>Назови дату, например «Свадьба».</Text>

@@ -3,6 +3,7 @@ import { useRef, useState, type ComponentRef } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from 'react-native';
 
 import { FriendPicker } from '@/components/FriendPicker';
+import { PRIORITY_ICON } from '@/components/ReminderRow';
 import { DateField } from '@/components/DateField';
 import { Button, Card, Chip, Empty, Field, Label, SectionTitle, Segmented, SwitchRow, useTheme } from '@/components/ui';
 import { confirm, notify } from '@/lib/confirm';
@@ -194,6 +195,9 @@ function ReminderForm() {
       <ScrollView ref={scrollRef} style={s.screen} contentContainerStyle={[s.content, { gap: 0 }]} keyboardShouldPersistTaps="handled">
         <Field
           label="Что сделать"
+          grow
+          singleLine
+          maxLines={3}
           value={r.title}
           onChangeText={(v) => set('title', v)}
           placeholder={friend ? `Например, написать ${friend.name}` : 'Например, сдать отчёт'}
@@ -326,7 +330,14 @@ function ReminderForm() {
         )}
 
         <SectionTitle style={{ marginTop: 18, marginBottom: 8 }}>Важность</SectionTitle>
-        <Segmented options={PRIORITIES} value={r.priority ?? 0} onChange={(p) => set('priority', p || undefined)} />
+        {/* Стрелки — как в списке дел: вниз — низкая, вверх — средняя, двойная — важно. */}
+        <Segmented
+          options={PRIORITIES.map((o) =>
+            o.value ? { ...o, icon: PRIORITY_ICON[o.value], iconColor: o.value === 3 ? colors.danger : o.value === 2 ? colors.warn : colors.text3 } : o,
+          )}
+          value={r.priority ?? 0}
+          onChange={(p) => set('priority', p || undefined)}
+        />
 
         <SectionTitle style={{ marginTop: 18, marginBottom: 8 }}>Сколько займёт</SectionTitle>
         <View style={s.chips}>

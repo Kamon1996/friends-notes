@@ -205,10 +205,11 @@ export default function FriendScreen() {
           Напоминания
         </SectionTitle>
         {reminders.length > 0 ? (
-          <Group inset={14}>
+          // Как на вкладке «Напоминания»: кольцо со сроком, детали значками; аватара у кольца нет — это и так его карточка.
+          <Group inset={70}>
             {reminders.map((r, i) => (
               <ReminderSwipe key={r.id} reminder={r} hint={i === 0}>
-                <ReminderRow reminder={r} friend={friend} showFriend={false} />
+                <ReminderRow detailed reminder={r} friend={friend} showFriend={false} />
               </ReminderSwipe>
             ))}
           </Group>

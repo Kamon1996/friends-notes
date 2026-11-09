@@ -128,7 +128,7 @@ export function ReminderRow(props: RowProps) {
  * Подпись — какой срок и детали значками, только заданные: ⏱ сколько займёт, стрелки важности, звенящий колокольчик
  * «каждый день». Справа — дата (у сегодняшних не нужна: «сег.» в кольце).
  */
-function TaskRow({ reminder: r, friend, selected = false, selecting = false, onPress, onLongPress }: RowProps) {
+function TaskRow({ reminder: r, friend, showFriend = true, selected = false, selecting = false, onPress, onLongPress }: RowProps) {
   const { toggleReminderDone, deleteReminder } = useStore();
   const { s, colors, fonts } = useTheme();
   const now = new Date();
@@ -139,10 +139,10 @@ function TaskRow({ reminder: r, friend, selected = false, selecting = false, onP
 
   const leading = r.done ? (
     <View style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
-      {friend ? <Avatar friend={friend} size={40} /> : <IconCircle icon="check" tone="success" size={40} />}
+      {friend && showFriend ? <Avatar friend={friend} size={40} /> : <IconCircle icon="check" tone="success" size={40} />}
     </View>
   ) : (
-    <CountRing r={r} friend={friend} today={today} overdue={overdue} corner={!(selecting && selected)} />
+    <CountRing r={r} friend={showFriend ? friend : null} today={today} overdue={overdue} corner={!(selecting && selected)} />
   );
 
   return (
