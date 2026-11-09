@@ -185,6 +185,8 @@ jobs:
           VERSION=$(node -p "require('./app.json').expo.version")
           TAG="v$VERSION"
           if [ "$BUNDLE" = "true" ]; then FILE="friends-notes-$VERSION.aab"; cp friends-notes.aab "$FILE"; else FILE="friends-notes-$VERSION.apk"; cp friends-notes.apk "$FILE"; fi
+          # Описание релиза — пункты «Что нового» этой версии (scripts/releases/notes.ts).
+          BODY=$(npx tsx scripts/releases/notes.ts "$VERSION")
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             # Через gh api, а не gh release create: при отказе GitHub показывает полный ответ, а не одну строку.
             # Тег — на текущую вершину ветки, а не на коммит сборки: пока шла сборка, в ветку могли прийти коммиты
@@ -193,7 +195,7 @@ jobs:
             create_release() {
               gh api -X POST "repos/$GITHUB_REPOSITORY/releases" \
                 -f tag_name="$TAG" -f target_commitish="$GITHUB_REF_NAME" -f name="Друзья $VERSION" \
-                -f body="APK собран в GitHub Actions из коммита $GITHUB_SHA. Подпись та же, что у сборок EAS: ставится поверх прошлой версии." >release.log 2>&1
+                -f body="$BODY" >release.log 2>&1
             }
             created=false
             for wait in 0 30 90; do

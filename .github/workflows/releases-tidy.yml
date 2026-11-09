@@ -1,0 +1,29 @@
+name: Releases tidy
+
+# Релизы на GitHub — как «Что нового» в приложении: остаются только версии из src/lib/changelog.ts, с описанием
+# оттуда же; промежуточные релизы удаляются вместе с тегами (scripts/releases/tidy.sh). Приложение не собирает.
+# Запуск: коммитом со словом «[releases-tidy]» в первой строке или вручную (Actions → Releases tidy → Run workflow).
+on:
+  push:
+    branches: [main, claude/mobile-project-creation-pgqs46]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  tidy:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[releases-tidy]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Release notes from changelog
+        run: npx --yes tsx@4 scripts/releases/notes.ts > notes.json && jq 'keys' notes.json
+      - name: Keep changelog versions, delete the rest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/releases/tidy.sh notes.json
