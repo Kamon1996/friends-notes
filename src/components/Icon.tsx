@@ -3,6 +3,7 @@ import Svg, { Circle, Defs, LinearGradient, Path, Rect, Stop } from 'react-nativ
 
 export type IconName =
   | 'archive'
+  | 'undo'
   | 'hourglass'
   | 'flag'
   | 'bolt'
@@ -137,6 +138,12 @@ const PATHS: Record<IconName, ReactNode> = {
     <>
       <Circle cx={12} cy={12} r={9} />
       <Path d="M12 7v5l3 2" />
+    </>
+  ),
+  undo: (
+    <>
+      <Path d="M9 14 4 9l5-5" />
+      <Path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />
     </>
   ),
   hourglass: <Path d="M7 3h10M7 21h10M8 3c0 4 8 5 8 9s-8 5-8 9M16 3c0 4-8 5-8 9s8 5 8 9" />,

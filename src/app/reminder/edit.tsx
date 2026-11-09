@@ -81,7 +81,8 @@ function ReminderNotFound() {
 }
 
 function ReminderForm() {
-  const params = useLocalSearchParams<{ id?: string; friendId?: string }>();
+  // Из календаря: дата выбранного дня, «Дата и время», и сразу в календаре.
+  const params = useLocalSearchParams<{ id?: string; friendId?: string; date?: string; kind?: string; calendar?: string }>();
   const { data, saveReminder, deleteReminder } = useStore();
   const { s, colors, fonts } = useTheme();
   const { width, fontScale } = useWindowDimensions();
@@ -97,12 +98,14 @@ function ReminderForm() {
         title: '',
         note: '',
         friendId: params.friendId ?? null,
-        date: addInterval(todayISO(), 'day', 1),
+        date: params.date && /^\d{4}-\d{2}-\d{2}$/.test(params.date) ? params.date : addInterval(todayISO(), 'day', 1),
         time: '10:00',
         repeat: null,
         advance: 0,
         done: false,
         createdAt: Date.now(),
+        ...(params.kind === 'at' ? { kind: 'at' as const } : {}),
+        ...(params.calendar === '1' ? { calendar: true } : {}),
       },
   );
   const set = <K extends keyof Reminder>(key: K, value: Reminder[K]) => setR((prev) => ({ ...prev, [key]: value }));

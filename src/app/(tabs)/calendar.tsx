@@ -10,7 +10,7 @@ import { Avatar } from '@/components/Avatar';
 import { useSvgId } from '@/components/ai/AiIcon';
 import { Icon } from '@/components/Icon';
 import { TabSwipe } from '@/components/TabSwipe';
-import { Group, IconButton, ListRow, ScreenHeader, Tag, useTheme } from '@/components/ui';
+import { Fab, Group, IconButton, ListRow, ScreenHeader, Tag, useTheme } from '@/components/ui';
 import { MONTHS, MONTHS_IN, WEEKDAYS_MON, calendarEvents, monthGrid, monthRange, nextEvents, type CalendarEvent } from '@/lib/calendar';
 import { daysBetween, formatDateLong, parseISODate, plural, relativeDay, todayISO } from '@/lib/dates';
 import { useStore } from '@/lib/store';
@@ -36,12 +36,12 @@ function atDay(date: string): CalView {
 }
 
 /**
- * Цвета значков событий — палитра «В тон приложению»: торт — градиент от мёда к терракоте, сердце — пыльная роза,
+ * Цвета значков событий: торт — градиент от персика к розе (линия тоньше), сердце — пыльная роза,
  * встречи — спокойный голубой. В светлой теме — те же оттенки темнее, чтобы читались на бумаге.
  */
 const KIND_PALETTE = {
-  dark: { birthday: ['#E9B44C', '#E0704F'], date: ['#E45D7B'], meeting: ['#86B6E0'] },
-  light: { birthday: ['#C98A1E', '#C4502F'], date: ['#C2405F'], meeting: ['#3F78AE'] },
+  dark: { birthday: ['#FFB089', '#F0708C'], date: ['#E45D7B'], meeting: ['#86B6E0'] },
+  light: { birthday: ['#E07F55', '#C94A6B'], date: ['#C2405F'], meeting: ['#3F78AE'] },
 } as const;
 
 function useKindColors() {
@@ -50,8 +50,10 @@ function useKindColors() {
 }
 
 /** Значок события: цвет или градиент из палитры. */
-function KindIcon({ kind, size, strokeWidth = 2.2 }: { kind: CalendarEvent['kind']; size: number; strokeWidth?: number }) {
+function KindIcon({ kind, size, strokeWidth }: { kind: CalendarEvent['kind']; size: number; strokeWidth?: number }) {
   const stops = useKindColors()[kind];
+  // Торт — тоньше: так он читается легче остальных значков.
+  strokeWidth ??= kind === 'birthday' ? 1.6 : 2.2;
   return <Icon name={KIND_ICON[kind]} size={size} strokeWidth={strokeWidth} color={stops[stops.length - 1]} gradient={stops.length > 1 ? stops : undefined} />;
 }
 
@@ -88,100 +90,122 @@ export default function CalendarScreen() {
 
   return (
     <TabSwipe tab="/calendar">
-      <ScrollView style={s.screen} contentContainerStyle={{ paddingBottom: 40 }}>
-        <ScreenHeader
-          title="Календарь"
-          subtitle={
-            inMonth ? `В ${MONTHS_IN[view.month]} — ${inMonth} ${plural(inMonth, 'событие', 'события', 'событий')}` : `В ${MONTHS_IN[view.month]} событий нет`
-          }
-          right={<IconButton icon="sliders" label="Настройки" onPress={() => router.push('/settings')} />}
-        />
-
-        <View style={[s.group, { marginHorizontal: 20, marginTop: 14, paddingHorizontal: 8, paddingTop: 10, paddingBottom: 8 }]}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, marginBottom: 6 }}>
-            <Text style={{ flex: 1, fontFamily: fonts.display, fontSize: 20, color: colors.text }} accessibilityRole="header">
-              {MONTHS[view.month]} {view.year}
-            </Text>
-            {!isCurrent && (
-              <Pressable onPress={goToday} hitSlop={8} accessibilityRole="button" style={{ paddingHorizontal: 10, paddingVertical: 6, marginRight: 4 }}>
-                <Text style={{ fontFamily: fonts.semibold, fontSize: 14, color: colors.accentText }}>Сегодня</Text>
-              </Pressable>
-            )}
-            <IconButton icon="chevronLeft" label="Прошлый месяц" onPress={() => go(-1)} />
-            <IconButton icon="chevronRight" label="Следующий месяц" onPress={() => go(1)} />
-          </View>
-          <View style={{ flexDirection: 'row' }}>
-            {WEEKDAYS_MON.map((w, i) => (
-              <Text
-                key={w}
-                style={{
-                  width: cellW,
-                  textAlign: 'center',
-                  fontFamily: fonts.medium,
-                  fontSize: 12,
-                  color: i >= 5 ? colors.text3 : colors.text2,
-                  paddingBottom: 6,
-                }}
-              >
-                {w}
-              </Text>
-            ))}
-          </View>
-          <MonthCarousel
-            year={view.year}
-            month={view.month}
-            onStep={go}
-            render={(y, m) => <MonthGrid year={y} month={m} selected={selected} today={today} byDay={byDay} onPick={pick} />}
+      <View style={s.screen}>
+        <ScrollView style={s.screen} contentContainerStyle={{ paddingBottom: 120 }}>
+          <ScreenHeader
+            title="Календарь"
+            subtitle={
+              inMonth ? `В ${MONTHS_IN[view.month]} — ${inMonth} ${plural(inMonth, 'событие', 'события', 'событий')}` : `В ${MONTHS_IN[view.month]} событий нет`
+            }
+            right={<IconButton icon="sliders" label="Настройки" onPress={() => router.push('/settings')} />}
           />
-          <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 14, paddingTop: 6 }}>
-            {(
-              [
-                ['birthday', 'Дни рождения'],
-                ['date', 'Важные даты'],
-                ['meeting', 'Встречи'],
-              ] as const
-            ).map(([k, label]) => (
-              <View key={k} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                <KindIcon kind={k} size={13} />
-                <Text style={[s.caption, { fontSize: 12 }]}>{label}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
 
-        <Text style={[s.sectionLabel, { paddingHorizontal: 24, paddingTop: 20, paddingBottom: 8 }]}>
-          {formatDateLong(selected)}
-          {selected === today ? ' · сегодня' : ''}
-        </Text>
-        {dayEvents.length ? (
-          <View style={{ paddingHorizontal: 20 }}>
-            <Group>
-              {dayEvents.map((e) => (
-                <EventRow key={e.key} event={e} today={today} />
+          <View style={[s.group, { marginHorizontal: 20, marginTop: 14, paddingHorizontal: 8, paddingTop: 10, paddingBottom: 8 }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, marginBottom: 6 }}>
+              <Text style={{ flex: 1, fontFamily: fonts.display, fontSize: 20, color: colors.text }} accessibilityRole="header">
+                {MONTHS[view.month]} {view.year}
+              </Text>
+              {(!isCurrent || selected !== today) && (
+                // Пилюля «↶ Сегодня» — видно, что это кнопка и куда она вернёт.
+                <Pressable
+                  onPress={goToday}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Вернуться к сегодня"
+                  style={({ pressed }) => ({
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 5,
+                    backgroundColor: colors.soft,
+                    borderRadius: 999,
+                    paddingHorizontal: 10,
+                    paddingVertical: 6,
+                    marginRight: 4,
+                    opacity: pressed ? 0.7 : 1,
+                  })}
+                >
+                  <Icon name="undo" size={14} color={colors.accentText} strokeWidth={2.2} />
+                  <Text style={{ fontFamily: fonts.semibold, fontSize: 13, color: colors.accentText }}>Сегодня</Text>
+                </Pressable>
+              )}
+              <IconButton icon="chevronLeft" label="Прошлый месяц" onPress={() => go(-1)} />
+              <IconButton icon="chevronRight" label="Следующий месяц" onPress={() => go(1)} />
+            </View>
+            <View style={{ flexDirection: 'row' }}>
+              {WEEKDAYS_MON.map((w, i) => (
+                <Text
+                  key={w}
+                  style={{
+                    width: cellW,
+                    textAlign: 'center',
+                    fontFamily: fonts.medium,
+                    fontSize: 12,
+                    color: i >= 5 ? colors.text3 : colors.text2,
+                    paddingBottom: 6,
+                  }}
+                >
+                  {w}
+                </Text>
               ))}
-            </Group>
+            </View>
+            <MonthCarousel
+              year={view.year}
+              month={view.month}
+              onStep={go}
+              render={(y, m) => <MonthGrid year={y} month={m} selected={selected} today={today} byDay={byDay} onPick={pick} />}
+            />
+            <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 14, paddingTop: 6 }}>
+              {(
+                [
+                  ['birthday', 'Дни рождения'],
+                  ['date', 'Важные даты'],
+                  ['meeting', 'Встречи'],
+                ] as const
+              ).map(([k, label]) => (
+                <View key={k} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                  <KindIcon kind={k} size={13} />
+                  <Text style={[s.caption, { fontSize: 12 }]}>{label}</Text>
+                </View>
+              ))}
+            </View>
           </View>
-        ) : (
-          <Text style={[s.muted, { paddingHorizontal: 24 }]}>В этот день ничего нет.</Text>
-        )}
 
-        {later.length > 0 && (
-          <>
-            <Text style={[s.sectionLabel, { paddingHorizontal: 24, paddingTop: 20, paddingBottom: 8 }]}>Дальше</Text>
+          <Text style={[s.sectionLabel, { paddingHorizontal: 24, paddingTop: 20, paddingBottom: 8 }]}>
+            {formatDateLong(selected)}
+            {selected === today ? ' · сегодня' : ''}
+          </Text>
+          {dayEvents.length ? (
             <View style={{ paddingHorizontal: 20 }}>
               <Group>
-                {later.map((e) => (
+                {dayEvents.map((e) => (
                   <EventRow key={e.key} event={e} today={today} />
                 ))}
               </Group>
             </View>
-          </>
-        )}
+          ) : (
+            <Text style={[s.muted, { paddingHorizontal: 24 }]}>В этот день ничего нет.</Text>
+          )}
 
-        {data.friends.length === 0 && (
-          <Text style={[s.muted, { paddingHorizontal: 24, paddingTop: 16 }]}>Добавь друзей с днями рождения — они появятся в календаре сами.</Text>
-        )}
-      </ScrollView>
+          {later.length > 0 && (
+            <>
+              <Text style={[s.sectionLabel, { paddingHorizontal: 24, paddingTop: 20, paddingBottom: 8 }]}>Дальше</Text>
+              <View style={{ paddingHorizontal: 20 }}>
+                <Group>
+                  {later.map((e) => (
+                    <EventRow key={e.key} event={e} today={today} />
+                  ))}
+                </Group>
+              </View>
+            </>
+          )}
+
+          {data.friends.length === 0 && (
+            <Text style={[s.muted, { paddingHorizontal: 24, paddingTop: 16 }]}>Добавь друзей с днями рождения — они появятся в календаре сами.</Text>
+          )}
+        </ScrollView>
+        {/* Новое событие — на выбранный день, «Дата и время», сразу в календаре. */}
+        <Fab label="Новое событие" onPress={() => router.push({ pathname: '/reminder/edit', params: { date: selected, kind: 'at', calendar: '1' } })} />
+      </View>
     </TabSwipe>
   );
 }

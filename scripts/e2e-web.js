@@ -1220,6 +1220,22 @@ scenario('Календарь: сетка листается каруселью �
   await page.waitForURL(/\/friends$/, { timeout: 3000 });
 });
 
+scenario('Календарь: «Новое событие» — на выбранный день, «Дата и время», сразу в календаре; «↶ Сегодня» возвращает', async ({ ui }) => {
+  await ui.go('/calendar');
+  await ui.tap('Пятница, 19 июня');
+  await ui.tap('Новое событие');
+  await ui.see('Новое напоминание');
+  await ui.fill('Например, сдать отчёт', 'Массаж');
+  await ui.see('Напомню 18 июн и 19 июн в 10:00.');
+  await ui.tap('Сохранить');
+  const data = await ui.waitData((x) => x.reminders.some((r) => r.title === 'Массаж'), 'не сохранилось');
+  const r = data.reminders.find((x) => x.title === 'Массаж');
+  assert.deepEqual([r.date, r.kind, r.calendar], ['2026-06-19', 'at', true]);
+  await ui.see('Пятница, 19 июня, 1 событие', { label: true });
+  await ui.tap('Вернуться к сегодня');
+  await ui.see('Среда, 10 июня · сегодня');
+});
+
 scenario('Умный календарь: «до срока» не бывает, событие с повтором — каждую неделю, «В календаре» правится в деле; выключается в настройках', async ({ ui, page }) => {
   await ui.go('/calendar');
   await ui.see('Стоматолог');
