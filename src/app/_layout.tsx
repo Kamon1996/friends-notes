@@ -37,7 +37,7 @@ function NotificationResponses() {
       if (!what) return;
       if ('done' in what) {
         setRemindersDone([what.done], true);
-        router.navigate('/reminders');
+        router.navigate('/');
       } else router.push(what.open as never);
     };
     handle(Notifications.getLastNotificationResponse());
@@ -75,6 +75,7 @@ function AppShell() {
         }}
       >
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="reminders" options={{ headerShown: false, animation: 'none' }} />
         <Stack.Screen name="friend/[id]" options={{ title: '' }} />
         <Stack.Screen name="friend/edit" options={{ presentation: 'modal', title: 'Друг' }} />
         <Stack.Screen name="reminder/edit" options={{ presentation: 'modal', title: 'Напоминание' }} />

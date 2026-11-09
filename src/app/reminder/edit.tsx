@@ -73,7 +73,7 @@ function ReminderNotFound() {
     <>
       <Stack.Screen options={{ title: 'Напоминание' }} />
       <Empty icon="bell" title="Напоминание не найдено" text="Возможно, его уже удалили или отметили и убрали.">
-        <Button title="К напоминаниям" variant="secondary" onPress={() => router.replace('/reminders')} style={{ marginTop: 8 }} />
+        <Button title="К напоминаниям" variant="secondary" onPress={() => router.replace('/')} style={{ marginTop: 8 }} />
       </Empty>
     </>
   );

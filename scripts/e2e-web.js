@@ -67,46 +67,14 @@ const scenarios = [];
 const scenario = (name, fn, opts = {}) => scenarios.push({ name, fn, ...opts });
 
 // ===== Лента «Скоро» =====
-scenario('Лента: просроченное, сегодняшний праздник с возрастом, неделя — в таком порядке', async ({ ui }) => {
-  await ui.go('/');
-  for (const s of ['Просрочено', 'Написать Диме', 'Сегодня', 'Аня Смирнова', 'Позвонить', 'Поздравить', 'На этой неделе', 'Игорь Ветров', 'через 3 дня', 'В ближайший месяц']) await ui.see(s);
-  const t = await ui.text();
-  const order = ['Просрочено', 'Сегодня', 'На этой неделе', 'В ближайший месяц'].map((s) => t.indexOf(s));
-  assert.deepEqual([...order].sort((a, b) => a - b), order, `порядок секций: ${t.slice(0, 300)}`);
-  await ui.see('31');
-  await ui.notSee('Сдать отчёт'); // сделанные в ленту не попадают
-});
-
-scenario('Лента: больше пяти просроченных — строка «Ещё N» ведёт во вкладку «Напоминания»', async ({ ui }) => {
-  await ui.go('/');
-  await ui.see('Ещё 2 просроченных');
-  await ui.tap(/^Ещё 2 просроченных/);
-  await ui.see('Сегодня');
-  await ui.see('Отправить документы');
-}, { data: seed({ reminders: [1, 2, 3, 4, 5, 6, 7].map((n) => R({ id: `o${n}`, title: ['Оплатить интернет', 'Записаться к врачу', 'Вернуть книгу', 'Позвонить в банк', 'Купить корм', 'Забрать химчистку', 'Отправить документы'][n - 1], date: d(-n) })) }) });
-
-scenario('Лента: на неделе праздники и дела одним списком по датам', async ({ ui }) => {
-  await ui.go('/');
-  await ui.see('Купить подарок');
-  const t = await ui.text();
-  assert.ok(t.indexOf('Купить подарок') < t.indexOf('Игорь Ветров'), 'дело на послезавтра должно идти раньше праздника через 3 дня: ' + t.slice(0, 400));
-}, { data: seed({ reminders: [R({ id: 'g', title: 'Купить подарок', date: d(2) })] }) });
-
-scenario('Лента: если у друзей нет дат, подсказывает это', async ({ ui }) => {
-  await ui.go('/');
-  await ui.see('не указан день рождения');
-  await ui.tap('Открыть друзей');
-  await ui.see('Без дня рождения');
-}, { data: seed({ friends: [F({ id: 'x', name: 'Маша' }), F({ id: 'y', name: 'Петя' })], reminders: [] }) });
-
 scenario('Напоминание на дату прошлого года показывает год', async ({ ui }) => {
-  await ui.go('/reminders');
+  await ui.go('/');
   await ui.see('Старое дело');
   await ui.see('1 янв 2025');
 }, { data: seed({ reminders: [R({ id: 'old', title: 'Старое дело', date: '2025-01-01' })] }) });
 
 scenario('Напоминания: свайп влево только открывает «Удалить» — дата и «сделано» не меняются; «Удалить» спрашивает и удаляет', async ({ ui }) => {
-  await ui.go('/reminders');
+  await ui.go('/');
   await ui.see('Подстаканник купить');
   await ui.swipe('Подстаканник купить', -160);
   await ui.see('Удалить', { label: true });
@@ -119,7 +87,7 @@ scenario('Напоминания: свайп влево только откры�
 }, { data: seed({ reminders: [R({ id: 'daily', title: 'Подстаканник купить', date: d(1), repeat: { every: 1, unit: 'day' } })] }) });
 
 scenario('Напоминания: свайп вправо — сделано (и повторяющееся тоже), внизу «Сделано сегодня»; ещё раз вправо — вернуть', async ({ ui }) => {
-  await ui.go('/reminders');
+  await ui.go('/');
   await ui.swipe('Билеты на самолёт', 160);
   let data = await ui.waitData((x) => x.reminders.find((r) => r.id === 'once').done, 'разовое не отмечено');
   assert.equal(data.reminders.find((r) => r.id === 'once').date, d(2));
@@ -140,7 +108,7 @@ scenario('Напоминания: свайп вправо — сделано (и
 });
 
 scenario('Напоминания: без кружков; первая строка один раз «подглядывает» вправо и влево, после своего свайпа — больше нет', async ({ ui, page }) => {
-  await ui.go('/reminders');
+  await ui.go('/');
   await ui.see('Написать Диме');
   assert.equal(await page.locator('[role="checkbox"]').count(), 0, 'кружков в строках быть не должно');
   // Следим за первой строкой (просроченное — наверху «Сегодня»): сначала вправо, потом влево, потом на место.
@@ -166,7 +134,7 @@ scenario('Напоминания: без кружков; первая строк
 }, { storage: { 'friends-notes/swipe-hint': '0' } });
 
 scenario('Напоминания: подсказка не больше трёх раз — на четвёртый строка стоит', async ({ ui, page }) => {
-  await ui.go('/reminders');
+  await ui.go('/');
   await ui.see('Написать Диме');
   const h = await page.getByText('Написать Диме', { exact: true }).last().elementHandle();
   const x0 = (await h.boundingBox()).x;
@@ -188,16 +156,8 @@ scenario('Карточка друга: напоминание без кружк�
   await ui.see('Сделано · снова пн, 10 авг');
 });
 
-scenario('Лента: «сделано» у повторяющегося — сделано сегодня, из ленты уходит, дата та же', async ({ ui }) => {
-  await ui.go('/');
-  await ui.check('Купить цветы — Аня');
-  const r = await ui.waitData((x) => x.reminders.find((r) => r.id === 'r1').done, 'не отмечено');
-  assert.equal(r.reminders.find((r) => r.id === 'r1').date, d(0), 'дата не меняется до завтра — чтобы можно было вернуть');
-  await ui.notSee('Купить цветы — Аня');
-});
-
 scenario('Напоминания: повторяющееся, сделанное вчера, сегодня снова активно — на ближайший раз', async ({ ui }) => {
-  await ui.go('/reminders');
+  await ui.go('/');
   const data = await ui.waitData((x) => !x.reminders.find((r) => r.id === 'pills').done, 'не вернулось в активные');
   assert.equal(data.reminders.find((r) => r.id === 'pills').date, d(0));
   await ui.see('Таблетки');
@@ -206,25 +166,6 @@ scenario('Напоминания: повторяющееся, сделанное
   data: seed({
     reminders: [R({ id: 'pills', title: 'Таблетки', date: d(-1), time: '09:00', repeat: { every: 1, unit: 'day' }, done: true, doneAt: new Date(`${d(-1)}T21:00:00+03:00`).getTime() })],
   }),
-});
-
-scenario('Лента: однократное просроченное уходит в «Сделанные» и возвращается оттуда', async ({ ui }) => {
-  await ui.go('/');
-  await ui.check('Написать Диме');
-  await ui.waitData((x) => x.reminders.find((r) => r.id === 'r3').done === true, 'не отмечено сделанным');
-  await ui.notSee('Просрочено');
-  await ui.tab('Напоминания');
-  await ui.tap('Сделанные');
-  await ui.see('Написать Диме');
-  await ui.check('Написать Диме');
-  await ui.waitData((x) => x.reminders.find((r) => r.id === 'r3').done === false, 'не вернулось в активные');
-});
-
-scenario('Лента: нажатие на карточку «Сегодня» открывает друга', async ({ ui }) => {
-  await ui.go('/');
-  await ui.tap('Аня Смирнова');
-  await ui.see('Суши, тирамису');
-  await ui.see('Познакомились');
 });
 
 // ===== Друзья =====
@@ -292,17 +233,16 @@ scenario('Карточка: знак зодиака чипом рядом с о�
   await ui.notSee('Знак зодиака', { label: true });
 }, { data: seed({ friends: [ANYA, IGOR, MAMA, F({ id: 'x', name: 'Без даты' })] }) });
 
-scenario('Знаки зодиака: маленький знак в списке и в «Сегодня»; переключатель в настройках прячет их везде', async ({ ui }) => {
+scenario('Знаки зодиака: маленький знак в списке и в карточке; переключатель в настройках прячет их везде', async ({ ui }) => {
   await ui.go('/friends');
   await ui.see('Знак зодиака: Рак', { label: true }); // Мама, 20 июля
-  await ui.go('/');
-  await ui.see('Знак зодиака: Близнецы', { label: true }); // у Ани день рождения сегодня
-  await ui.see('День рождения ·');
+  await ui.go('/friend/a');
+  await ui.see('Близнецы');
   await ui.go('/settings');
   await ui.see('Знаки зодиака');
   await ui.tap('Показывать знаки зодиака');
   await ui.waitData((x) => x.settings.showZodiac === false, 'переключатель не сохранился');
-  for (const path of ['/friends', '/', '/friend/c']) {
+  for (const path of ['/friends', '/friend/c']) {
     await ui.go(path);
     await ui.notSee('Знак зодиака', { label: true });
   }
@@ -386,7 +326,7 @@ scenario('Друг не найден: удалённый друг по стар�
 });
 
 // ===== Форма друга =====
-scenario('Новый друг: дата тремя полями, телефон, важная дата — и он сразу в ленте', async ({ ui, page }) => {
+scenario('Новый друг: дата тремя полями, телефон, важная дата — и он сразу в списке по дню рождения', async ({ ui, page }) => {
   await ui.go('/friends');
   await ui.tap('Добавить друга');
   await ui.fill('Например, Аня', 'Пётр Тестов');
@@ -405,7 +345,7 @@ scenario('Новый друг: дата тремя полями, телефон,
   assert.equal(f.phone, '+375 29 111-00-11');
   assert.equal(f.food, 'Пицца');
   assert.deepEqual(f.dates.map((x) => [x.title, x.date]), [['Свадьба', '2015-09-01']]);
-  await ui.tab('Скоро');
+  await ui.tap('Скоро день рождения');
   await ui.see('Пётр Тестов');
   await ui.see('через 5 дней');
 });
@@ -555,7 +495,7 @@ scenario('Соцсети: убрать сеть в форме друга', async
 
 // ===== Напоминания =====
 scenario('Напоминание: шаблон, друг, дата и время цифрами, каждую неделю', async ({ ui }) => {
-  await ui.go('/reminders');
+  await ui.go('/');
   await ui.tap('Новое напоминание');
   await ui.tap('Оплатить счета');
   await ui.tap('Игорь Ветров');
@@ -573,7 +513,7 @@ scenario('Напоминание: шаблон, друг, дата и время
 });
 
 scenario('Напоминание: свой интервал и «за 3 дня»', async ({ ui }) => {
-  await ui.go('/reminders');
+  await ui.go('/');
   await ui.tap('Новое напоминание');
   await ui.fill('Например, сдать отчёт', 'Сдать проект');
   await ui.tap('За 3 дня');
@@ -589,7 +529,7 @@ scenario('Напоминание: свой интервал и «за 3 дня»
 });
 
 scenario('Напоминание: «каждый день до срока» — подпись в форме и в списке; «за день» и повтор его снимают', async ({ ui }) => {
-  await ui.go('/reminders');
+  await ui.go('/');
   await ui.tap('Новое напоминание');
   await ui.fill('Например, сдать отчёт', 'Билеты на самолёт');
   await ui.typeInto('ДД.ММ.ГГГГ', '20062026', { clear: true });
@@ -622,7 +562,7 @@ scenario('Напоминание: «каждый день до срока» — 
 });
 
 scenario('Напоминания: разделы по сроку, при одинаковом сроке важное выше; чипы времени и важности (прочерк), фитиль; «Быстрые» и «Важные»', async ({ ui, page }) => {
-  await ui.go('/reminders');
+  await ui.go('/');
   await ui.see('Продлить страховку');
   for (const t of ['Сегодня', 'На неделе', 'В течение месяца', 'Позже']) await ui.see(t);
   const order = ['Оплатить интернет', 'Стоматолог', 'Билеты на самолёт', 'Купить косметику', 'Сдать проект', 'Подарок Ане', 'Продлить страховку'];
@@ -657,7 +597,7 @@ scenario('Напоминания: разделы по сроку, при оди�
 });
 
 scenario('Напоминание: «Дата и время», важность и «Сколько займёт» — сохраняются и видны в строке', async ({ ui }) => {
-  await ui.go('/reminders');
+  await ui.go('/');
   await ui.tap('Новое напоминание');
   await ui.fill('Например, сдать отчёт', 'Стоматолог');
   await ui.tap('Дата и время');
@@ -677,7 +617,7 @@ scenario('Напоминание: «Дата и время», важность �
 });
 
 scenario('Напоминание: без текста не сохраняется', async ({ ui }) => {
-  await ui.go('/reminders');
+  await ui.go('/');
   await ui.tap('Новое напоминание');
   await ui.tap('Сохранить');
   await ui.see('Новое напоминание');
@@ -685,7 +625,7 @@ scenario('Напоминание: без текста не сохраняетс�
 });
 
 scenario('Напоминание: неверное время не сохраняется молча', async ({ ui }) => {
-  await ui.go('/reminders');
+  await ui.go('/');
   await ui.tap('Новое напоминание');
   await ui.fill('Например, сдать отчёт', 'Проверка времени');
   await ui.typeInto('ЧЧ:ММ', '2599', { clear: true });
@@ -702,7 +642,7 @@ scenario('Напоминание: неверное время не сохран�
 });
 
 scenario('Напоминание: неверная дата не сохраняется молча', async ({ ui }) => {
-  await ui.go('/reminders');
+  await ui.go('/');
   await ui.tap('Новое напоминание');
   await ui.fill('Например, сдать отчёт', 'Проверка даты');
   await ui.typeInto('ДД.ММ.ГГГГ', '31022027', { clear: true });
@@ -715,7 +655,7 @@ scenario('Напоминание: неверная дата не сохраня�
 });
 
 scenario('Напоминания: фильтры, выбор нескольких — сделать, вернуть и удалить', async ({ ui }) => {
-  await ui.go('/reminders');
+  await ui.go('/');
   await ui.tap('Сделанные'); await ui.see('Сдать отчёт'); await ui.notSee('Написать Диме');
   await ui.tap('Для себя'); await ui.see('Написать Диме'); await ui.notSee('Купить цветы — Аня');
   await ui.tap('Друзья', { nth: 'first' }); await ui.see('Купить цветы — Аня'); await ui.notSee('Написать Диме');
@@ -741,7 +681,7 @@ scenario('Напоминания: фильтры, выбор нескольки�
 });
 
 scenario('Напоминание: удаление из формы с подтверждением', async ({ ui }) => {
-  await ui.go('/reminders');
+  await ui.go('/');
   await ui.tap('Написать Диме');
   await ui.see('Напоминание');
   await ui.tap('Удалить');
@@ -750,7 +690,7 @@ scenario('Напоминание: удаление из формы с подтв
 });
 
 scenario('Напоминание по старой ссылке после удаления — «не найдено», а не пустая форма', async ({ ui }) => {
-  await ui.go('/reminders');
+  await ui.go('/');
   await ui.go('/reminder/edit?id=gone');
   await ui.see('Напоминание не найдено');
   await ui.notSee('Новое напоминание');
@@ -759,7 +699,7 @@ scenario('Напоминание по старой ссылке после уд�
 });
 
 scenario('Напоминание: выбор друга через окно с поиском, когда друзей много', async ({ ui }) => {
-  await ui.go('/reminders');
+  await ui.go('/');
   await ui.tap('Новое напоминание');
   await ui.fill('Например, сдать отчёт', 'Поздравить');
   await ui.tap('Выбрать друга');
@@ -821,7 +761,7 @@ scenario('Оформление: тёмная тема и свои цвета п�
   await page.getByLabel('Индиго').first().click();
   await ui.waitData((x) => x.settings.accentLight === 'indigo', 'цвет светлой не сохранился');
   assert.equal(await page.getByLabel('Предпросмотр светлой темы').getAttribute('aria-selected'), 'true', 'цвет светлой темы переключает предпросмотр');
-  await ui.go('/reminders');
+  await ui.go('/');
   const bg = await page.getByLabel('Новое напоминание').evaluate((el) => getComputedStyle(el).backgroundColor);
   assert.equal(bg, 'rgb(184, 138, 181)', 'кнопка должна стать «сливой» тёмной темы');
 });
@@ -1154,7 +1094,7 @@ scenario('«Что нового» после обновления: только 
   await ui.tap('Понятно');
   await ui.waitData((x) => x.settings.lastSeenVersion === VERSION, 'версия не запомнилась');
   await page.reload();
-  await ui.see('Скоро');
+  await ui.see('Напоминания');
   await ui.pause(800);
   await ui.notSee(`обновилось до версии ${VERSION}`);
 }, { data: seed({ settings: { lastSeenVersion: '1.12.0' } }) });
@@ -1166,11 +1106,26 @@ scenario('«Что нового»: «Вся история изменений» 
   await ui.see('1.19.0');
 }, { data: seed({ settings: { lastSeenVersion: '1.12.0' } }) });
 
-scenario('Первый запуск: пустые вкладки и без шторки «Что нового»', async ({ ui }) => {
+scenario('Открывается на «Напоминаниях»: две вкладки, в шапке — настройки; старая ссылка /reminders ведёт туда же', async ({ ui, page }) => {
   await ui.go('/');
+  await ui.see('Написать Диме');
+  await ui.notSee('Скоро');
+  await ui.tap('Настройки');
+  await ui.see('Уведомления');
+  await ui.go('/reminders');
+  await page.waitForURL((u) => new URL(u).pathname === '/', { timeout: 5000 });
+  await ui.see('Написать Диме');
+  await ui.tab('Друзья');
+  await ui.tap('Настройки');
+  await ui.see('Уведомления');
+});
+
+scenario('Первый запуск: открываются «Друзья», пустые вкладки и без шторки «Что нового»', async ({ ui, page }) => {
+  await ui.go('/');
+  await page.waitForURL(/\/friends$/, { timeout: 5000 });
   await ui.see('Пока никого');
   await ui.see('Импорт из контактов');
-  await ui.see('Добавить друга');
+  await ui.see('Добавить друга', { label: true });
   await ui.notSee('обновилось до версии');
   await ui.waitData((x) => x.settings.lastSeenVersion === VERSION, 'новой установке версия должна запомниться');
   await ui.tab('Друзья'); await ui.see('Импорт из контактов');
@@ -1189,7 +1144,7 @@ scenario('Данные переживают перезапуск приложе�
 });
 
 scenario('Данные старой версии без новых полей открываются без сбоев', async ({ ui, page }) => {
-  await ui.go('/');
+  await ui.go('/friends');
   await ui.see('Старый Друг');
   await ui.tap('Старый Друг');
   await ui.see('через 2 дня');
@@ -1212,28 +1167,17 @@ scenario('Повреждённые сохранённые данные не за
   await ui.see('Пока никого'); // приложение работает дальше, а не падает
 }, { raw: '{"friends":[{"id":"a","name":"Аня"' });
 
-// ===== Импорт из Telegram: карточка в ленте =====
+// ===== Импорт из Telegram: карточка в списке друзей =====
 for (const [state, expect] of [['loading', ['Импорт из Telegram', '154 из 248']], ['done', ['Telegram: 248 контактов', 'Выбери, кого добавить']], ['code', ['Вход в Telegram ждёт тебя', 'Код из приложения Telegram']]]) {
-  scenario(`Импорт из Telegram: карточка «${expect[0]}» в ленте и в списке друзей`, async ({ ui }) => {
-    await ui.go('/');
+  scenario(`Импорт из Telegram: карточка «${expect[0]}» в списке друзей`, async ({ ui }) => {
+    await ui.go('/friends');
     for (const s of expect) await ui.see(s);
     const box = await ui.box(expect[0]);
-    assert.ok(box.y < 400, `карточка должна быть в начале ленты, y=${box.y}`);
-    await ui.tab('Друзья');
-    await ui.see(expect[0]);
+    assert.ok(box.y < 500, `карточка должна быть в начале списка, y=${box.y}`);
   }, { storage: { 'friends-notes/tg-preview': state } });
 }
 
 // ===== Вёрстка и навигация =====
-scenario('Узкий экран 360: имя в карточке «Сегодня» видно целиком', async ({ ui, page }) => {
-  await ui.go('/');
-  await ui.see('Аня Смирнова');
-  const cut = await page.evaluate(() => [...document.querySelectorAll('div[dir="auto"]')]
-    .filter((e) => e.textContent === 'Аня Смирнова' && !e.closest('[aria-hidden="true"]'))
-    .some((e) => e.scrollWidth > e.clientWidth + 1));
-  assert.ok(!cut, 'имя обрезано многоточием');
-}, { viewport: { width: 360, height: 780 } });
-
 scenario('Неизвестный адрес — свой экран на русском', async ({ ui }) => {
   await ui.go('/nope');
   await ui.notSee('Unmatched Route');

@@ -22,9 +22,9 @@ export default function TabsLayout() {
         tabBarLabelStyle: { fontFamily: fonts.medium, fontSize: 11 },
       }}
     >
-      <Tabs.Screen name="index" options={{ title: 'Скоро', tabBarIcon: tabIcon('calendar') }} />
+      {/* Главная — «Напоминания»: приложение открывается на них (при первом запуске — на «Друзьях»). */}
+      <Tabs.Screen name="index" options={{ title: 'Напоминания', tabBarIcon: tabIcon('bell') }} />
       <Tabs.Screen name="friends" options={{ title: 'Друзья', tabBarIcon: tabIcon('people') }} />
-      <Tabs.Screen name="reminders" options={{ title: 'Напоминания', tabBarIcon: tabIcon('bell') }} />
     </Tabs>
   );
 }
