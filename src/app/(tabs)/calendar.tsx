@@ -65,7 +65,6 @@ export default function CalendarScreen() {
   const pick = (date: string) => setView(atDay(date));
 
   const isCurrent = view.year === parseISODate(today).getFullYear() && view.month === parseISODate(today).getMonth();
-  const cellW = `${100 / 7}%` as const;
 
   return (
     <TabSwipe tab="/calendar">
@@ -121,7 +120,7 @@ export default function CalendarScreen() {
                 <Text
                   key={w}
                   style={{
-                    width: cellW,
+                    flex: 1,
                     textAlign: 'center',
                     fontFamily: fonts.medium,
                     fontSize: 12,
@@ -283,56 +282,62 @@ function MonthGrid({
   onPick: (date: string) => void;
 }) {
   const { colors, fonts } = useTheme();
-  const cellW = `${100 / 7}%` as const;
+  const days = monthGrid(year, month);
+  // Неделя — отдельной строкой из семи клеток flex: 1. Не перенос по ширине 1/7: на Android сумма семи округлённых
+  // «14,2857 %» бывала шире ряда, в строку влезало шесть дней, и числа съезжали со своих дней недели.
   return (
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-      {monthGrid(year, month).map((date) => {
-        const d = parseISODate(date);
-        const own = d.getMonth() === month;
-        const isToday = date === today;
-        const isSel = date === selected && own;
-        const list = byDay.get(date) ?? [];
-        // Не больше трёх значков — шире клетки не влезут; если событий всех четырёх видов, праздник — только в списке.
-        const kinds = GRID_ORDER.filter((k) => list.some((e) => e.kind === k)).slice(0, 3);
-        return (
-          <Pressable
-            key={date}
-            onPress={() => onPick(date)}
-            accessibilityRole="button"
-            accessibilityState={{ selected: isSel }}
-            accessibilityLabel={`${formatDateLong(date)}${isToday ? ', сегодня' : ''}${list.length ? `, ${list.length} ${plural(list.length, 'событие', 'события', 'событий')}` : ''}`}
-            style={{ width: cellW, height: 56, alignItems: 'center', paddingTop: 4 }}
-          >
-            <View style={{ width: 34, height: 34, alignItems: 'center', justifyContent: 'center' }}>
-              {/* Кружок — отдельным видом и заново при смене вида: на Android смена фона у вида со скруглением
-                  теряла скругление, и выбранный день становился квадратом. */}
-              {(isSel || isToday) && (
-                <View
-                  key={isSel ? 'sel' : 'today'}
-                  style={{ position: 'absolute', width: 34, height: 34, borderRadius: 17, backgroundColor: isSel ? colors.accent : colors.soft }}
-                />
-              )}
-              <Text
-                style={{
-                  fontFamily: isSel || isToday ? fonts.semibold : fonts.body,
-                  fontSize: 16,
-                  fontVariant: ['tabular-nums'],
-                  color: isSel ? colors.onAccent : isToday ? colors.accentText : own ? colors.text : colors.text3,
-                  opacity: own ? 1 : 0.6,
-                }}
+    <View>
+      {Array.from({ length: 6 }, (_, week) => (
+        <View key={week} style={{ flexDirection: 'row' }}>
+          {days.slice(week * 7, week * 7 + 7).map((date) => {
+            const d = parseISODate(date);
+            const own = d.getMonth() === month;
+            const isToday = date === today;
+            const isSel = date === selected && own;
+            const list = byDay.get(date) ?? [];
+            // Не больше трёх значков — шире клетки не влезут; если событий всех четырёх видов, праздник — только в списке.
+            const kinds = GRID_ORDER.filter((k) => list.some((e) => e.kind === k)).slice(0, 3);
+            return (
+              <Pressable
+                key={date}
+                onPress={() => onPick(date)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isSel }}
+                accessibilityLabel={`${formatDateLong(date)}${isToday ? ', сегодня' : ''}${list.length ? `, ${list.length} ${plural(list.length, 'событие', 'события', 'событий')}` : ''}`}
+                style={{ flex: 1, height: 56, alignItems: 'center', paddingTop: 4 }}
               >
-                {d.getDate()}
-              </Text>
-            </View>
-            {/* Значки — сразу под кружком дня, с зазором: кружок 4…38, значки 42…55. */}
-            <View style={{ position: 'absolute', top: 42, flexDirection: 'row', gap: 3, height: 13, opacity: own ? 1 : 0.5 }}>
-              {kinds.map((k) => (
-                <KindIcon key={k} kind={k} size={13} />
-              ))}
-            </View>
-          </Pressable>
-        );
-      })}
+                <View style={{ width: 34, height: 34, alignItems: 'center', justifyContent: 'center' }}>
+                  {/* Кружок — отдельным видом и заново при смене вида: на Android смена фона у вида со скруглением
+                  теряла скругление, и выбранный день становился квадратом. */}
+                  {(isSel || isToday) && (
+                    <View
+                      key={isSel ? 'sel' : 'today'}
+                      style={{ position: 'absolute', width: 34, height: 34, borderRadius: 17, backgroundColor: isSel ? colors.accent : colors.soft }}
+                    />
+                  )}
+                  <Text
+                    style={{
+                      fontFamily: isSel || isToday ? fonts.semibold : fonts.body,
+                      fontSize: 16,
+                      fontVariant: ['tabular-nums'],
+                      color: isSel ? colors.onAccent : isToday ? colors.accentText : own ? colors.text : colors.text3,
+                      opacity: own ? 1 : 0.6,
+                    }}
+                  >
+                    {d.getDate()}
+                  </Text>
+                </View>
+                {/* Значки — сразу под кружком дня, с зазором: кружок 4…38, значки 42…55. */}
+                <View style={{ position: 'absolute', top: 42, flexDirection: 'row', gap: 3, height: 13, opacity: own ? 1 : 0.5 }}>
+                  {kinds.map((k) => (
+                    <KindIcon key={k} kind={k} size={13} />
+                  ))}
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
+      ))}
     </View>
   );
 }
@@ -351,7 +356,19 @@ function EventRow({ event: e, today }: { event: CalendarEvent; today: string }) 
     const estimated = e.holidays.some((h) => h.estimated);
     return (
       <ListRow
-        onPress={() => router.push({ pathname: '/holiday', params: { id: e.holidays[0].id, date: e.date, also: e.holidays.slice(1).map((h) => h.id).join(',') } })}
+        onPress={() =>
+          router.push({
+            pathname: '/holiday',
+            params: {
+              id: e.holidays[0].id,
+              date: e.date,
+              also: e.holidays
+                .slice(1)
+                .map((h) => h.id)
+                .join(','),
+            },
+          })
+        }
         leading={
           <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: colors.chip, alignItems: 'center', justifyContent: 'center' }}>
             <KindIcon kind="holiday" size={20} strokeWidth={2} />

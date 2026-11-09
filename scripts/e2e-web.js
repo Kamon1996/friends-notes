@@ -1143,6 +1143,12 @@ scenario('Календарь: дни рождения, годовщины и в�
   await ui.notSee('Написать Диме'); // дело «до срока»
   await ui.notSee('Купить цветы — Аня'); // повторяющееся
   await ui.see('Важные даты');
+  // Неделя — ровно семь клеток: понедельники одним столбцом, воскресенье — последним.
+  const cols = await page.evaluate(() => {
+    const x = (label) => [...document.querySelectorAll(`[aria-label^="${label}"]`)].find((e) => !e.closest('[aria-hidden="true"]')).getBoundingClientRect().x;
+    return { mon15: x('Понедельник, 15 июня'), mon22: x('Понедельник, 22 июня'), sat20: x('Суббота, 20 июня'), sun21: x('Воскресенье, 21 июня') };
+  });
+  assert.ok(Math.abs(cols.mon15 - cols.mon22) < 1 && cols.sun21 > cols.sat20, `дни недели съехали: ${JSON.stringify(cols)}`);
   // Точки в днях: у 22 июня — событие.
   await ui.see('Понедельник, 22 июня, 1 событие', { label: true });
   await ui.tap('Понедельник, 22 июня, 1 событие');
