@@ -5,7 +5,7 @@ import { Alert, AppState, Linking, Platform, Pressable, ScrollView, Switch, Text
 import { AccentDots } from '@/components/AccentPicker';
 import { DateField } from '@/components/DateField';
 import { Icon } from '@/components/Icon';
-import { Button, Card, Group, IconCircle, ListRow, SectionTitle, SwitchRow, useTheme } from '@/components/ui';
+import { Button, Card, Group, IconCircle, ListRow, SectionTitle, Segmented, SwitchRow, useTheme } from '@/components/ui';
 import { smartCalendarOn } from '@/lib/calendarAi';
 import { calendarItems } from '@/lib/calendarPlan';
 import { APP_VERSION } from '@/lib/changelog';
@@ -278,6 +278,20 @@ export default function SettingsScreen() {
             sub="Что значат значки и сколько чего в месяце."
             value={settings.calendarLegend !== false}
             onChange={(v) => updateSettings({ calendarLegend: v })}
+          />
+        </Card>
+        <Card style={{ gap: 10 }}>
+          <View style={{ gap: 2 }}>
+            <Text style={s.title}>Подробности дня</Text>
+            <Text style={s.muted}>Что показывать, когда нажал на день с событиями.</Text>
+          </View>
+          <Segmented
+            options={[
+              { value: 'sheet', label: 'Шторкой снизу' },
+              { value: 'inline', label: 'В календаре' },
+            ]}
+            value={settings.calendarDayView === 'inline' ? 'inline' : 'sheet'}
+            onChange={(v) => updateSettings({ calendarDayView: v })}
           />
         </Card>
         {deviceCalendarAvailable && (

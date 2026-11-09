@@ -1262,6 +1262,32 @@ scenario('Режим выбора на одной вкладке не мешае
   await page.waitForURL(/\/friends$/, { timeout: 3000 });
 });
 
+scenario('Календарь: подробности дня «в календаре» — гармошка под неделей, недели ниже отъезжают; переключается в настройках', async ({ ui, page }) => {
+  await ui.go('/settings');
+  await ui.tap('В календаре');
+  await ui.waitData((x) => x.settings.calendarDayView === 'inline', 'настройка не сохранилась');
+  await ui.go('/calendar');
+  await ui.see('Июнь 2026');
+  const y = (label) => page.evaluate((l) => [...document.querySelectorAll(`[aria-label^="${l}"]`)].find((e) => !e.closest('[aria-hidden="true"]')).getBoundingClientRect().y, label);
+  const before = await y('Понедельник, 29 июня');
+  await ui.tap('Понедельник, 22 июня, 1 событие');
+  await ui.see('Понедельник, 22 июня · через 12 дней');
+  await ui.pause(400);
+  assert.ok((await y('Понедельник, 29 июня')) > before + 40, 'неделя под раскрытым днём должна отъехать вниз');
+  // Другой день с событием — гармошка переехала к нему; тот же день ещё раз — свернулась.
+  await ui.tap('Понедельник, 15 июня, 1 событие');
+  await ui.see('Понедельник, 15 июня · через 5 дней');
+  await ui.notSee('Понедельник, 22 июня · через 12 дней');
+  await ui.tap('Понедельник, 15 июня, 1 событие');
+  await ui.notSee('Понедельник, 15 июня · через 5 дней');
+  await ui.pause(400);
+  assert.ok(Math.abs((await y('Понедельник, 29 июня')) - before) < 2, 'после сворачивания недели должны вернуться');
+}, {
+  data: seed({
+    reminders: [R({ id: 'v', title: 'Стоматолог', kind: 'at', date: d(5), time: '15:00' })],
+  }),
+});
+
 scenario('Календарь: сетка листается каруселью — месяцы, а не вкладки; выбранный день — кружок', async ({ ui, page }) => {
   const path = () => new URL(page.url()).pathname;
   await ui.go('/calendar');

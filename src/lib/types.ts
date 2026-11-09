@@ -152,6 +152,8 @@ export interface Settings {
   holidayCountries?: string[];
   /** Обозначения под календарём (сколько чего в месяце). Нет — показывать. */
   calendarLegend?: boolean;
+  /** Подробности дня в календаре: шторкой снизу или «гармошкой» внутри календаря. Нет — шторкой. */
+  calendarDayView?: 'sheet' | 'inline';
 }
 
 export interface AppData {
