@@ -1,12 +1,13 @@
 import { router, useIsFocused } from 'expo-router';
-import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { BackHandler, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
+import { Fragment, useEffect, useMemo, useRef, useState, type ComponentRef, type ReactNode } from 'react';
+import { BackHandler, Platform, Pressable, ScrollView, Text, View, useWindowDimensions, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { Avatar } from '@/components/Avatar';
+import { openExternal } from '@/components/ContactButtons';
 import { KindBadge, KindIcon, useKindColors } from '@/components/CalendarIcons';
 import { Icon } from '@/components/Icon';
 import { settleDuration } from '@/components/settle';
@@ -16,7 +17,9 @@ import { Button, Fab, Group, IconButton, ListRow, ScreenHeader, Tag, useTheme } 
 import { MONTHS, MONTHS_IN, WEEKDAYS_MON, calendarEvents, monthCounts, monthGrid, monthRange, nextEvents, type CalendarEvent } from '@/lib/calendar';
 import { addInterval, daysBetween, formatDate, formatDateLong, parseISODate, plural, relativeDay, todayISO } from '@/lib/dates';
 import { formatHolidayDays, holidayCountries, holidayCountry, holidayDatesInYear } from '@/lib/holidays';
+import { messageChannel } from '@/lib/messageChannel';
 import { useStore } from '@/lib/store';
+import type { Friend } from '@/lib/types';
 
 interface CalView {
   year: number;
@@ -74,6 +77,13 @@ export default function CalendarScreen() {
   const counts = useMemo(() => monthCounts(events, monthFrom, monthTo), [events, monthFrom, monthTo]);
   const openEvents = useMemo(() => (lastOpened ? (byDay.get(lastOpened) ?? []) : []), [byDay, lastOpened]);
   const isOpen = opened !== null && openEvents.length > 0;
+  // Шторка открылась — подкатываем календарь к верху экрана: сетка остаётся видна над шторкой, можно жать другие дни.
+  const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
+  const [cardY, setCardY] = useState(0);
+  const sheetOpen = isOpen && !inline;
+  useEffect(() => {
+    if (sheetOpen) scrollRef.current?.scrollTo({ y: Math.max(0, cardY - 8), animated: true });
+  }, [sheetOpen, cardY]);
   // «Гармошка»: высота раскрытой панели — на неё растёт карусель месяцев; меняется плавно.
   const panelH = useSharedValue(0);
   const [panelContentH, setPanelContentH] = useState(0);
@@ -107,7 +117,7 @@ export default function CalendarScreen() {
   return (
     <TabSwipe tab="/calendar">
       <View style={s.screen}>
-        <ScrollView style={s.screen} contentContainerStyle={{ paddingBottom: 120 }}>
+        <ScrollView ref={scrollRef} style={s.screen} contentContainerStyle={{ paddingBottom: 120 }}>
           <ScreenHeader
             title="Календарь"
             subtitle={
@@ -122,7 +132,10 @@ export default function CalendarScreen() {
             }
           />
 
-          <View style={[s.group, { marginHorizontal: 20, marginTop: 14, paddingTop: 10, paddingBottom: legend ? 0 : 6 }]}>
+          <View
+            onLayout={(e) => setCardY(e.nativeEvent.layout.y)}
+            style={[s.group, { marginHorizontal: 20, marginTop: 14, paddingTop: 10, paddingBottom: legend ? 0 : 6 }]}
+          >
             <MonthCarousel
               cur={cur}
               extra={panelH}
@@ -587,7 +600,6 @@ function DayPanel({
   onMeasure: (h: number) => void;
 }) {
   const { s, colors } = useTheme();
-  const birthday = events.find((e) => e.kind === 'birthday');
   const style = useAnimatedStyle(() => ({ height: height.get() }));
   return (
     <Animated.View style={[{ overflow: 'hidden' }, style]} aria-hidden={!open} pointerEvents={open ? 'auto' : 'none'}>
@@ -609,25 +621,9 @@ function DayPanel({
           <Text style={[s.caption, { paddingTop: 4, paddingBottom: 2 }]}>
             {formatDateLong(date)} · {relativeDay(date, today)}
           </Text>
-          <Group style={{ backgroundColor: 'transparent', borderWidth: 0, borderRadius: 0 }} inset={52}>
-            {events.map((e) => (
-              <EventRow key={e.key} event={e} today={today} showWhen={false} />
-            ))}
-          </Group>
-          <View style={{ flexDirection: 'row', gap: 18, paddingTop: 4, paddingHorizontal: 2 }}>
-            {birthday && birthday.kind === 'birthday' && (
-              <Pressable onPress={() => router.push({ pathname: '/friend/[id]', params: { id: birthday.friend.id } })} hitSlop={8} accessibilityRole="button">
-                <Text style={{ color: colors.accentText, fontWeight: '600', fontSize: 14 }}>Поздравить</Text>
-              </Pressable>
-            )}
-            <Pressable
-              onPress={() => router.push({ pathname: '/reminder/edit', params: { date, kind: 'at', calendar: '1' } })}
-              hitSlop={8}
-              accessibilityRole="button"
-            >
-              <Text style={{ color: colors.accentText, fontWeight: '600', fontSize: 14 }}>+ Событие</Text>
-            </Pressable>
-          </View>
+          {/* Много событий — первые пять и «Ещё N»: панель не растягивает календарь на весь экран. */}
+          <DayEvents key={date} events={events} today={today} limit={5} />
+          <NewEventButton date={date} style={{ marginTop: 8 }} />
         </View>
       </View>
     </Animated.View>
@@ -686,7 +682,6 @@ function DaySheet({
     });
   const style = useAnimatedStyle(() => ({ transform: [{ translateY: y.get() }] }));
   const d = shown.date;
-  const birthday = shown.events.find((e) => e.kind === 'birthday');
   return (
     <Animated.View
       pointerEvents={open ? 'auto' : 'none'}
@@ -699,7 +694,8 @@ function DaySheet({
           left: 0,
           right: 0,
           bottom: 0,
-          maxHeight: screenH * 0.55,
+          // Не выше половины экрана: над шторкой — сетка месяца, по ней можно жать другие дни.
+          maxHeight: screenH * 0.5,
           backgroundColor: colors.card,
           borderTopLeftRadius: 24,
           borderTopRightRadius: 24,
@@ -725,32 +721,100 @@ function DaySheet({
           </View>
         </View>
       </GestureDetector>
+      {/* Шапка и кнопка снизу на месте, список между ними прокручивается — хоть двадцать событий. */}
       <ScrollView style={{ flexGrow: 0 }} contentContainerStyle={{ paddingHorizontal: 20 }}>
-        <Group style={{ backgroundColor: 'transparent', borderWidth: 0, borderRadius: 0 }} inset={52}>
-          {shown.events.map((e) => (
-            // «Когда» — уже в заголовке шторки.
-            <EventRow key={e.key} event={e} today={today} showWhen={false} />
-          ))}
-        </Group>
+        <DayEvents key={d} events={shown.events} today={today} />
       </ScrollView>
-      <View style={{ flexDirection: 'row', gap: 10, paddingHorizontal: 20, paddingTop: 10 }}>
-        {birthday && birthday.kind === 'birthday' && (
-          <Button title="Поздравить" style={{ flex: 1 }} onPress={() => router.push({ pathname: '/friend/[id]', params: { id: birthday.friend.id } })} />
-        )}
-        <Button
-          title="Событие"
-          icon="plus"
-          variant="soft"
-          style={{ flex: 1 }}
-          onPress={() => router.push({ pathname: '/reminder/edit', params: { date: d, kind: 'at', calendar: '1' } })}
-        />
-      </View>
+      <NewEventButton date={d} style={{ marginHorizontal: 20, marginTop: 10 }} />
     </Animated.View>
   );
 }
 
+const KIND_TITLE: Record<CalendarEvent['kind'], string> = { holiday: 'Праздники', birthday: 'Дни рождения', date: 'Важные даты', meeting: 'Встречи' };
+
+/**
+ * События дня — для шторки и «гармошки». «Когда» уже в шапке, поэтому справа у человека — «Поздравить» или «Написать»
+ * (если ему есть куда написать). Больше пяти событий — по группам с подзаголовками; `limit` — сколько показать сразу,
+ * остальное — по «Ещё N».
+ */
+function DayEvents({ events, today, limit }: { events: CalendarEvent[]; today: string; limit?: number }) {
+  const { s, colors, fonts } = useTheme();
+  const [all, setAll] = useState(false);
+  const grouped = events.length > 5;
+  const visible = limit && !all ? events.slice(0, limit) : events;
+  const rest = events.length - visible.length;
+  const counts = new Map<CalendarEvent['kind'], number>();
+  for (const e of events) counts.set(e.kind, (counts.get(e.kind) ?? 0) + 1);
+  return (
+    <View>
+      {visible.map((e, i) => {
+        const head = grouped && (i === 0 || visible[i - 1].kind !== e.kind);
+        return (
+          <View key={e.key}>
+            {head && (
+              <Text
+                style={[s.sectionLabel, { paddingTop: i ? 12 : 6, paddingBottom: 2, paddingHorizontal: 0 }]}
+              >{`${KIND_TITLE[e.kind]} · ${counts.get(e.kind)}`}</Text>
+            )}
+            {i > 0 && !head && <View style={[s.separator, { marginLeft: 52 }]} />}
+            <EventRow event={e} today={today} showWhen={false} contact />
+          </View>
+        );
+      })}
+      {rest > 0 && (
+        <Pressable onPress={() => setAll(true)} hitSlop={6} accessibilityRole="button" style={{ paddingVertical: 10, paddingLeft: 2 }}>
+          <Text
+            style={{ fontFamily: fonts.semibold, fontSize: 14, color: colors.accentText }}
+          >{`Ещё ${rest} ${plural(rest, 'событие', 'события', 'событий')}`}</Text>
+        </Pressable>
+      )}
+    </View>
+  );
+}
+
+/** «+ Новое событие» на этот день — во всю ширину, внизу шторки и «гармошки». */
+function NewEventButton({ date, style }: { date: string; style?: ViewStyle }) {
+  return (
+    <Button
+      title="Новое событие"
+      icon="plus"
+      variant="soft"
+      style={style}
+      onPress={() => router.push({ pathname: '/reminder/edit', params: { date, kind: 'at', calendar: '1' } })}
+    />
+  );
+}
+
+/** «Поздравить» / «Написать» у человека — сразу в мессенджер или соцсеть (Telegram первым); некуда — кнопки нет. */
+function ContactPill({ friend, label }: { friend: Friend; label: string }) {
+  const { colors, fonts } = useTheme();
+  const channel = messageChannel(friend, Platform.OS);
+  if (!channel) return null;
+  return (
+    <Pressable
+      onPress={() => openExternal(channel.url, channel.app)}
+      hitSlop={6}
+      accessibilityRole="button"
+      accessibilityLabel={`${label} в ${channel.app}`}
+      style={({ pressed }) => ({
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        backgroundColor: colors.soft,
+        borderRadius: 999,
+        paddingHorizontal: 11,
+        paddingVertical: 7,
+        opacity: pressed ? 0.7 : 1,
+      })}
+    >
+      <Icon name={channel.icon} size={14} color={colors.accentText} strokeWidth={2.2} />
+      <Text style={{ fontFamily: fonts.semibold, fontSize: 13, color: colors.accentText }}>{label}</Text>
+    </Pressable>
+  );
+}
+
 /** Строка события: аватар (у встречи без друга — часы), что за событие, когда. Нажатие — к другу или к делу. */
-function EventRow({ event: e, today, showWhen = true }: { event: CalendarEvent; today: string; showWhen?: boolean }) {
+function EventRow({ event: e, today, showWhen = true, contact = false }: { event: CalendarEvent; today: string; showWhen?: boolean; contact?: boolean }) {
   const { colors } = useTheme();
   const diff = daysBetween(today, e.date);
   const when = relativeDay(e.date, today);
@@ -809,7 +873,7 @@ function EventRow({ event: e, today, showWhen = true }: { event: CalendarEvent; 
         title={r.title}
         titleStyle={done ? { textDecorationLine: 'line-through', color: colors.text3 } : undefined}
         subtitle={`${r.time}${e.friend ? ` · ${e.friend.name}` : ''}${done ? ' · сделано' : ''}`}
-        trailing={showWhen ? tag : undefined}
+        trailing={showWhen ? tag : contact && e.friend ? <ContactPill friend={e.friend} label="Написать" /> : undefined}
       />
     );
   }
@@ -829,7 +893,7 @@ function EventRow({ event: e, today, showWhen = true }: { event: CalendarEvent; 
       }
       title={f.name}
       subtitle={what}
-      trailing={showWhen ? tag : undefined}
+      trailing={showWhen ? tag : contact ? <ContactPill friend={f} label="Поздравить" /> : undefined}
     />
   );
 }

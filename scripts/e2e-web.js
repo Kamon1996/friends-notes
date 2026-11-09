@@ -1288,6 +1288,48 @@ scenario('Календарь: подробности дня «в календа�
   }),
 });
 
+scenario('Календарь: в подробностях дня — «Поздравить» у именинника (есть куда написать), «Новое событие» снизу; много событий — по группам', async ({ ui, page }) => {
+  await ui.go('/calendar');
+  // Сегодня у Ани день рождения, у неё есть Telegram — кнопка прямо в её строке.
+  await ui.tap('Среда, 10 июня, сегодня, 1 событие');
+  await ui.see('Поздравить в Telegram', { label: true });
+  await ui.see('Новое событие');
+  // У Мамы нет ни мессенджера, ни соцсетей — кнопки нет.
+  await ui.tap('Июнь 2026');
+  await ui.tap('Июль 2026');
+  const mama = await page.evaluate(() => [...document.querySelectorAll('[aria-label*=", 20 июля"]')].find((e) => !e.closest('[aria-hidden="true"]'))?.getAttribute('aria-label'));
+  await ui.tap(mama);
+  await ui.see('Мама');
+  await ui.notSee('Поздравить в', { label: true });
+  // 20 июня — двенадцать дней рождения: шторка группирует и прокручивается.
+  await ui.tap('Июль 2026');
+  await ui.tap('Июнь 2026');
+  await ui.tap('Суббота, 20 июня, 12 событий');
+  await ui.see('Дни рождения · 12');
+}, {
+  data: seed({
+    friends: [ANYA, MAMA, ...Array.from({ length: 12 }, (_, i) => F({ id: `x${i}`, name: `Друг ${i + 1}`, birthday: bday(10, 1990 + i), whatsapp: i % 2 ? '79990000000' : '' }))],
+    reminders: [],
+  }),
+});
+
+scenario('Календарь: «в календаре» много событий — первые пять и «Ещё N»', async ({ ui }) => {
+  await ui.go('/calendar');
+  await ui.tap('Суббота, 20 июня, 12 событий');
+  await ui.see('Дни рождения · 12');
+  await ui.see('Ещё 7 событий');
+  // По алфавиту первые пять — «Друг 1», «Друг 10», «Друг 11», «Друг 12», «Друг 2»; «Друг 9» — под «Ещё».
+  await ui.notSee('Друг 9');
+  await ui.tap('Ещё 7 событий');
+  await ui.see('Друг 9');
+}, {
+  data: seed({
+    settings: { calendarDayView: 'inline' },
+    friends: [ANYA, ...Array.from({ length: 12 }, (_, i) => F({ id: `x${i}`, name: `Друг ${i + 1}`, birthday: bday(10, 1990 + i) }))],
+    reminders: [],
+  }),
+});
+
 scenario('Календарь: сетка листается каруселью — месяцы, а не вкладки; выбранный день — кружок', async ({ ui, page }) => {
   const path = () => new URL(page.url()).pathname;
   await ui.go('/calendar');
