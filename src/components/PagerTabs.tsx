@@ -3,12 +3,14 @@ import { CommonActions, TabActions, TabRouter, createNavigatorFactory, useNaviga
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View, useWindowDimensions, type ColorValue } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import Animated, { Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { useTheme } from '@/lib/themeContext';
 import { PagerLock } from './pagerLock';
+import { ropeWaves, type RopeWave } from '@/lib/tabRope';
+import { TabRope } from './TabRope';
 
 /** Что вкладка говорит о себе нижней панели. */
 export interface PagerTabOptions {
@@ -75,9 +77,15 @@ function PagerTabsNavigator({
     [],
   );
 
+  // «Ниточка»: при переходе по нитке между вкладками бежит волна — от той, с которой ушли.
+  const [waves, setWaves] = useState<Record<number, RopeWave>>({});
+  const reduceMotion = useReducedMotion();
+
   const jump = (to: number) => {
     const name = names[to];
-    if (name) navigation.dispatch({ ...TabActions.jumpTo(name), target: state.key });
+    if (!name) return;
+    if (to !== index && !reduceMotion) setWaves((w) => ropeWaves(w, index, to));
+    navigation.dispatch({ ...TabActions.jumpTo(name), target: state.key });
   };
 
   const pan = Gesture.Pan()
@@ -142,6 +150,8 @@ function PagerTabsNavigator({
               paddingBottom: insets.bottom,
             }}
           >
+            {/* Иконки 24 px с отступом 7 сверху: центр — на 19, нитка чуть ниже. */}
+            <TabRope width={w} count={count} y={21} edge={17} waves={waves} rest={colors.checkbox} glow={colors.accent} />
             {names.map((name, i) => {
               const route = routeOf(name);
               const focused = i === index;

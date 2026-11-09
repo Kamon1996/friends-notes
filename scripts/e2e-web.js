@@ -1196,6 +1196,38 @@ scenario('Свайп по экрану листает вкладки; свайп
   assert.equal(path(), '/', 'свайп по фильтрам не должен менять вкладку');
 });
 
+scenario('Нижняя панель: «ниточка» — волна только между вкладками перехода, от той, с которой ушли', async ({ ui, page }) => {
+  await ui.go('/');
+  await ui.see('Написать Диме');
+  // Высота середины каждого отрезка нитки (меньше — выше), снимаем по ходу перехода.
+  const mids = () => page.evaluate(() => [...document.querySelectorAll('[data-testid="tab-rope"] path:nth-of-type(odd)')].map((p) => Number(p.getAttribute('d').split('L')[12].split(' ')[1])));
+  const sample = async () => {
+    const out = [];
+    for (let i = 0; i < 24; i++) { out.push(await mids()); await page.waitForTimeout(40); }
+    return out;
+  };
+  const rest = await mids();
+  assert.equal(rest.length, 2, 'два отрезка нитки');
+  // 1 → 2: вздрагивает только первый отрезок.
+  await page.getByRole('tab').nth(1).click();
+  let s = await sample();
+  assert.ok(Math.min(...s.map((m) => m[0])) < rest[0] - 5, 'первый отрезок должен подпрыгнуть');
+  assert.ok(Math.min(...s.map((m) => m[1])) > rest[1] - 0.5, 'второй отрезок должен остаться на месте');
+  await page.waitForTimeout(600);
+  // 2 → 3: только второй.
+  await page.getByRole('tab').nth(2).click();
+  s = await sample();
+  assert.ok(Math.min(...s.map((m) => m[1])) < rest[1] - 5, 'второй отрезок должен подпрыгнуть');
+  assert.ok(Math.min(...s.map((m) => m[0])) > rest[0] - 0.5, 'первый отрезок должен остаться на месте');
+  await page.waitForTimeout(600);
+  // 3 → 1: оба, и сначала второй (от «Календаря»).
+  await page.getByRole('tab').nth(0).click();
+  s = await sample();
+  const peak = (k) => s.findIndex((m) => m[k] < rest[k] - 5);
+  assert.ok(peak(1) >= 0 && peak(0) >= 0, 'оба отрезка должны подпрыгнуть');
+  assert.ok(peak(1) < peak(0), 'волна должна начаться от «Календаря»');
+});
+
 scenario('Календарь: сетка листается каруселью — месяцы, а не вкладки; выбранный день — кружок', async ({ ui, page }) => {
   const path = () => new URL(page.url()).pathname;
   await ui.go('/calendar');
