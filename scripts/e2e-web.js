@@ -1114,22 +1114,22 @@ scenario('Экраны Telegram и «Сообщить о проблеме»', as
 scenario('«Что нового» после обновления: только пропущенные версии, второй раз не показывается', async ({ ui, page }) => {
   await ui.go('/');
   await ui.see(`обновилось до версии ${VERSION}`);
-  await ui.see('Тишина для отдельных людей'); // 1.13.0
-  await ui.notSee('Свайп влево удаляет друга'); // 1.12.0 уже видели
+  await ui.see('Резервная копия'); // 1.24.0
+  await ui.notSee('Экран «Оформление»'); // 1.21.0 уже видели
   await ui.tap('Понятно');
   await ui.waitData((x) => x.settings.lastSeenVersion === VERSION, 'версия не запомнилась');
   await page.reload();
   await ui.see('Напоминания');
   await ui.pause(800);
   await ui.notSee(`обновилось до версии ${VERSION}`);
-}, { data: seed({ settings: { lastSeenVersion: '1.12.0' } }) });
+}, { data: seed({ settings: { lastSeenVersion: '1.21.0' } }) });
 
 scenario('«Что нового»: «Вся история изменений» открывает экран истории', async ({ ui }) => {
   await ui.go('/');
   await ui.tap(/Вся история изменений/);
   await ui.see(`Установлена версия ${VERSION}`);
-  await ui.see('1.19.0');
-}, { data: seed({ settings: { lastSeenVersion: '1.12.0' } }) });
+  await ui.see('1.21.0');
+}, { data: seed({ settings: { lastSeenVersion: '1.21.0' } }) });
 
 scenario('Календарь: дни рождения, годовщины и встречи; дел «до срока» и повторяющихся нет; листание месяцев', async ({ ui, page }) => {
   await ui.go('/calendar');
