@@ -101,8 +101,13 @@ export function nextEvents(data: Pick<AppData, 'friends' | 'reminders'> & { sett
   return calendarEvents(data, addInterval(after, 'day', 1), addInterval(after, 'month', 2))
     .filter((e) => {
       if (e.kind !== 'holiday') return true;
-      if (seen.has(e.name)) return false;
-      seen.add(e.name);
+      // Один и тот же праздник (те же страны) — по набору id, а не по названию: «Рождество» России и Украины — разные дни.
+      const id = e.holidays
+        .map((h) => h.id)
+        .sort()
+        .join('|');
+      if (seen.has(id)) return false;
+      seen.add(id);
       return true;
     })
     .slice(0, limit);

@@ -118,6 +118,14 @@ describe('в календаре', () => {
   });
 });
 
+test('«дальше»: одноимённые праздники разных стран не прячут друг друга (Рождество 25 декабря и 7 января)', () => {
+  const next = nextEvents({ ...empty, settings: settings(['RU', 'UA']) }, '2026-12-20', 10).filter((e) => e.kind === 'holiday' && e.name === 'Рождество Христово');
+  assert.deepEqual(
+    next.map((e) => e.date),
+    ['2026-12-25', '2027-01-07'],
+  );
+});
+
 test('дни праздника в году и подпись: «1–6 и 8 января», через месяцы — через запятую', () => {
   const id = holidaysIn(['RU'], '2027-01-01', '2027-01-01')[0].id;
   assert.equal(formatHolidayDays(holidayDatesInYear(id, 2027)), '1–6 и 8 января');

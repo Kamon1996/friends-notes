@@ -1228,6 +1228,22 @@ scenario('Нижняя панель: «ниточка» — волна толь�
   assert.ok(peak(1) < peak(0), 'волна должна начаться от «Календаря»');
 });
 
+scenario('Режим выбора на одной вкладке не мешает листать другие; на ней самой листание выключено', async ({ ui, page }) => {
+  await ui.go('/');
+  await ui.longPress('Написать Диме');
+  await ui.see('Выбрано: 1', { label: true });
+  // На «Напоминаниях» в режиме выбора свайп по шапке вкладку не меняет.
+  await ui.swipeAt(300, 30, -220);
+  await ui.pause(500);
+  assert.equal(new URL(page.url()).pathname, '/', 'в режиме выбора вкладка не должна листаться');
+  // Переходим на «Календарь» кнопкой — там листать можно.
+  await page.getByRole('tab').nth(2).click();
+  await page.waitForURL(/\/calendar$/, { timeout: 3000 });
+  await ui.see('Июнь 2026');
+  await ui.swipeAt(80, 30, 220);
+  await page.waitForURL(/\/friends$/, { timeout: 3000 });
+});
+
 scenario('Календарь: сетка листается каруселью — месяцы, а не вкладки; выбранный день — кружок', async ({ ui, page }) => {
   const path = () => new URL(page.url()).pathname;
   await ui.go('/calendar');

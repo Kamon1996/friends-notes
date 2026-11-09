@@ -3,7 +3,7 @@
 //   npx tsx scripts/releases/notes.ts         → { "1.39.0": "…", … } для всех версий (для «Releases tidy»)
 import { CHANGELOG } from '../../src/lib/changelog';
 
-const FOOTER = 'APK ставится поверх прошлой версии — друзья и напоминания сохраняются.';
+const FOOTER = 'Ставится поверх прошлой версии — друзья и напоминания сохраняются.';
 const body = (items: readonly string[]) => [...items.map((t) => `- ${t}`), '', FOOTER].join('\n');
 
 const version = process.argv[2];

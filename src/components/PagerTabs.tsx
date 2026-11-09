@@ -1,7 +1,7 @@
 import { withLayoutContext } from 'expo-router/build/layouts/withLayoutContext';
 import { CommonActions, TabActions, TabRouter, createNavigatorFactory, useNavigationBuilder } from 'expo-router/build/react-navigation/core/index';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, View, useWindowDimensions, type ColorValue } from 'react-native';
+import { Keyboard, Pressable, StyleSheet, Text, View, useWindowDimensions, type ColorValue } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -68,28 +68,40 @@ function PagerTabsNavigator({
     x.set(withTiming(-index * w, { duration: 280, easing: Easing.out(Easing.cubic) }));
   }, [index, w, x, from]);
 
-  const [locks, setLocks] = useState(0);
-  const lock = useMemo(
-    () => () => {
-      setLocks((n) => n + 1);
-      return () => setLocks((n) => n - 1);
-    },
-    [],
+  // Запреты листания — у каждой вкладки свои: режим выбора в «Напоминаниях» не мешает листать с «Календаря».
+  const [locks, setLocks] = useState<Record<string, number>>({});
+  const namesKey = names.join('|');
+  const lockers = useMemo(
+    () =>
+      Object.fromEntries(
+        namesKey.split('|').map((name) => [
+          name,
+          () => {
+            setLocks((l) => ({ ...l, [name]: (l[name] ?? 0) + 1 }));
+            return () => setLocks((l) => ({ ...l, [name]: Math.max(0, (l[name] ?? 1) - 1) }));
+          },
+        ]),
+      ),
+    [namesKey],
   );
+  const locked = (locks[names[index]] ?? 0) > 0;
 
   // «Ниточка»: при переходе по нитке между вкладками бежит волна — от той, с которой ушли.
   const [waves, setWaves] = useState<Record<number, RopeWave>>({});
   const reduceMotion = useReducedMotion();
 
-  const jump = (to: number) => {
+  // `at` — откуда ушли: из жеста приходит точное значение, даже если вкладка ещё не успела смениться.
+  const jump = (to: number, at: number = index) => {
     const name = names[to];
     if (!name) return;
-    if (to !== index && !reduceMotion) setWaves((w) => ropeWaves(w, index, to));
+    // Клавиатура с прошлой вкладки не должна висеть над новой: экраны теперь не выгружаются.
+    Keyboard.dismiss();
+    if (to !== at && !reduceMotion) setWaves((w) => ropeWaves(w, at, to));
     navigation.dispatch({ ...TabActions.jumpTo(name), target: state.key });
   };
 
   const pan = Gesture.Pan()
-    .enabled(locks === 0 && count > 1)
+    .enabled(!locked && count > 1)
     .activeOffsetX([-22, 22])
     .failOffsetY([-14, 14])
     .onUpdate((e) => {
@@ -100,16 +112,17 @@ function PagerTabsNavigator({
       if ((at === 0 && dx > 0) || (at === count - 1 && dx < 0)) dx *= 0.25;
       x.set(-at * w + dx);
     })
-    .onEnd((e) => {
+    .onEnd((e, success) => {
       'worklet';
       const at = from.get();
       let to = at;
-      if (e.translationX < -w / 3 || e.velocityX < -600) to = Math.min(count - 1, at + 1);
-      else if (e.translationX > w / 3 || e.velocityX > 600) to = Math.max(0, at - 1);
+      // Жест отменён (перехватил другой) — возвращаемся на место.
+      if (success && (e.translationX < -w / 3 || e.velocityX < -600)) to = Math.min(count - 1, at + 1);
+      else if (success && (e.translationX > w / 3 || e.velocityX > 600)) to = Math.max(0, at - 1);
       x.set(withTiming(-to * w, { duration: 240, easing: Easing.out(Easing.cubic) }));
       if (to !== at) {
         from.set(to);
-        scheduleOnRN(jump, to);
+        scheduleOnRN(jump, to, at);
       }
     });
 
@@ -117,66 +130,64 @@ function PagerTabsNavigator({
 
   return (
     <NavigationContent>
-      <PagerLock.Provider value={lock}>
-        <View style={{ flex: 1, backgroundColor: colors.bg }}>
-          <GestureDetector gesture={pan}>
-            <View style={{ flex: 1, overflow: 'hidden' }} onLayout={(e) => setW(e.nativeEvent.layout.width)}>
-              <Animated.View style={[{ flex: 1, flexDirection: 'row', width: w * count }, rowStyle]}>
-                {names.map((name, i) => {
-                  const route = routeOf(name);
-                  return (
-                    <View
-                      key={name}
-                      style={{ width: w, height: '100%', backgroundColor: colors.bg }}
-                      // Невидимые экраны — не для диктора.
-                      aria-hidden={i !== index}
-                      importantForAccessibility={i === index ? 'auto' : 'no-hide-descendants'}
-                      accessibilityElementsHidden={i !== index}
-                    >
-                      {route ? descriptors[route.key]?.render() : null}
-                    </View>
-                  );
-                })}
-              </Animated.View>
-            </View>
-          </GestureDetector>
-          <View
-            accessibilityRole="tablist"
-            style={{
-              flexDirection: 'row',
-              backgroundColor: colors.card,
-              borderTopColor: colors.hairline,
-              borderTopWidth: StyleSheet.hairlineWidth * 2,
-              paddingBottom: insets.bottom,
-            }}
-          >
-            {/* Иконки 24 px с отступом 7 сверху: центр — на 19, нитка чуть ниже. */}
-            <TabRope width={w} count={count} y={21} edge={17} waves={waves} rest={colors.checkbox} glow={colors.accent} />
-            {names.map((name, i) => {
-              const route = routeOf(name);
-              const focused = i === index;
-              const o = ((route && descriptors[route.key]?.options) ?? { title: '' }) as PagerTabOptions;
-              const color = focused ? colors.accent : colors.text3;
-              return (
-                <Pressable
-                  key={name}
-                  accessibilityRole="tab"
-                  accessibilityState={{ selected: focused }}
-                  onPress={() => {
-                    if (!focused) jump(i);
-                  }}
-                  style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 7, paddingBottom: 6, minHeight: 54, gap: 2 }}
-                >
-                  {o.tabBarIcon?.({ color, focused })}
-                  <Text style={{ fontFamily: fonts.medium, fontSize: 11, color }} numberOfLines={1}>
-                    {o.title}
-                  </Text>
-                </Pressable>
-              );
-            })}
+      <View style={{ flex: 1, backgroundColor: colors.bg }}>
+        <GestureDetector gesture={pan}>
+          <View style={{ flex: 1, overflow: 'hidden' }} onLayout={(e) => setW(e.nativeEvent.layout.width)}>
+            <Animated.View style={[{ flex: 1, flexDirection: 'row', width: w * count }, rowStyle]}>
+              {names.map((name, i) => {
+                const route = routeOf(name);
+                return (
+                  <View
+                    key={name}
+                    style={{ width: w, height: '100%', backgroundColor: colors.bg }}
+                    // Невидимые экраны — не для диктора.
+                    aria-hidden={i !== index}
+                    importantForAccessibility={i === index ? 'auto' : 'no-hide-descendants'}
+                    accessibilityElementsHidden={i !== index}
+                  >
+                    <PagerLock.Provider value={lockers[name]}>{route ? descriptors[route.key]?.render() : null}</PagerLock.Provider>
+                  </View>
+                );
+              })}
+            </Animated.View>
           </View>
+        </GestureDetector>
+        <View
+          accessibilityRole="tablist"
+          style={{
+            flexDirection: 'row',
+            backgroundColor: colors.card,
+            borderTopColor: colors.hairline,
+            borderTopWidth: StyleSheet.hairlineWidth * 2,
+            paddingBottom: insets.bottom,
+          }}
+        >
+          {/* Иконки 24 px с отступом 7 сверху: центр — на 19, нитка чуть ниже. */}
+          <TabRope width={w} count={count} y={21} edge={17} waves={waves} rest={colors.checkbox} glow={colors.accent} />
+          {names.map((name, i) => {
+            const route = routeOf(name);
+            const focused = i === index;
+            const o = ((route && descriptors[route.key]?.options) ?? { title: '' }) as PagerTabOptions;
+            const color = focused ? colors.accent : colors.text3;
+            return (
+              <Pressable
+                key={name}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: focused }}
+                onPress={() => {
+                  if (!focused) jump(i);
+                }}
+                style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 7, paddingBottom: 6, minHeight: 54, gap: 2 }}
+              >
+                {o.tabBarIcon?.({ color, focused })}
+                <Text style={{ fontFamily: fonts.medium, fontSize: 11, color }} numberOfLines={1}>
+                  {o.title}
+                </Text>
+              </Pressable>
+            );
+          })}
         </View>
-      </PagerLock.Provider>
+      </View>
     </NavigationContent>
   );
 }

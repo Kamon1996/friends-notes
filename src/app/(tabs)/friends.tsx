@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, useIsFocused } from 'expo-router';
 import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { FlatList, Pressable, Text, View } from 'react-native';
 import ReanimatedSwipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
@@ -36,6 +36,7 @@ export default function FriendsScreen() {
   const selecting = selected.size > 0;
   const [scrolled, setScrolled] = useState(false);
   const today = todayISO();
+  const focused = useIsFocused();
 
   const items = useMemo(() => buildFriendList(data.friends, query, sort, today), [data.friends, query, sort, today]);
 
@@ -195,7 +196,8 @@ export default function FriendsScreen() {
             setTimeout(() => setGenderRun(true), 230);
           }}
         />
-        {!genderRun && <AiToast text={toast} onDone={toastDone} bottom={selecting ? 90 : 96} />}
+        {/* Тост — только на видимой вкладке: «Друзья» теперь живут и за кадром, пока открыта другая. */}
+        {!genderRun && focused && <AiToast text={toast} onDone={toastDone} bottom={selecting ? 90 : 96} />}
         {genderRun && headerH > 0 && <GenderRun listTop={headerH} onClose={() => setGenderRun(false)} />}
       </View>
     </TabSwipe>

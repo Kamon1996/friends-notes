@@ -191,7 +191,7 @@ jobs:
             # Через gh api, а не gh release create: при отказе GitHub показывает полный ответ, а не одну строку.
             # Тег — на текущую вершину ветки, а не на коммит сборки: пока шла сборка, в ветку могли прийти коммиты
             # с изменёнными workflow, и тогда робот Actions не может поставить тег на старый коммит (403 «Resource not
-            # accessible by integration» — GitHub считает это изменением workflow). Коммит сборки — в описании релиза.
+            # accessible by integration» — GitHub считает это изменением workflow). Коммит сборки виден в этом запуске Actions.
             create_release() {
               gh api -X POST "repos/$GITHUB_REPOSITORY/releases" \
                 -f tag_name="$TAG" -f target_commitish="$GITHUB_REF_NAME" -f name="Друзья $VERSION" \

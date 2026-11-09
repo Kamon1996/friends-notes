@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
@@ -234,9 +234,10 @@ function MonthCarousel({
       'worklet';
       x.set(-(shown.get() - base) * w + e.translationX);
     })
-    .onEnd((e) => {
+    .onEnd((e, success) => {
       'worklet';
-      const d = e.translationX < -w / 4 || e.velocityX < -500 ? 1 : e.translationX > w / 4 || e.velocityX > 500 ? -1 : 0;
+      // Жест отменён (перехватил другой) — месяц не меняем.
+      const d = !success ? 0 : e.translationX < -w / 4 || e.velocityX < -500 ? 1 : e.translationX > w / 4 || e.velocityX > 500 ? -1 : 0;
       if (d) scheduleOnRN(onStep, d);
       else x.set(withTiming(-(shown.get() - base) * w, { duration: 200, easing: Easing.out(Easing.cubic) }));
     });
@@ -244,12 +245,14 @@ function MonthCarousel({
   return (
     <GestureDetector gesture={pan}>
       <View style={{ height: GRID_H, overflow: 'hidden' }} onLayout={(e) => setW(e.nativeEvent.layout.width)}>
-        <Animated.View style={[StyleSheet.absoluteFill, style]}>
+        {/* Три месяца лежат внутри ряда шириной 3w, который сдвигается вместе с текущим месяцем: видимая сетка всегда
+            в границах ряда — на Android нажатия за границами родителя могут не доходить. */}
+        <Animated.View style={[{ position: 'absolute', top: 0, height: GRID_H, left: (cur - 1 - base) * w, width: 3 * w }, style]}>
           {w > 0 &&
             [cur - 1, cur, cur + 1].map((k) => (
               <View
                 key={k}
-                style={{ position: 'absolute', top: 0, height: GRID_H, left: (k - base) * w, width: w }}
+                style={{ position: 'absolute', top: 0, height: GRID_H, left: (k - cur + 1) * w, width: w }}
                 aria-hidden={k !== cur}
                 importantForAccessibility={k === cur ? 'auto' : 'no-hide-descendants'}
                 accessibilityElementsHidden={k !== cur}
