@@ -1,10 +1,13 @@
 import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { FlatList, ScrollView, Text, View } from 'react-native';
+import { FlatList, Text, View } from 'react-native';
+// Строка фильтров — прокрутка из обработчика жестов: свайп по ней листает фильтры, а не вкладки.
+import { ScrollView } from 'react-native-gesture-handler';
 
 import { ReminderRow } from '@/components/ReminderRow';
 import { ReminderSwipe } from '@/components/ReminderSwipe';
 import { SelectionBar } from '@/components/SelectionBar';
+import { TabSwipe } from '@/components/TabSwipe';
 import type { IconName } from '@/components/Icon';
 import { Chip, Empty, Fab, GroupedRow, IconButton, ScreenHeader, useTheme } from '@/components/ui';
 import { confirm } from '@/lib/confirm';
@@ -75,7 +78,11 @@ export default function RemindersScreen() {
   const todayCount = active.filter((r) => r.date <= today).length;
   const overdueCount = active.filter((r) => reminderOverdue(r)).length;
   const subtitle = active.length
-    ? [`${active.length} ${plural(active.length, 'дело', 'дела', 'дел')}`, todayCount && `${todayCount} на сегодня`, overdueCount && `${overdueCount} просрочено`]
+    ? [
+        `${active.length} ${plural(active.length, 'дело', 'дела', 'дел')}`,
+        todayCount && `${todayCount} на сегодня`,
+        overdueCount && `${overdueCount} просрочено`,
+      ]
         .filter(Boolean)
         .join(' · ')
     : undefined;
@@ -92,7 +99,8 @@ export default function RemindersScreen() {
   /** Удаление с подтверждением; возвращает false, если передумали. */
   const remove = async (ids: string[]) => {
     const first = data.reminders.find((r) => r.id === ids[0]);
-    const title = ids.length === 1 && first ? `Удалить «${first.title}»?` : `Удалить ${ids.length} ${plural(ids.length, 'напоминание', 'напоминания', 'напоминаний')}?`;
+    const title =
+      ids.length === 1 && first ? `Удалить «${first.title}»?` : `Удалить ${ids.length} ${plural(ids.length, 'напоминание', 'напоминания', 'напоминаний')}?`;
     if (!(await confirm(title, 'Отменить это будет нельзя.'))) return false;
     deleteReminders(ids);
     clear();
@@ -109,72 +117,86 @@ export default function RemindersScreen() {
   if (!ready) return <View style={s.screen} />;
 
   return (
-    <View style={s.screen}>
-      <FlatList
-        data={items}
-        keyExtractor={(i) => i.key}
-        extraData={selected}
-        contentContainerStyle={{ paddingBottom: 120 }}
-        onScroll={(e) => setScrolled(e.nativeEvent.contentOffset.y > 2)}
-        scrollEventThrottle={32}
-        ListHeaderComponent={
-          <>
-            <View style={{ opacity: selecting ? 0 : 1, pointerEvents: selecting ? 'none' : 'auto' }} importantForAccessibility={selecting ? 'no-hide-descendants' : 'auto'}>
-              <ScreenHeader
-                title="Напоминания"
-                subtitle={subtitle}
-                right={<IconButton icon="sliders" label="Настройки" onPress={() => router.push('/settings')} />}
-              />
-            </View>
-            {/* Фильтры одной строкой с прокруткой: не занимают полэкрана над списком. */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 20, paddingTop: 14, paddingBottom: 8 }}>
-              {FILTERS.map((f) => (
-                <Chip key={f.key} label={f.label} icon={f.icon} selected={filter === f.key} onPress={() => setFilter(f.key)} />
-              ))}
-            </ScrollView>
-          </>
-        }
-        renderItem={({ item }) =>
-          item.type === 'label' ? (
-            <Text style={[s.sectionLabel, { paddingHorizontal: 24, paddingTop: 12, paddingBottom: 8 }]}>{item.text}</Text>
-          ) : (
-            <View style={{ paddingHorizontal: 20 }}>
-              <GroupedRow first={item.first} last={item.last}>
-                <ReminderSwipe reminder={item.reminder} enabled={!selecting} hint={item.key === hintKey}>
-                  <ReminderRow
-                    detailed
-                    reminder={item.reminder}
-                    friend={item.reminder.friendId ? friendById.get(item.reminder.friendId) : null}
-                    selected={selected.has(item.reminder.id)}
-                    selecting={selecting}
-                    onPress={selecting ? () => toggle(item.reminder.id) : undefined}
-                    onLongPress={() => toggle(item.reminder.id)}
-                  />
-                </ReminderSwipe>
-              </GroupedRow>
-            </View>
-          )
-        }
-        ListEmptyComponent={
-          <Empty
-            icon="bell"
-            title={EMPTY[filter]}
-            text={EMPTY_TEXT[filter] ?? 'Создай напоминание: «купить билеты до пятницы», «стоматолог в среду в 15:00» или «написать маме раз в неделю».'}
-          />
-        }
-      />
-      {selecting && (
-        <SelectionBar
-          count={selected.size}
-          scrolled={scrolled}
-          onClose={clear}
-          actions={[
-            { icon: allDone ? 'repeat' : 'check', label: allDone ? 'Вернуть в активные' : 'Отметить сделанными', color: colors.success, onPress: markSelected },
-            { icon: 'trash', label: 'Удалить выбранные', color: colors.danger, onPress: () => remove([...selected]) },
-          ]}
+    <TabSwipe tab="/" enabled={!selecting}>
+      <View style={s.screen}>
+        <FlatList
+          data={items}
+          keyExtractor={(i) => i.key}
+          extraData={selected}
+          contentContainerStyle={{ paddingBottom: 120 }}
+          onScroll={(e) => setScrolled(e.nativeEvent.contentOffset.y > 2)}
+          scrollEventThrottle={32}
+          ListHeaderComponent={
+            <>
+              <View
+                style={{ opacity: selecting ? 0 : 1, pointerEvents: selecting ? 'none' : 'auto' }}
+                importantForAccessibility={selecting ? 'no-hide-descendants' : 'auto'}
+              >
+                <ScreenHeader
+                  title="Напоминания"
+                  subtitle={subtitle}
+                  right={<IconButton icon="sliders" label="Настройки" onPress={() => router.push('/settings')} />}
+                />
+              </View>
+              {/* Фильтры одной строкой с прокруткой: не занимают полэкрана над списком. */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ gap: 8, paddingHorizontal: 20, paddingTop: 14, paddingBottom: 8 }}
+              >
+                {FILTERS.map((f) => (
+                  <Chip key={f.key} label={f.label} icon={f.icon} selected={filter === f.key} onPress={() => setFilter(f.key)} />
+                ))}
+              </ScrollView>
+            </>
+          }
+          renderItem={({ item }) =>
+            item.type === 'label' ? (
+              <Text style={[s.sectionLabel, { paddingHorizontal: 24, paddingTop: 12, paddingBottom: 8 }]}>{item.text}</Text>
+            ) : (
+              <View style={{ paddingHorizontal: 20 }}>
+                <GroupedRow first={item.first} last={item.last}>
+                  <ReminderSwipe reminder={item.reminder} enabled={!selecting} hint={item.key === hintKey}>
+                    <ReminderRow
+                      detailed
+                      reminder={item.reminder}
+                      friend={item.reminder.friendId ? friendById.get(item.reminder.friendId) : null}
+                      selected={selected.has(item.reminder.id)}
+                      selecting={selecting}
+                      onPress={selecting ? () => toggle(item.reminder.id) : undefined}
+                      onLongPress={() => toggle(item.reminder.id)}
+                    />
+                  </ReminderSwipe>
+                </GroupedRow>
+              </View>
+            )
+          }
+          ListEmptyComponent={
+            <Empty
+              icon="bell"
+              title={EMPTY[filter]}
+              text={EMPTY_TEXT[filter] ?? 'Создай напоминание: «купить билеты до пятницы», «стоматолог в среду в 15:00» или «написать маме раз в неделю».'}
+            />
+          }
         />
-      )}
-      {!selecting && <Fab onPress={() => router.push('/reminder/edit')} label="Новое напоминание" />}
-    </View>
+        {selecting && (
+          <SelectionBar
+            count={selected.size}
+            scrolled={scrolled}
+            onClose={clear}
+            actions={[
+              {
+                icon: allDone ? 'repeat' : 'check',
+                label: allDone ? 'Вернуть в активные' : 'Отметить сделанными',
+                color: colors.success,
+                onPress: markSelected,
+              },
+              { icon: 'trash', label: 'Удалить выбранные', color: colors.danger, onPress: () => remove([...selected]) },
+            ]}
+          />
+        )}
+        {!selecting && <Fab onPress={() => router.push('/reminder/edit')} label="Новое напоминание" />}
+      </View>
+    </TabSwipe>
   );
 }

@@ -1167,6 +1167,35 @@ scenario('Календарь: дни рождения, годовщины и в�
   }),
 });
 
+scenario('Свайп по экрану листает вкладки; свайп по карточке и по фильтрам — нет', async ({ ui, page }) => {
+  const path = () => new URL(page.url()).pathname;
+  await ui.go('/');
+  await ui.see('Написать Диме');
+  // По карточке влево — открывается «Удалить», вкладка та же.
+  await ui.swipe('Написать Диме', -160);
+  await ui.see('Удалить', { label: true });
+  assert.equal(path(), '/', 'свайп по карточке не должен менять вкладку');
+  await page.reload();
+  await ui.see('Написать Диме');
+  // По шапке влево — «Друзья», ещё раз — «Календарь», вправо — обратно.
+  await ui.swipeAt(300, 30, -220);
+  await page.waitForURL(/\/friends$/, { timeout: 3000 });
+  await ui.see('Игорь Ветров');
+  await ui.swipeAt(300, 30, -220);
+  await page.waitForURL(/\/calendar$/, { timeout: 3000 });
+  await ui.see('Июнь 2026');
+  await ui.swipeAt(300, 300, -220); // дальше «Календаря» некуда
+  assert.equal(path(), '/calendar');
+  await ui.swipeAt(80, 30, 220);
+  await page.waitForURL(/\/friends$/, { timeout: 3000 });
+  await ui.swipeAt(80, 30, 220);
+  await page.waitForURL((u) => new URL(u).pathname === '/', { timeout: 3000 });
+  // Строка фильтров листается сама, вкладка не меняется.
+  const chips = await ui.box('Быстрые');
+  await ui.swipeAt(chips.x + chips.width / 2, chips.y + chips.height / 2, -150);
+  assert.equal(path(), '/', 'свайп по фильтрам не должен менять вкладку');
+});
+
 scenario('Открывается на «Напоминаниях»: две вкладки, в шапке — настройки; старая ссылка /reminders ведёт туда же', async ({ ui, page }) => {
   await ui.go('/');
   await ui.see('Написать Диме');
@@ -1360,6 +1389,18 @@ function helpers(page, dialogs) {
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
       await cdp.detach();
       await page.waitForTimeout(600);
+    },
+    /** Провести пальцем по экрану в точке (x, y) на dx — не по карточке: так листаются вкладки. */
+    async swipeAt(x, y, dx) {
+      const cdp = await page.context().newCDPSession(page);
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+      for (let k = 1; k <= 24; k++) {
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + (dx * k) / 24, y }] });
+        await page.waitForTimeout(10);
+      }
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      await cdp.detach();
+      await page.waitForTimeout(700);
     },
     /** «Сделано» у напоминания с этим текстом — свайпом вправо (кружков в строках нет). */
     async check(title) { await ui.swipe(title, 160); },

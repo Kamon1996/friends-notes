@@ -4,6 +4,7 @@ import { FlatList, Pressable, Text, View } from 'react-native';
 import ReanimatedSwipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 
 import { AiSheet } from '@/components/ai/AiSheet';
+import { TabSwipe } from '@/components/TabSwipe';
 import { GenderRun } from '@/components/ai/GenderRun';
 import { AiToast } from '@/components/ai/AiToast';
 import { FRIEND_ROW_INSET, FriendGroupLabel, FriendRow } from '@/components/FriendRow';
@@ -87,116 +88,118 @@ export default function FriendsScreen() {
   };
 
   return (
-    <View style={s.screen}>
-      <FlatList
-        ref={listRef}
-        data={items}
-        keyExtractor={(i) => i.key}
-        extraData={selected}
-        contentContainerStyle={{ paddingBottom: 120 }}
-        keyboardShouldPersistTaps="handled"
-        onScroll={(e) => setScrolled(e.nativeEvent.contentOffset.y > 2)}
-        scrollEventThrottle={32}
-        ListHeaderComponent={
-          <View onLayout={(e) => setHeaderH(e.nativeEvent.layout.height)}>
-            <FriendsHeader
-              friends={data.friends}
-              today={today}
-              selecting={selecting}
-              aiBusy={genderBusy}
-              onAi={() => setAiOpen(true)}
-              onImport={() => router.push('/import')}
-              onSettings={() => router.push('/settings')}
-              query={query}
-              onQuery={setQuery}
-              sort={sort}
-              onSort={setSort}
-            />
-          </View>
-        }
-        renderItem={({ item }) =>
-          item.type === 'label' ? (
-            <FriendGroupLabel title={item.title} star={item.star} />
-          ) : (
-            <View style={{ paddingHorizontal: 20 }}>
-              <GroupedRow first={item.first} last={item.last} inset={FRIEND_ROW_INSET}>
-                <SwipeToDelete enabled={!selecting} onDelete={() => remove([item.friend.id])}>
-                  <FriendRow
-                    friend={item.friend}
-                    today={today}
-                    selected={selected.has(item.friend.id)}
-                    selecting={selecting}
-                    zodiac={zodiacShown(data.settings)}
-                    onPress={selecting ? () => toggle(item.friend.id) : () => router.push(`/friend/${item.friend.id}`)}
-                    onLongPress={() => toggle(item.friend.id)}
-                  />
-                </SwipeToDelete>
-              </GroupedRow>
+    <TabSwipe tab="/friends" enabled={!selecting && !genderRun}>
+      <View style={s.screen}>
+        <FlatList
+          ref={listRef}
+          data={items}
+          keyExtractor={(i) => i.key}
+          extraData={selected}
+          contentContainerStyle={{ paddingBottom: 120 }}
+          keyboardShouldPersistTaps="handled"
+          onScroll={(e) => setScrolled(e.nativeEvent.contentOffset.y > 2)}
+          scrollEventThrottle={32}
+          ListHeaderComponent={
+            <View onLayout={(e) => setHeaderH(e.nativeEvent.layout.height)}>
+              <FriendsHeader
+                friends={data.friends}
+                today={today}
+                selecting={selecting}
+                aiBusy={genderBusy}
+                onAi={() => setAiOpen(true)}
+                onImport={() => router.push('/import')}
+                onSettings={() => router.push('/settings')}
+                query={query}
+                onQuery={setQuery}
+                sort={sort}
+                onSort={setSort}
+              />
             </View>
-          )
-        }
-        ListEmptyComponent={
-          n === 0 ? (
-            <View style={{ gap: 10, padding: 20 }}>
-              <Empty icon="people" title="Пока никого" text="Импортируй друзей из контактов телефона вместе с днями рождения — или добавь первого вручную." />
-              <Button title="Импорт из контактов" icon="import" onPress={() => router.push('/import')} />
-              {telegramAvailable && <Button title="Импорт из Telegram" icon="send" variant="secondary" onPress={() => router.push('/telegram')} />}
-            </View>
-          ) : (
-            <Empty icon="search" title="Никого не нашлось" text="Попробуй другой запрос." />
-          )
-        }
-      />
-      {selecting && (
-        <SelectionBar
-          count={selected.size}
-          scrolled={scrolled}
-          onClose={clear}
-          actions={[
-            {
-              icon: 'star',
-              label: allFavorite ? 'Убрать из избранного' : 'В избранное',
-              color: allFavorite ? colors.accent : undefined,
-              fill: allFavorite ? colors.accent : undefined,
-              onPress: toggleFavorites,
-            },
-            {
-              icon: allMuted ? 'bell' : 'bellOff',
-              label: allMuted ? 'Включить уведомления' : 'Выключить уведомления',
-              onPress: toggleMuted,
-            },
-            {
-              icon: 'trash',
-              label: 'Удалить выбранных',
-              color: colors.danger,
-              onPress: () => remove([...selected]),
-            },
-          ]}
+          }
+          renderItem={({ item }) =>
+            item.type === 'label' ? (
+              <FriendGroupLabel title={item.title} star={item.star} />
+            ) : (
+              <View style={{ paddingHorizontal: 20 }}>
+                <GroupedRow first={item.first} last={item.last} inset={FRIEND_ROW_INSET}>
+                  <SwipeToDelete enabled={!selecting} onDelete={() => remove([item.friend.id])}>
+                    <FriendRow
+                      friend={item.friend}
+                      today={today}
+                      selected={selected.has(item.friend.id)}
+                      selecting={selecting}
+                      zodiac={zodiacShown(data.settings)}
+                      onPress={selecting ? () => toggle(item.friend.id) : () => router.push(`/friend/${item.friend.id}`)}
+                      onLongPress={() => toggle(item.friend.id)}
+                    />
+                  </SwipeToDelete>
+                </GroupedRow>
+              </View>
+            )
+          }
+          ListEmptyComponent={
+            n === 0 ? (
+              <View style={{ gap: 10, padding: 20 }}>
+                <Empty icon="people" title="Пока никого" text="Импортируй друзей из контактов телефона вместе с днями рождения — или добавь первого вручную." />
+                <Button title="Импорт из контактов" icon="import" onPress={() => router.push('/import')} />
+                {telegramAvailable && <Button title="Импорт из Telegram" icon="send" variant="secondary" onPress={() => router.push('/telegram')} />}
+              </View>
+            ) : (
+              <Empty icon="search" title="Никого не нашлось" text="Попробуй другой запрос." />
+            )
+          }
         />
-      )}
-      {!selecting && <Fab onPress={() => router.push('/friend/edit')} label="Добавить друга" />}
-      <AiSheet
-        visible={aiOpen}
-        onClose={() => setAiOpen(false)}
-        gender={{
-          known: data.friends.filter((f) => f.gender).length,
-          total: n,
-        }}
-        notes={{ waiting: notesWaiting, busy: notesBusy }}
-        onNotes={() => readNotes('all')}
-        onGender={() => {
-          setAiOpen(false);
-          // Список — к началу и «по имени»: слой «Пола друзей» рисует его точь-в-точь и встаёт поверх незаметно.
-          setQuery('');
-          setSort('name');
-          listRef.current?.scrollToOffset({ offset: 0, animated: false });
-          clearGenderNews();
-          setTimeout(() => setGenderRun(true), 230);
-        }}
-      />
-      {!genderRun && <AiToast text={toast} onDone={toastDone} bottom={selecting ? 90 : 96} />}
-      {genderRun && headerH > 0 && <GenderRun listTop={headerH} onClose={() => setGenderRun(false)} />}
-    </View>
+        {selecting && (
+          <SelectionBar
+            count={selected.size}
+            scrolled={scrolled}
+            onClose={clear}
+            actions={[
+              {
+                icon: 'star',
+                label: allFavorite ? 'Убрать из избранного' : 'В избранное',
+                color: allFavorite ? colors.accent : undefined,
+                fill: allFavorite ? colors.accent : undefined,
+                onPress: toggleFavorites,
+              },
+              {
+                icon: allMuted ? 'bell' : 'bellOff',
+                label: allMuted ? 'Включить уведомления' : 'Выключить уведомления',
+                onPress: toggleMuted,
+              },
+              {
+                icon: 'trash',
+                label: 'Удалить выбранных',
+                color: colors.danger,
+                onPress: () => remove([...selected]),
+              },
+            ]}
+          />
+        )}
+        {!selecting && <Fab onPress={() => router.push('/friend/edit')} label="Добавить друга" />}
+        <AiSheet
+          visible={aiOpen}
+          onClose={() => setAiOpen(false)}
+          gender={{
+            known: data.friends.filter((f) => f.gender).length,
+            total: n,
+          }}
+          notes={{ waiting: notesWaiting, busy: notesBusy }}
+          onNotes={() => readNotes('all')}
+          onGender={() => {
+            setAiOpen(false);
+            // Список — к началу и «по имени»: слой «Пола друзей» рисует его точь-в-точь и встаёт поверх незаметно.
+            setQuery('');
+            setSort('name');
+            listRef.current?.scrollToOffset({ offset: 0, animated: false });
+            clearGenderNews();
+            setTimeout(() => setGenderRun(true), 230);
+          }}
+        />
+        {!genderRun && <AiToast text={toast} onDone={toastDone} bottom={selecting ? 90 : 96} />}
+        {genderRun && headerH > 0 && <GenderRun listTop={headerH} onClose={() => setGenderRun(false)} />}
+      </View>
+    </TabSwipe>
   );
 }
 

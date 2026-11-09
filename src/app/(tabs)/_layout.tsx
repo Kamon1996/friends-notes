@@ -15,6 +15,8 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
+        // Переход между вкладками — сдвигом: и по нажатию, и свайпом (TabSwipe).
+        animation: 'shift',
         sceneStyle: { backgroundColor: colors.bg },
         tabBarActiveTintColor: colors.accent,
         tabBarInactiveTintColor: colors.text3,
