@@ -1,16 +1,19 @@
 import { router } from 'expo-router';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { Avatar } from '@/components/Avatar';
-import { KindBadge, KindIcon } from '@/components/CalendarIcons';
+import { KindBadge, KindIcon, useKindColors } from '@/components/CalendarIcons';
 import { Icon } from '@/components/Icon';
+import { settleDuration } from '@/components/settle';
+import { Sheet, SheetHandle } from '@/components/Sheet';
 import { TabSwipe } from '@/components/TabSwipe';
 import { Fab, Group, IconButton, ListRow, ScreenHeader, Tag, useTheme } from '@/components/ui';
-import { MONTHS, MONTHS_IN, WEEKDAYS_MON, calendarEvents, monthGrid, monthRange, nextEvents, type CalendarEvent } from '@/lib/calendar';
+import { MONTHS, MONTHS_IN, WEEKDAYS_MON, calendarEvents, monthCounts, monthGrid, monthRange, nextEvents, type CalendarEvent } from '@/lib/calendar';
 import { daysBetween, formatDateLong, parseISODate, plural, relativeDay, todayISO } from '@/lib/dates';
 import { holidayCountries, holidayCountry } from '@/lib/holidays';
 import { useStore } from '@/lib/store';
@@ -22,12 +25,13 @@ interface CalView {
   selected: string;
 }
 
-/** Соседний месяц: выбранным становится сегодня, если оно там, иначе первое число. */
-function stepMonth(v: CalView, delta: number): CalView {
+/** Месяц по номеру (год·12 + месяц): выбранным становится сегодня, если оно там, иначе первое число. */
+function monthView(k: number): CalView {
   const today = todayISO();
-  const d = new Date(v.year, v.month + delta, 1);
-  const [a, b] = monthRange(d.getFullYear(), d.getMonth());
-  return { year: d.getFullYear(), month: d.getMonth(), selected: today >= a && today <= b ? today : a };
+  const year = Math.floor(k / 12);
+  const month = ((k % 12) + 12) % 12;
+  const [a, b] = monthRange(year, month);
+  return { year, month, selected: today >= a && today <= b ? today : a };
 }
 
 function atDay(date: string): CalView {
@@ -36,18 +40,22 @@ function atDay(date: string): CalView {
 }
 
 /**
- * Календарь: месяц сеткой (стрелки и «Сегодня»; свайп по экрану — соседние вкладки), в днях — точки событий; ниже — что в выбранный день и что дальше. События — дни рождения,
- * годовщины и важные даты друзей, дела «на дату и время». Дела «до срока» и повторяющиеся — в «Напоминаниях».
+ * Календарь: месяц карточкой — название, дни недели и числа листаются пальцем вместе; название — кнопка выбора
+ * месяца и года, «↶ Сегодня» — когда ушли от сегодня. Под днём — значки событий, праздники — красным числом; внизу
+ * карточки — обозначения со счётчиками (можно скрыть). Ниже — что в выбранный день и что дальше. События — дни
+ * рождения, годовщины и важные даты друзей, дела-встречи, праздники выбранных стран.
  */
 export default function CalendarScreen() {
-  const { data } = useStore();
-  const { s, colors, fonts } = useTheme();
+  const { data, updateSettings } = useStore();
+  const { s } = useTheme();
   const today = todayISO();
   const [view, setView] = useState<CalView>(() => atDay(today));
+  const [picking, setPicking] = useState(false);
   const { selected } = view;
+  const cur = view.year * 12 + view.month;
 
   // События сразу для соседних месяцев: их сетки видны, пока листаешь.
-  const span = useMemo(() => [monthGrid(view.year, view.month - 1)[0], monthGrid(view.year, view.month + 1)[41]] as const, [view]);
+  const span = useMemo(() => [monthGrid(view.year, view.month - 1)[0], monthGrid(view.year, view.month + 1)[41]] as const, [view.year, view.month]);
   const events = useMemo(() => calendarEvents(data, span[0], span[1]), [data, span]);
   const byDay = useMemo(() => {
     const m = new Map<string, CalendarEvent[]>();
@@ -56,15 +64,17 @@ export default function CalendarScreen() {
   }, [events]);
   const [monthFrom, monthTo] = monthRange(view.year, view.month);
   const inMonth = events.filter((e) => e.date >= monthFrom && e.date <= monthTo).length;
+  const counts = useMemo(() => monthCounts(events, monthFrom, monthTo), [events, monthFrom, monthTo]);
   const dayEvents = byDay.get(selected) ?? [];
   const later = useMemo(() => nextEvents(data, selected, 5), [data, selected]);
-  const countries = holidayCountries(data.settings);
+  const withHolidays = holidayCountries(data.settings).length > 0;
+  const legend = data.settings.calendarLegend !== false;
 
-  const go = (delta: number) => setView((v) => stepMonth(v, delta));
+  // Показать месяц k (жест, выбор месяца, диктор). Уже он — ничего не трогаем: выбранный день остаётся.
+  const show = (k: number) => setView((v) => (v.year * 12 + v.month === k ? v : monthView(k)));
   const goToday = () => setView(atDay(today));
   const pick = (date: string) => setView(atDay(date));
-
-  const isCurrent = view.year === parseISODate(today).getFullYear() && view.month === parseISODate(today).getMonth();
+  const awayFromToday = selected !== today;
 
   return (
     <TabSwipe tab="/calendar">
@@ -77,82 +87,30 @@ export default function CalendarScreen() {
             }
             right={
               <>
-                {/* Праздники каких стран показывать — флажок, как у праздников в календаре. */}
+                {/* Праздники каких стран показывать. */}
                 <IconButton icon="flag" label="Праздники стран" onPress={() => router.push('/holidays')} />
                 <IconButton icon="sliders" label="Настройки" onPress={() => router.push('/settings')} />
               </>
             }
           />
 
-          <View style={[s.group, { marginHorizontal: 20, marginTop: 14, paddingHorizontal: 8, paddingTop: 10, paddingBottom: 8 }]}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, marginBottom: 6 }}>
-              <Text style={{ flex: 1, fontFamily: fonts.display, fontSize: 20, color: colors.text }} accessibilityRole="header">
-                {MONTHS[view.month]} {view.year}
-              </Text>
-              {(!isCurrent || selected !== today) && (
-                // Пилюля «↶ Сегодня» — видно, что это кнопка и куда она вернёт.
-                <Pressable
-                  onPress={goToday}
-                  hitSlop={8}
-                  accessibilityRole="button"
-                  accessibilityLabel="Вернуться к сегодня"
-                  style={({ pressed }) => ({
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 5,
-                    backgroundColor: colors.soft,
-                    borderRadius: 999,
-                    paddingHorizontal: 10,
-                    paddingVertical: 6,
-                    marginRight: 4,
-                    opacity: pressed ? 0.7 : 1,
-                  })}
-                >
-                  <Icon name="undo" size={14} color={colors.accentText} strokeWidth={2.2} />
-                  <Text style={{ fontFamily: fonts.semibold, fontSize: 13, color: colors.accentText }}>Сегодня</Text>
-                </Pressable>
-              )}
-              <IconButton icon="chevronLeft" label="Прошлый месяц" onPress={() => go(-1)} />
-              <IconButton icon="chevronRight" label="Следующий месяц" onPress={() => go(1)} />
-            </View>
-            <View style={{ flexDirection: 'row' }}>
-              {WEEKDAYS_MON.map((w, i) => (
-                <Text
-                  key={w}
-                  style={{
-                    flex: 1,
-                    textAlign: 'center',
-                    fontFamily: fonts.medium,
-                    fontSize: 12,
-                    color: i >= 5 ? colors.text3 : colors.text2,
-                    paddingBottom: 6,
-                  }}
-                >
-                  {w}
-                </Text>
-              ))}
-            </View>
+          <View style={[s.group, { marginHorizontal: 20, marginTop: 14, paddingTop: 10, paddingBottom: legend ? 0 : 6 }]}>
             <MonthCarousel
-              year={view.year}
-              month={view.month}
-              onStep={go}
-              render={(y, m) => <MonthGrid year={y} month={m} selected={selected} today={today} byDay={byDay} onPick={pick} />}
+              cur={cur}
+              onShow={show}
+              render={(k, active) => (
+                <MonthPage
+                  k={k}
+                  active={active}
+                  onTitle={() => setPicking(true)}
+                  onStep={(d) => show(k + d)}
+                  grid={<MonthGrid year={Math.floor(k / 12)} month={((k % 12) + 12) % 12} selected={selected} today={today} byDay={byDay} onPick={pick} />}
+                />
+              )}
             />
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', columnGap: 12, rowGap: 4, paddingTop: 6 }}>
-              {(
-                [
-                  ['birthday', 'Дни рождения'],
-                  ['date', 'Важные даты'],
-                  ['meeting', 'Встречи'],
-                  ...(countries.length ? ([['holiday', 'Праздники']] as const) : []),
-                ] as const
-              ).map(([k, label]) => (
-                <View key={k} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                  <KindIcon kind={k} size={13} />
-                  <Text style={[s.caption, { fontSize: 12 }]}>{label}</Text>
-                </View>
-              ))}
-            </View>
+            {/* «↶ Сегодня» стоит на месте, пока месяц едет под ним. */}
+            {awayFromToday && <TodayPill onPress={goToday} />}
+            {legend && <Legend month={view.month} counts={counts} holidays={withHolidays} onHide={() => updateSettings({ calendarLegend: false })} />}
           </View>
 
           <Text style={[s.sectionLabel, { paddingHorizontal: 24, paddingTop: 20, paddingBottom: 8 }]}>
@@ -190,42 +148,39 @@ export default function CalendarScreen() {
         </ScrollView>
         {/* Новое событие — на выбранный день, «Дата и время», сразу в календаре. */}
         <Fab label="Новое событие" onPress={() => router.push({ pathname: '/reminder/edit', params: { date: selected, kind: 'at', calendar: '1' } })} />
+        <MonthPicker visible={picking} k={cur} onPick={(k) => show(k)} onClose={() => setPicking(false)} />
       </View>
     </TabSwipe>
   );
 }
 
-/** Высота сетки месяца: шесть недель по 56 px. */
-const GRID_H = 6 * 56;
+/** Высоты страницы месяца: название, дни недели, шесть недель по 56 px. */
+const TITLE_H = 40;
+const WEEK_H = 24;
+const PAGE_H = TITLE_H + WEEK_H + 6 * 56;
 
 /**
- * Месяцы каруселью: соседние месяцы стоят слева и справа, сетка едет за пальцем; отпустил дальше четверти ширины
- * (или быстро) — перелистнулось. Стрелки и «Сегодня» листают так же; прыжок дальше соседнего месяца — сразу, без
- * пролистывания. Жест сетки срабатывает раньше листания вкладок, поэтому внутри сетки листаются месяцы.
+ * Месяцы каруселью: страница — месяц целиком (название, дни недели, числа); соседние стоят слева и справа и едут за
+ * пальцем. Отпустил дальше четверти ширины (или быстро) — страница доезжает на UI-потоке со скоростью пальца, и
+ * только потом календарь пересчитывает месяц: перерисовка не мешает движению. Выбор месяца, «Сегодня», диктор —
+ * тоже сюда: на соседний месяц — пролистыванием, дальше — сразу.
  */
-function MonthCarousel({
-  year,
-  month,
-  onStep,
-  render,
-}: {
-  year: number;
-  month: number;
-  onStep: (delta: number) => void;
-  render: (y: number, m: number) => ReactNode;
-}) {
-  const cur = year * 12 + month;
+function MonthCarousel({ cur, onShow, render }: { cur: number; onShow: (k: number) => void; render: (k: number, active: boolean) => ReactNode }) {
   const [base] = useState(cur);
   const [w, setW] = useState(0);
   const x = useSharedValue(0);
+  // Месяц, к которому карусель едет или на котором стоит.
   const shown = useSharedValue(cur);
   useEffect(() => {
-    if (!w) return;
-    const target = -(cur - base) * w;
+    if (!w || shown.get() === cur) return;
     const far = Math.abs(cur - shown.get()) > 1;
     shown.set(cur);
-    x.set(far ? target : withTiming(target, { duration: 260, easing: Easing.out(Easing.cubic) }));
+    const target = -(cur - base) * w;
+    x.set(far ? target : withTiming(target, { duration: 280, easing: Easing.out(Easing.cubic) }));
   }, [cur, base, w, x, shown]);
+  useEffect(() => {
+    x.set(-(shown.get() - base) * w);
+  }, [w, base, x, shown]);
   const pan = Gesture.Pan()
     .activeOffsetX([-10, 10])
     .failOffsetY([-12, 12])
@@ -237,26 +192,35 @@ function MonthCarousel({
       'worklet';
       // Жест отменён (перехватил другой) — месяц не меняем.
       const d = !success ? 0 : e.translationX < -w / 4 || e.velocityX < -500 ? 1 : e.translationX > w / 4 || e.velocityX > 500 ? -1 : 0;
-      if (d) scheduleOnRN(onStep, d);
-      else x.set(withTiming(-(shown.get() - base) * w, { duration: 200, easing: Easing.out(Easing.cubic) }));
+      const next = shown.get() + d;
+      const target = -(next - base) * w;
+      const easing = Easing.out(Easing.cubic);
+      const duration = settleDuration(target - x.get(), e.velocityX);
+      if (!d) {
+        x.set(withTiming(target, { duration, easing }));
+        return;
+      }
+      shown.set(next);
+      // Месяц в календаре меняем, когда страница доехала (или её перебили новым свайпом).
+      x.set(withTiming(target, { duration, easing }, () => scheduleOnRN(onShow, next)));
     });
   const style = useAnimatedStyle(() => ({ transform: [{ translateX: x.get() }] }));
   return (
     <GestureDetector gesture={pan}>
-      <View style={{ height: GRID_H, overflow: 'hidden' }} onLayout={(e) => setW(e.nativeEvent.layout.width)}>
-        {/* Три месяца лежат внутри ряда шириной 3w, который сдвигается вместе с текущим месяцем: видимая сетка всегда
+      <View style={{ height: PAGE_H, overflow: 'hidden' }} onLayout={(e) => setW(e.nativeEvent.layout.width)}>
+        {/* Три месяца лежат внутри ряда шириной 3w, который сдвигается вместе с текущим месяцем: видимая страница всегда
             в границах ряда — на Android нажатия за границами родителя могут не доходить. */}
-        <Animated.View style={[{ position: 'absolute', top: 0, height: GRID_H, left: (cur - 1 - base) * w, width: 3 * w }, style]}>
+        <Animated.View style={[{ position: 'absolute', top: 0, height: PAGE_H, left: (cur - 1 - base) * w, width: 3 * w }, style]}>
           {w > 0 &&
             [cur - 1, cur, cur + 1].map((k) => (
               <View
                 key={k}
-                style={{ position: 'absolute', top: 0, height: GRID_H, left: (k - cur + 1) * w, width: w }}
+                style={{ position: 'absolute', top: 0, height: PAGE_H, left: (k - cur + 1) * w, width: w }}
                 aria-hidden={k !== cur}
                 importantForAccessibility={k === cur ? 'auto' : 'no-hide-descendants'}
                 accessibilityElementsHidden={k !== cur}
               >
-                {render(Math.floor(k / 12), ((k % 12) + 12) % 12)}
+                {render(k, k === cur)}
               </View>
             ))}
         </Animated.View>
@@ -265,7 +229,180 @@ function MonthCarousel({
   );
 }
 
-/** Сетка одного месяца: дни кружками, сегодня и выбранный — с заливкой, под днём — значки событий. */
+/** Страница месяца: название-кнопка («Ноябрь 2026 ▾» — выбор месяца), дни недели и сетка. */
+function MonthPage({ k, active, onTitle, onStep, grid }: { k: number; active: boolean; onTitle: () => void; onStep: (d: number) => void; grid: ReactNode }) {
+  const { colors, fonts } = useTheme();
+  const year = Math.floor(k / 12);
+  const month = ((k % 12) + 12) % 12;
+  return (
+    <View style={{ paddingHorizontal: 8 }}>
+      <View style={{ height: TITLE_H, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6 }}>
+        <Pressable
+          onPress={onTitle}
+          disabled={!active}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={`${MONTHS[month]} ${year}`}
+          accessibilityHint="Выбрать месяц и год"
+          // Без стрелок: диктор листает месяцы жестом вверх-вниз по названию.
+          accessibilityActions={[
+            { name: 'increment', label: 'Следующий месяц' },
+            { name: 'decrement', label: 'Прошлый месяц' },
+          ]}
+          onAccessibilityAction={(e) => onStep(e.nativeEvent.actionName === 'increment' ? 1 : -1)}
+          style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 4, opacity: pressed ? 0.6 : 1 })}
+        >
+          <Text style={{ fontFamily: fonts.display, fontSize: 20, color: colors.text }} numberOfLines={1}>
+            {MONTHS[month]} {year}
+          </Text>
+          <Icon name="chevronDown" size={18} color={colors.text2} strokeWidth={2.2} />
+        </Pressable>
+      </View>
+      <View style={{ flexDirection: 'row', height: WEEK_H }}>
+        {WEEKDAYS_MON.map((w, i) => (
+          <Text key={w} style={{ flex: 1, textAlign: 'center', fontFamily: fonts.medium, fontSize: 12, color: i >= 5 ? colors.text3 : colors.text2 }}>
+            {w}
+          </Text>
+        ))}
+      </View>
+      {grid}
+    </View>
+  );
+}
+
+/** Пилюля «↶ Сегодня» — в правом верхнем углу карточки, поверх листаемых месяцев. */
+function TodayPill({ onPress }: { onPress: () => void }) {
+  const { colors, fonts } = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      hitSlop={8}
+      accessibilityRole="button"
+      accessibilityLabel="Вернуться к сегодня"
+      style={({ pressed }) => ({
+        position: 'absolute',
+        top: 14,
+        right: 14,
+        zIndex: 2,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        backgroundColor: colors.soft,
+        borderRadius: 999,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        opacity: pressed ? 0.7 : 1,
+      })}
+    >
+      <Icon name="undo" size={14} color={colors.accentText} strokeWidth={2.2} />
+      <Text style={{ fontFamily: fonts.semibold, fontSize: 13, color: colors.accentText }}>Сегодня</Text>
+    </Pressable>
+  );
+}
+
+/** Обозначения внизу карточки: сетка 2×2 — значок, что это и сколько в месяце; «Скрыть» убирает (вернуть — в настройках). */
+function Legend({ month, counts, holidays, onHide }: { month: number; counts: Record<CalendarEvent['kind'], number>; holidays: boolean; onHide: () => void }) {
+  const { s, colors, fonts } = useTheme();
+  const red = useKindColors().holiday[0];
+  const items: [CalendarEvent['kind'], string][] = [
+    ['birthday', 'Дни рождения'],
+    ['date', 'Важные даты'],
+    ['meeting', 'Встречи'],
+    ...(holidays ? ([['holiday', 'Праздники']] as [CalendarEvent['kind'], string][]) : []),
+  ];
+  return (
+    <View style={{ borderTopWidth: 1, borderTopColor: colors.separator, paddingHorizontal: 14, paddingTop: 10, paddingBottom: 10, marginTop: 2 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+        <Text style={[s.sectionLabel, { flex: 1, paddingHorizontal: 0 }]}>В {MONTHS_IN[month]}</Text>
+        <Pressable onPress={onHide} hitSlop={10} accessibilityRole="button" accessibilityLabel="Скрыть обозначения">
+          <Text style={{ fontFamily: fonts.semibold, fontSize: 13, color: colors.accentText }}>Скрыть</Text>
+        </Pressable>
+      </View>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+        {items.map(([kind, label]) => (
+          <View key={kind} style={{ width: '50%', flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 5, paddingRight: 14 }}>
+            <View style={{ width: 16, alignItems: 'center' }}>
+              {/* Праздник в сетке — красное число, поэтому и здесь — число. */}
+              {kind === 'holiday' ? <Text style={{ fontFamily: fonts.semibold, fontSize: 13, color: red }}>7</Text> : <KindIcon kind={kind} size={15} />}
+            </View>
+            <Text style={{ flex: 1, fontFamily: fonts.body, fontSize: 13, color: colors.text }} numberOfLines={1}>
+              {label}
+            </Text>
+            <Text style={{ fontFamily: fonts.medium, fontSize: 13, color: colors.text3, fontVariant: ['tabular-nums'] }}>{counts[kind]}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+/** Выбор месяца: год стрелками, месяцы сеткой 3×4. Текущий — акцентом, месяц «сегодня» — мягкой заливкой. */
+function MonthPicker({ visible, k, onPick, onClose }: { visible: boolean; k: number; onPick: (k: number) => void; onClose: () => void }) {
+  const { colors, fonts } = useTheme();
+  const insets = useSafeAreaInsets();
+  const [year, setYear] = useState(Math.floor(k / 12));
+  const [openedFor, setOpenedFor] = useState<number | null>(null);
+  // Открыли заново — год того месяца, что сейчас на экране.
+  if (visible && openedFor !== k) {
+    setOpenedFor(k);
+    setYear(Math.floor(k / 12));
+  }
+  if (!visible && openedFor !== null) setOpenedFor(null);
+  const now = parseISODate(todayISO());
+  const nowK = now.getFullYear() * 12 + now.getMonth();
+  return (
+    <Sheet visible={visible} onClose={onClose} style={{ paddingTop: 10, paddingBottom: insets.bottom + 18, paddingHorizontal: 16 }}>
+      <SheetHandle />
+      <View style={{ flexDirection: 'row', alignItems: 'center', paddingTop: 10, paddingBottom: 8 }}>
+        <IconButton icon="chevronLeft" label="Прошлый год" onPress={() => setYear((y) => y - 1)} />
+        <Text style={{ flex: 1, textAlign: 'center', fontFamily: fonts.display, fontSize: 22, color: colors.text }} accessibilityRole="header">
+          {year}
+        </Text>
+        <IconButton icon="chevronRight" label="Следующий год" onPress={() => setYear((y) => y + 1)} />
+      </View>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+        {MONTHS.map((name, m) => {
+          const key = year * 12 + m;
+          const isCur = key === k;
+          const isNow = key === nowK;
+          return (
+            <View key={m} style={{ width: '33.333%', padding: 4 }}>
+              <Pressable
+                onPress={() => {
+                  onPick(key);
+                  onClose();
+                }}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isCur }}
+                accessibilityLabel={`${name} ${year}`}
+                style={({ pressed }) => ({
+                  height: 46,
+                  borderRadius: 14,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: isCur ? colors.accent : isNow ? colors.soft : colors.chip,
+                  opacity: pressed ? 0.7 : 1,
+                })}
+              >
+                <Text
+                  style={{
+                    fontFamily: isCur || isNow ? fonts.semibold : fonts.medium,
+                    fontSize: 15,
+                    color: isCur ? colors.onAccent : isNow ? colors.accentText : colors.text,
+                  }}
+                >
+                  {name}
+                </Text>
+              </Pressable>
+            </View>
+          );
+        })}
+      </View>
+    </Sheet>
+  );
+}
+
+/** Сетка одного месяца: дни кружками, сегодня и выбранный — с заливкой, праздник — красным числом, под днём — значки событий. */
 function MonthGrid({
   year,
   month,
@@ -282,6 +419,7 @@ function MonthGrid({
   onPick: (date: string) => void;
 }) {
   const { colors, fonts } = useTheme();
+  const red = useKindColors().holiday[0];
   const days = monthGrid(year, month);
   // Неделя — отдельной строкой из семи клеток flex: 1. Не перенос по ширине 1/7: на Android сумма семи округлённых
   // «14,2857 %» бывала шире ряда, в строку влезало шесть дней, и числа съезжали со своих дней недели.
@@ -295,8 +433,9 @@ function MonthGrid({
             const isToday = date === today;
             const isSel = date === selected && own;
             const list = byDay.get(date) ?? [];
-            // Не больше трёх значков — шире клетки не влезут; если событий всех четырёх видов, праздник — только в списке.
-            const kinds = GRID_ORDER.filter((k) => list.some((e) => e.kind === k)).slice(0, 3);
+            const kinds = GRID_ORDER.filter((k) => list.some((e) => e.kind === k));
+            // Праздник — «красный день календаря»: само число красное, значка нет — место под днём остаётся своим событиям.
+            const holiday = list.some((e) => e.kind === 'holiday');
             return (
               <Pressable
                 key={date}
@@ -317,10 +456,10 @@ function MonthGrid({
                   )}
                   <Text
                     style={{
-                      fontFamily: isSel || isToday ? fonts.semibold : fonts.body,
+                      fontFamily: isSel || isToday || holiday ? fonts.semibold : fonts.body,
                       fontSize: 16,
                       fontVariant: ['tabular-nums'],
-                      color: isSel ? colors.onAccent : isToday ? colors.accentText : own ? colors.text : colors.text3,
+                      color: isSel ? colors.onAccent : holiday ? red : isToday ? colors.accentText : own ? colors.text : colors.text3,
                       opacity: own ? 1 : 0.6,
                     }}
                   >
@@ -342,8 +481,8 @@ function MonthGrid({
   );
 }
 
-/** Порядок значков под днём: сначала своё, праздник — последним. */
-const GRID_ORDER = ['birthday', 'date', 'meeting', 'holiday'] as const;
+/** Значки под днём — по порядку; праздник значком не отмечаем: он — красным числом. */
+const GRID_ORDER = ['birthday', 'date', 'meeting'] as const;
 
 /** Строка события: аватар (у встречи без друга — часы), что за событие, когда. Нажатие — к другу или к делу. */
 function EventRow({ event: e, today }: { event: CalendarEvent; today: string }) {

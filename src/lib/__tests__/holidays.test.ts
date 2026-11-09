@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
-import { calendarEvents, nextEvents } from '../calendar';
+import { calendarEvents, monthCounts, nextEvents } from '../calendar';
 import {
   HOLIDAY_COUNTRIES,
   HOLIDAY_YEARS,
@@ -116,6 +116,13 @@ describe('в календаре', () => {
       ['2027-01-01 Новогодние каникулы', '2027-01-07 Рождество Христово', '2027-02-23 День защитника Отечества'],
     );
   });
+});
+
+test('обозначения: сколько чего в месяце; многодневный праздник — один раз', () => {
+  const friends = [{ id: 'a', name: 'Аня', emoji: '', birthday: '1995-01-04', phone: '', food: '', flowers: '', gifts: '', notes: '', dates: [], createdAt: 0 }];
+  const ev = calendarEvents({ friends, reminders: [], settings: settings(['RU']) } as never, '2026-12-01', '2027-01-31');
+  assert.deepEqual(monthCounts(ev, '2027-01-01', '2027-01-31'), { birthday: 1, date: 0, meeting: 0, holiday: 2 });
+  assert.deepEqual(monthCounts(ev, '2026-12-01', '2026-12-31'), { birthday: 0, date: 0, meeting: 0, holiday: 0 });
 });
 
 test('«дальше»: одноимённые праздники разных стран не прячут друг друга (Рождество 25 декабря и 7 января)', () => {

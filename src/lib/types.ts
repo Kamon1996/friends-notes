@@ -150,6 +150,8 @@ export interface Settings {
   smartCalendar?: boolean;
   /** Праздники каких стран показывать в календаре (коды стран). Нет — страна телефона, если она есть в базе. */
   holidayCountries?: string[];
+  /** Обозначения под календарём (сколько чего в месяце). Нет — показывать. */
+  calendarLegend?: boolean;
 }
 
 export interface AppData {

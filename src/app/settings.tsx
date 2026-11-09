@@ -271,6 +271,15 @@ export default function SettingsScreen() {
             onChange={(v) => updateSettings({ smartCalendar: v })}
           />
         </Card>
+        <Card style={{ paddingVertical: 4 }}>
+          <SwitchRow
+            icon="info"
+            label="Обозначения под календарём"
+            sub="Что значат значки и сколько чего в месяце."
+            value={settings.calendarLegend !== false}
+            onChange={(v) => updateSettings({ calendarLegend: v })}
+          />
+        </Card>
         {deviceCalendarAvailable && (
           <Card style={{ paddingVertical: 4 }}>
             <SwitchRow

@@ -1154,12 +1154,19 @@ scenario('Календарь: дни рождения, годовщины и в�
   await ui.tap('Понедельник, 22 июня, 1 событие');
   await ui.see('Понедельник, 22 июня');
   await ui.see('через 12 дней');
-  // Следующий месяц — день рождения Мамы.
-  await ui.tap('Следующий месяц');
+  // Название месяца — кнопка: выбор месяца сеткой; июль — день рождения Мамы.
+  await ui.tap('Июнь 2026');
+  await ui.see('2026');
+  await ui.tap('Июль 2026');
   await ui.see('Июль 2026');
   await ui.see('Мама');
-  await ui.tap('Сегодня');
+  await ui.tap('Вернуться к сегодня');
   await ui.see('Июнь 2026');
+  // Обозначения со счётчиками за месяц; «Скрыть» убирает, вернуть — в настройках.
+  await ui.see('Скрыть обозначения', { label: true });
+  await ui.tap('Скрыть обозначения');
+  await ui.notSee('Скрыть обозначения', { label: true });
+  await ui.waitData((x) => x.settings.calendarLegend === false, 'обозначения не скрылись');
   await ui.tap('Настройки');
   await ui.see('Уведомления');
   void page;
@@ -1293,9 +1300,16 @@ scenario('Календарь: «Новое событие» — на выбра�
 scenario('Праздники: страна телефона сразу, выбор стран галочками, праздник с описанием из Википедии', async ({ ui, page }) => {
   await ui.go('/calendar');
   await ui.see('Июнь 2026');
-  // Язык телефона ru-RU — сразу праздники России: 12 июня — День России, флажок в легенде.
+  // Язык телефона ru-RU — сразу праздники России: 12 июня — День России, красным числом; в обозначениях — «Праздники».
   await ui.see('Праздники');
   await ui.see('Пятница, 12 июня, 1 событие', { label: true });
+  const red = await page.evaluate(() => {
+    const cell = [...document.querySelectorAll('[aria-label^="Пятница, 12 июня"]')].find((e) => !e.closest('[aria-hidden="true"]'));
+    const plain = [...document.querySelectorAll('[aria-label^="Четверг, 11 июня"]')].find((e) => !e.closest('[aria-hidden="true"]'));
+    const color = (el) => getComputedStyle([...el.querySelectorAll('div')].find((d) => d.textContent.trim() === d.textContent && /^\d+$/.test(d.textContent.trim()) && !d.children.length) || el).color;
+    return { hol: color(cell), plain: color(plain) };
+  });
+  assert.notEqual(red.hol, red.plain, `праздник должен быть красным числом: ${JSON.stringify(red)}`);
   await ui.tap('Пятница, 12 июня, 1 событие');
   await ui.see('День России');
   await ui.see('🇷🇺 Россия');
@@ -1319,7 +1333,8 @@ scenario('Праздники: страна телефона сразу, выбо
   await ui.notSee('Пятница, 12 июня, 1 событие', { label: true });
   // 19 июня — Джунтин, 4 июля — День независимости США.
   await ui.see('Пятница, 19 июня, 1 событие', { label: true });
-  await ui.tap('Следующий месяц');
+  await ui.tap('Июнь 2026');
+  await ui.tap('Июль 2026');
   await ui.tap('Суббота, 4 июля, 1 событие');
   await ui.see('День независимости США');
   await ui.see('🇺🇸 США');

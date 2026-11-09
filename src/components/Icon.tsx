@@ -23,6 +23,7 @@ export type IconName =
   | 'chevronRight'
   | 'chevronLeft'
   | 'chevronDown'
+  | 'redDay'
   | 'chevronUp'
   | 'check'
   | 'cake'
@@ -99,10 +100,19 @@ const PATHS: Record<IconName, ReactNode> = {
   chevronRight: <Path d="M9 6l6 6-6 6" />,
   chevronLeft: <Path d="M15 6l-6 6 6 6" />,
   chevronDown: <Path d="M6 9l6 6 6-6" />,
+  // «Красный день календаря» — листок с точкой: праздник в списке дня.
+  redDay: (
+    <>
+      <Rect x={4} y={5} width={16} height={15} rx={2.5} />
+      <Path d="M4 10h16M8.5 3v4M15.5 3v4" />
+      <Circle cx={12} cy={15} r={1.6} />
+    </>
+  ),
   chevronUp: <Path d="M6 15l6-6 6 6" />,
   check: <Path d="M5 12l5 5 9-10" />,
   cake: (
-    <Path d="M4 21h16M5 21v-7a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v7M5 16.5c1.2 0 1.2 1 2.4 1s1.1-1 2.3-1 1.2 1 2.3 1 1.2-1 2.3-1 1.2 1 2.4 1 1.1-1 2.3-1M12 12V8" />
+    // Свеча с пламенем: и на торт похоже, и рисунок стоит по центру квадрата (без пламени он сидел ниже).
+    <Path d="M4 21h16M5 21v-7a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v7M5 16.5c1.2 0 1.2 1 2.4 1s1.1-1 2.3-1 1.2 1 2.3 1 1.2-1 2.3-1 1.2 1 2.4 1 1.1-1 2.3-1M12 12V8M12 5.4c.75-.8.75-1.8 0-2.6-.75.8-.75 1.8 0 2.6z" />
   ),
   heart: <Path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.5-7 10-7 10z" />,
   flower: (

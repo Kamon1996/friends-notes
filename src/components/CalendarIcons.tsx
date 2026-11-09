@@ -29,14 +29,19 @@ export function KindIcon({ kind, size, strokeWidth }: { kind: CalendarEvent['kin
   return <Icon name={KIND_ICON[kind]} size={size} strokeWidth={strokeWidth} color={stops[stops.length - 1]} gradient={stops.length > 1 ? stops : undefined} />;
 }
 
-/** Значок события — в днях месяца, в подписи под ним и на аватаре в списке (набор «Линии»). Праздникам — флажок. */
-const KIND_ICON = { birthday: 'cake', date: 'heart', meeting: 'clock', holiday: 'flag' } as const;
+/**
+ * Значок события — в днях месяца, в подписи под ним и на аватаре в списке (набор «Линии»). Праздник в сетке — красным
+ * числом, а в списке дня — листком «красный день».
+ */
+const KIND_ICON = { birthday: 'cake', date: 'heart', meeting: 'clock', holiday: 'redDay' } as const;
 
 /** Значок типа события в углу аватара: кружок цвета события (у дня рождения — градиентом) с белым значком. */
 export function KindBadge({ kind }: { kind: CalendarEvent['kind'] }) {
-  const { colors } = useTheme();
+  const { colors, scheme } = useTheme();
   const stops = useKindColors()[kind];
   const id = useSvgId('badge');
+  // Торт на светлом персике в тёмной теме — тёмно-шоколадный: белый там почти не читался.
+  const glyph = kind === 'birthday' && scheme === 'dark' ? '#4A2416' : '#FFFFFF';
   return (
     <View style={{ position: 'absolute', right: -3, bottom: -3, width: 18, height: 18, alignItems: 'center', justifyContent: 'center' }}>
       <Svg width={18} height={18} style={StyleSheet.absoluteFill}>
@@ -51,7 +56,7 @@ export function KindBadge({ kind }: { kind: CalendarEvent['kind'] }) {
       </Svg>
       {/* Значок — поверх кружка (на вебе абсолютный кружок иначе ложится сверху). */}
       <View style={{ zIndex: 1 }}>
-        <Icon name={KIND_ICON[kind]} size={9} color="#FFFFFF" strokeWidth={2.6} />
+        <Icon name={KIND_ICON[kind]} size={9} color={glyph} strokeWidth={2.6} />
       </View>
     </View>
   );

@@ -112,3 +112,16 @@ export function nextEvents(data: Pick<AppData, 'friends' | 'reminders'> & { sett
     })
     .slice(0, limit);
 }
+
+/** Сколько чего в месяце — для обозначений под календарём. Праздник на несколько дней считаем один раз. */
+export function monthCounts(events: readonly CalendarEvent[], from: ISODate, to: ISODate): Record<CalendarEvent['kind'], number> {
+  const counts = { birthday: 0, date: 0, meeting: 0, holiday: 0 };
+  const holidays = new Set<string>();
+  for (const e of events) {
+    if (e.date < from || e.date > to) continue;
+    if (e.kind === 'holiday') holidays.add(e.name);
+    else counts[e.kind]++;
+  }
+  counts.holiday = holidays.size;
+  return counts;
+}
