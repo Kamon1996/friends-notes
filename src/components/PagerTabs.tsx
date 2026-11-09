@@ -9,7 +9,7 @@ import { scheduleOnRN } from 'react-native-worklets';
 
 import { useTheme } from '@/lib/themeContext';
 import { ropeWaves, type RopeWave } from '@/lib/tabRope';
-import { PagerLock } from './pagerLock';
+import { PagerLock, TabBarSeam } from './pagerLock';
 import { settleDuration } from './settle';
 import { TabRope } from './TabRope';
 
@@ -94,6 +94,22 @@ function PagerTabsNavigator({
     [namesKey],
   );
   const locked = (locks[names[index]] ?? 0) > 0;
+  // Шторка экрана у самой панели — панель без верхней линии (у каждой вкладки свой счётчик).
+  const [seams, setSeams] = useState<Record<string, number>>({});
+  const seamers = useMemo(
+    () =>
+      Object.fromEntries(
+        namesKey.split('|').map((name) => [
+          name,
+          () => {
+            setSeams((l) => ({ ...l, [name]: (l[name] ?? 0) + 1 }));
+            return () => setSeams((l) => ({ ...l, [name]: Math.max(0, (l[name] ?? 1) - 1) }));
+          },
+        ]),
+      ),
+    [namesKey],
+  );
+  const seamless = (seams[names[index]] ?? 0) > 0;
 
   // Панель — сразу: подсветка новой вкладки и волна по ниточке (перерисовывается только панель).
   const [bar] = useState(createPreviewBus);
@@ -160,7 +176,9 @@ function PagerTabsNavigator({
                     importantForAccessibility={i === index ? 'auto' : 'no-hide-descendants'}
                     accessibilityElementsHidden={i !== index}
                   >
-                    <PagerLock.Provider value={lockers[name]}>{route ? descriptors[route.key]?.render() : null}</PagerLock.Provider>
+                    <PagerLock.Provider value={lockers[name]}>
+                      <TabBarSeam.Provider value={seamers[name]}>{route ? descriptors[route.key]?.render() : null}</TabBarSeam.Provider>
+                    </PagerLock.Provider>
                   </View>
                 );
               })}
@@ -171,6 +189,7 @@ function PagerTabsNavigator({
           bus={bar}
           index={index}
           width={w}
+          seamless={seamless}
           items={names.map((name) => {
             const route = routeOf(name);
             const o = ((route && descriptors[route.key]?.options) ?? { title: '' }) as PagerTabOptions;
@@ -205,12 +224,15 @@ function TabBar({
   bus,
   index,
   width,
+  seamless,
   items,
   onPress,
 }: {
   bus: PreviewBus;
   index: number;
   width: number;
+  /** Над панелью — шторка экрана: верхняя линия цветом фона (толщина та же — ничего не сдвигается). */
+  seamless: boolean;
   items: { name: string; title: string; icon?: PagerTabOptions['tabBarIcon'] }[];
   onPress: (i: number) => void;
 }) {
@@ -239,7 +261,7 @@ function TabBar({
       style={{
         flexDirection: 'row',
         backgroundColor: colors.card,
-        borderTopColor: colors.hairline,
+        borderTopColor: seamless ? colors.card : colors.hairline,
         borderTopWidth: StyleSheet.hairlineWidth * 2,
         paddingBottom: insets.bottom,
       }}

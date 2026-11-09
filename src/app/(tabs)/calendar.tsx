@@ -1,6 +1,6 @@
 import { router, useIsFocused } from 'expo-router';
 import { Fragment, useEffect, useMemo, useRef, useState, type ComponentRef, type ReactNode } from 'react';
-import { BackHandler, Platform, Pressable, ScrollView, Text, View, useWindowDimensions, type ViewStyle } from 'react-native';
+import { BackHandler, Platform, Pressable, ScrollView, Text, View, useWindowDimensions, type TextStyle, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated';
@@ -13,6 +13,7 @@ import { Icon } from '@/components/Icon';
 import { settleDuration } from '@/components/settle';
 import { Sheet, SheetHandle } from '@/components/Sheet';
 import { TabSwipe } from '@/components/TabSwipe';
+import { useTabBarSeam } from '@/components/pagerLock';
 import { Button, Fab, Group, IconButton, ListRow, ScreenHeader, Tag, useTheme } from '@/components/ui';
 import { MONTHS, MONTHS_IN, WEEKDAYS_MON, calendarEvents, monthCounts, monthGrid, monthRange, nextEvents, type CalendarEvent } from '@/lib/calendar';
 import { addInterval, daysBetween, formatDate, formatDateLong, parseISODate, plural, relativeDay, todayISO } from '@/lib/dates';
@@ -622,7 +623,7 @@ function DayPanel({
             {formatDateLong(date)} · {relativeDay(date, today)}
           </Text>
           {/* Много событий — первые пять и «Ещё N»: панель не растягивает календарь на весь экран. */}
-          <DayEvents key={date} events={events} today={today} limit={5} />
+          <DayEvents key={date} events={events} today={today} limit={5} compact />
           <NewEventButton date={date} style={{ marginTop: 8 }} />
         </View>
       </View>
@@ -682,6 +683,8 @@ function DaySheet({
     });
   const style = useAnimatedStyle(() => ({ transform: [{ translateY: y.get() }] }));
   const d = shown.date;
+  // Шторка у самой нижней панели — панель прячет свою верхнюю линию, иначе между ними видна полоска.
+  useTabBarSeam(open);
   return (
     <Animated.View
       pointerEvents={open ? 'auto' : 'none'}
@@ -693,7 +696,8 @@ function DaySheet({
           position: 'absolute',
           left: 0,
           right: 0,
-          bottom: 0,
+          // На 2 px ниже края (лишнее срежет карусель вкладок): без щели от округления.
+          bottom: -2,
           // Не выше половины экрана: над шторкой — сетка месяца, по ней можно жать другие дни.
           maxHeight: screenH * 0.5,
           backgroundColor: colors.card,
@@ -702,7 +706,7 @@ function DaySheet({
           borderTopWidth: 1,
           borderColor: colors.hairline,
           boxShadow: '0 -8px 28px rgba(0, 0, 0, 0.28)',
-          paddingBottom: 12,
+          paddingBottom: 14,
         },
         style,
       ]}
@@ -737,7 +741,7 @@ const KIND_TITLE: Record<CalendarEvent['kind'], string> = { holiday: 'Празд
  * (если ему есть куда написать). Больше пяти событий — по группам с подзаголовками; `limit` — сколько показать сразу,
  * остальное — по «Ещё N».
  */
-function DayEvents({ events, today, limit }: { events: CalendarEvent[]; today: string; limit?: number }) {
+function DayEvents({ events, today, limit, compact = false }: { events: CalendarEvent[]; today: string; limit?: number; compact?: boolean }) {
   const { s, colors, fonts } = useTheme();
   const [all, setAll] = useState(false);
   const grouped = events.length > 5;
@@ -757,7 +761,7 @@ function DayEvents({ events, today, limit }: { events: CalendarEvent[]; today: s
               >{`${KIND_TITLE[e.kind]} · ${counts.get(e.kind)}`}</Text>
             )}
             {i > 0 && !head && <View style={[s.separator, { marginLeft: 52 }]} />}
-            <EventRow event={e} today={today} showWhen={false} contact />
+            <EventRow event={e} today={today} showWhen={false} contact={compact ? 'icon' : 'pill'} />
           </View>
         );
       })}
@@ -786,7 +790,7 @@ function NewEventButton({ date, style }: { date: string; style?: ViewStyle }) {
 }
 
 /** «Поздравить» / «Написать» у человека — сразу в мессенджер или соцсеть (Telegram первым); некуда — кнопки нет. */
-function ContactPill({ friend, label }: { friend: Friend; label: string }) {
+function ContactPill({ friend, label, iconOnly = false }: { friend: Friend; label: string; iconOnly?: boolean }) {
   const { colors, fonts } = useTheme();
   const channel = messageChannel(friend, Platform.OS);
   if (!channel) return null;
@@ -799,22 +803,86 @@ function ContactPill({ friend, label }: { friend: Friend; label: string }) {
       style={({ pressed }) => ({
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 5,
+        gap: 4,
         backgroundColor: colors.soft,
         borderRadius: 999,
-        paddingHorizontal: 11,
-        paddingVertical: 7,
+        paddingHorizontal: iconOnly ? 0 : 9,
+        paddingVertical: iconOnly ? 0 : 6,
+        width: iconOnly ? 34 : undefined,
+        height: iconOnly ? 34 : undefined,
+        justifyContent: 'center',
+        marginLeft: 4,
         opacity: pressed ? 0.7 : 1,
       })}
     >
-      <Icon name={channel.icon} size={14} color={colors.accentText} strokeWidth={2.2} />
-      <Text style={{ fontFamily: fonts.semibold, fontSize: 13, color: colors.accentText }}>{label}</Text>
+      <Icon name={channel.icon} size={iconOnly ? 15 : 13} color={colors.accentText} strokeWidth={2.2} />
+      {!iconOnly && (
+        <Text style={{ fontFamily: fonts.semibold, fontSize: 12.5, color: colors.accentText }} numberOfLines={1}>
+          {label}
+        </Text>
+      )}
     </Pressable>
   );
 }
 
+/** Имя или название — всегда в одну строку, длинное — с «…»: строки списка одной высоты. */
+function OneLine({ text, style }: { text: string; style?: TextStyle }) {
+  const { s } = useTheme();
+  return (
+    <Text style={[s.title, style]} numberOfLines={1} ellipsizeMode="tail">
+      {text}
+    </Text>
+  );
+}
+
+/**
+ * Подпись из частей («День рождения», «36 лет»): влезают в строку — через точку, не влезают — каждая своей строкой
+ * и без точек (перенос посреди «· 36 лет» выглядит неряшливо). Пустые части пропускаем.
+ */
+function Subline({ parts }: { parts: string[] }) {
+  const { s } = useTheme();
+  const list = parts.filter(Boolean);
+  const text = list.join(' · ');
+  const [stacked, setStacked] = useState<{ text: string; on: boolean } | null>(null);
+  const isStacked = stacked?.text === text && stacked.on && list.length > 1;
+  if (isStacked) {
+    return (
+      <View>
+        {list.map((p) => (
+          <Text key={p} style={s.muted} numberOfLines={1}>
+            {p}
+          </Text>
+        ))}
+      </View>
+    );
+  }
+  return (
+    <Text
+      style={s.muted}
+      // Вторая строка — значит, не влезло: показываем столбиком.
+      onLayout={(e) => {
+        const wrapped = e.nativeEvent.layout.height > (s.muted.lineHeight ?? 18) * 1.5;
+        if (stacked?.text !== text || stacked.on !== wrapped) setStacked({ text, on: wrapped });
+      }}
+    >
+      {text}
+    </Text>
+  );
+}
+
 /** Строка события: аватар (у встречи без друга — часы), что за событие, когда. Нажатие — к другу или к делу. */
-function EventRow({ event: e, today, showWhen = true, contact = false }: { event: CalendarEvent; today: string; showWhen?: boolean; contact?: boolean }) {
+function EventRow({
+  event: e,
+  today,
+  showWhen = true,
+  contact,
+}: {
+  event: CalendarEvent;
+  today: string;
+  showWhen?: boolean;
+  /** Кнопка «Поздравить»/«Написать» у человека: с подписью или, где тесно («гармошка»), одним значком. */
+  contact?: 'pill' | 'icon';
+}) {
   const { colors } = useTheme();
   const diff = daysBetween(today, e.date);
   const when = relativeDay(e.date, today);
@@ -845,8 +913,8 @@ function EventRow({ event: e, today, showWhen = true, contact = false }: { event
             <KindIcon kind="holiday" size={20} strokeWidth={2} />
           </View>
         }
-        title={e.name}
-        subtitle={`${when} · ${where.map((c) => `${c.flag} ${c.name}`).join(' · ')}${estimated ? ' · дата примерная' : ''}`}
+        title={<OneLine text={e.name} />}
+        subtitle={<Subline parts={[when, where.map((c) => `${c.flag} ${c.name}`).join(', '), estimated ? 'дата примерная' : '']} />}
         trailing={showWhen ? tag : undefined}
       />
     );
@@ -870,18 +938,16 @@ function EventRow({ event: e, today, showWhen = true, contact = false }: { event
             </View>
           )
         }
-        title={r.title}
-        titleStyle={done ? { textDecorationLine: 'line-through', color: colors.text3 } : undefined}
-        subtitle={`${r.time}${e.friend ? ` · ${e.friend.name}` : ''}${done ? ' · сделано' : ''}`}
-        trailing={showWhen ? tag : contact && e.friend ? <ContactPill friend={e.friend} label="Написать" /> : undefined}
+        title={<OneLine text={r.title} style={done ? { textDecorationLine: 'line-through', color: colors.text3 } : undefined} />}
+        subtitle={<Subline parts={[r.time, e.friend?.name ?? '', done ? 'сделано' : '']} />}
+        trailing={showWhen ? tag : contact && e.friend ? <ContactPill friend={e.friend} label="Написать" iconOnly={contact === 'icon'} /> : undefined}
       />
     );
   }
   const f = e.friend;
-  const what =
-    e.kind === 'birthday'
-      ? `День рождения${e.age ? ` · ${e.age} ${plural(e.age, 'год', 'года', 'лет')}` : ''}`
-      : `${e.title}${e.years ? ` · ${e.years} ${plural(e.years, 'год', 'года', 'лет')}` : ''}`;
+  // Что за событие и сколько лет исполняется — двумя частями: влезают в строку — через точку, нет — столбиком.
+  const n = e.kind === 'birthday' ? e.age : e.years;
+  const what = [e.kind === 'birthday' ? 'День рождения' : e.title, n ? `${n} ${plural(n, 'год', 'года', 'лет')}` : ''];
   return (
     <ListRow
       onPress={() => router.push({ pathname: '/friend/[id]', params: { id: f.id } })}
@@ -891,9 +957,9 @@ function EventRow({ event: e, today, showWhen = true, contact = false }: { event
           <KindBadge kind={e.kind} />
         </View>
       }
-      title={f.name}
-      subtitle={what}
-      trailing={showWhen ? tag : contact ? <ContactPill friend={f} label="Поздравить" /> : undefined}
+      title={<OneLine text={f.name} />}
+      subtitle={<Subline parts={what} />}
+      trailing={showWhen ? tag : contact ? <ContactPill friend={f} label="Поздравить" iconOnly={contact === 'icon'} /> : undefined}
     />
   );
 }
