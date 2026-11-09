@@ -10,6 +10,7 @@ import { parseStored } from './storage';
 import { EMPTY_DATA, type AppData, type Friend, type Reminder, type Settings } from './types';
 import { genderOnSave } from './gender';
 import { applyGenderUpdate, genderPending, retractUnisexGuess } from './genderDetect';
+import { defaultHolidayCountries } from './holidays';
 import { genderSync } from './genderRun';
 import { ai } from './ai';
 import { applyCalendarUpdate, calendarPass, calendarPending, smartCalendarOn } from './calendarAi';
@@ -89,6 +90,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       // Повторяющиеся, сделанные в прошлые дни, снова активны — на ближайший раз.
       // Пол, угаданный по имени, общему для обоих (Валя, Ника), снимаем — спросим у человека.
       if (loaded) setData({ ...loaded, friends: loaded.friends.map((f) => retractUnisexGuess(retidySeen(f))), reminders: loaded.reminders.map((r) => rollReminder(r)) });
+      // Праздники: пока страну не выбирали — страна телефона (один раз; дальше — как выбрал человек).
+      setData((d) => (Array.isArray(d.settings.holidayCountries) ? d : { ...d, settings: { ...d.settings, holidayCountries: defaultHolidayCountries() } }));
     })().finally(() => setReady(true));
   }, []);
 

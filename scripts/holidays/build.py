@@ -122,6 +122,12 @@ def summary(ru_title):
     return None
 
 
+def clean(text):
+    """Без знаков ударения и редакторских пометок Википедии («[какой?]», «[1]»)."""
+    text = re.sub(r'\[[^\]]{0,30}\]', '', text.replace('\u0301', ''))
+    return re.sub(r'\s+([,.;:])', r'\1', re.sub(r'[ \t]{2,}', ' ', text)).strip()
+
+
 def slug(s):
     return re.sub(r'[^a-z0-9]+', '-', s.lower()).strip('-')[:60]
 
@@ -175,7 +181,7 @@ def main():
                     if s and not ABOUT_DAY.search(s['text'][:300]):
                         s = None  # нашлась статья не о празднике (страна, город…) — лучше без описания
                 display = ov.get('name') or ru_name or en_clean
-                text = (s or {}).get('text', '').replace('\u0301', '')  # без знаков ударения
+                text = clean((s or {}).get('text', ''))
                 if len(text) > 600:
                     cut = text[:600]
                     text = cut[: cut.rfind('. ') + 1] or cut

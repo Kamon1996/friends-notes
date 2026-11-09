@@ -4,15 +4,15 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
-import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
 
 import { Avatar } from '@/components/Avatar';
-import { useSvgId } from '@/components/ai/AiIcon';
+import { KindBadge, KindIcon } from '@/components/CalendarIcons';
 import { Icon } from '@/components/Icon';
 import { TabSwipe } from '@/components/TabSwipe';
 import { Fab, Group, IconButton, ListRow, ScreenHeader, Tag, useTheme } from '@/components/ui';
 import { MONTHS, MONTHS_IN, WEEKDAYS_MON, calendarEvents, monthGrid, monthRange, nextEvents, type CalendarEvent } from '@/lib/calendar';
 import { daysBetween, formatDateLong, parseISODate, plural, relativeDay, todayISO } from '@/lib/dates';
+import { holidayCountries, holidayCountry } from '@/lib/holidays';
 import { useStore } from '@/lib/store';
 
 interface CalView {
@@ -33,28 +33,6 @@ function stepMonth(v: CalView, delta: number): CalView {
 function atDay(date: string): CalView {
   const d = parseISODate(date);
   return { year: d.getFullYear(), month: d.getMonth(), selected: date };
-}
-
-/**
- * Цвета значков событий: торт — градиент от персика к розе (линия тоньше), сердце — пыльная роза,
- * встречи — спокойный голубой. В светлой теме — те же оттенки темнее, чтобы читались на бумаге.
- */
-const KIND_PALETTE = {
-  dark: { birthday: ['#FFB089', '#F0708C'], date: ['#E45D7B'], meeting: ['#86B6E0'] },
-  light: { birthday: ['#E07F55', '#C94A6B'], date: ['#C2405F'], meeting: ['#3F78AE'] },
-} as const;
-
-function useKindColors() {
-  const { scheme } = useTheme();
-  return KIND_PALETTE[scheme === 'dark' ? 'dark' : 'light'];
-}
-
-/** Значок события: цвет или градиент из палитры. */
-function KindIcon({ kind, size, strokeWidth }: { kind: CalendarEvent['kind']; size: number; strokeWidth?: number }) {
-  const stops = useKindColors()[kind];
-  // Торт — тоньше: так он читается легче остальных значков.
-  strokeWidth ??= kind === 'birthday' ? 1.6 : 2.2;
-  return <Icon name={KIND_ICON[kind]} size={size} strokeWidth={strokeWidth} color={stops[stops.length - 1]} gradient={stops.length > 1 ? stops : undefined} />;
 }
 
 /**
@@ -80,6 +58,7 @@ export default function CalendarScreen() {
   const inMonth = events.filter((e) => e.date >= monthFrom && e.date <= monthTo).length;
   const dayEvents = byDay.get(selected) ?? [];
   const later = useMemo(() => nextEvents(data, selected, 5), [data, selected]);
+  const countries = holidayCountries(data.settings);
 
   const go = (delta: number) => setView((v) => stepMonth(v, delta));
   const goToday = () => setView(atDay(today));
@@ -97,7 +76,13 @@ export default function CalendarScreen() {
             subtitle={
               inMonth ? `В ${MONTHS_IN[view.month]} — ${inMonth} ${plural(inMonth, 'событие', 'события', 'событий')}` : `В ${MONTHS_IN[view.month]} событий нет`
             }
-            right={<IconButton icon="sliders" label="Настройки" onPress={() => router.push('/settings')} />}
+            right={
+              <>
+                {/* Праздники каких стран показывать — флажок, как у праздников в календаре. */}
+                <IconButton icon="flag" label="Праздники стран" onPress={() => router.push('/holidays')} />
+                <IconButton icon="sliders" label="Настройки" onPress={() => router.push('/settings')} />
+              </>
+            }
           />
 
           <View style={[s.group, { marginHorizontal: 20, marginTop: 14, paddingHorizontal: 8, paddingTop: 10, paddingBottom: 8 }]}>
@@ -154,12 +139,13 @@ export default function CalendarScreen() {
               onStep={go}
               render={(y, m) => <MonthGrid year={y} month={m} selected={selected} today={today} byDay={byDay} onPick={pick} />}
             />
-            <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 14, paddingTop: 6 }}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', columnGap: 12, rowGap: 4, paddingTop: 6 }}>
               {(
                 [
                   ['birthday', 'Дни рождения'],
                   ['date', 'Важные даты'],
                   ['meeting', 'Встречи'],
+                  ...(countries.length ? ([['holiday', 'Праздники']] as const) : []),
                 ] as const
               ).map(([k, label]) => (
                 <View key={k} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
@@ -303,7 +289,8 @@ function MonthGrid({
         const isToday = date === today;
         const isSel = date === selected && own;
         const list = byDay.get(date) ?? [];
-        const kinds = [...new Set(list.map((e) => e.kind))];
+        // Не больше трёх значков — шире клетки не влезут; если событий всех четырёх видов, праздник — только в списке.
+        const kinds = GRID_ORDER.filter((k) => list.some((e) => e.kind === k)).slice(0, 3);
         return (
           <Pressable
             key={date}
@@ -347,33 +334,8 @@ function MonthGrid({
   );
 }
 
-/** Значок события — в днях месяца, в подписи под ним и на аватаре в списке (набор «Линии»). Праздникам — флажок. */
-const KIND_ICON = { birthday: 'cake', date: 'heart', meeting: 'clock' } as const;
-
-/** Значок типа события в углу аватара: кружок цвета события (у дня рождения — градиентом) с белым значком. */
-function KindBadge({ kind }: { kind: CalendarEvent['kind'] }) {
-  const { colors } = useTheme();
-  const stops = useKindColors()[kind];
-  const id = useSvgId('badge');
-  return (
-    <View style={{ position: 'absolute', right: -3, bottom: -3, width: 18, height: 18, alignItems: 'center', justifyContent: 'center' }}>
-      <Svg width={18} height={18} style={StyleSheet.absoluteFill}>
-        <Defs>
-          <LinearGradient id={id} x1="2" y1="2" x2="16" y2="16" gradientUnits="userSpaceOnUse">
-            {stops.map((c, i) => (
-              <Stop key={i} offset={i / Math.max(1, stops.length - 1)} stopColor={c} />
-            ))}
-          </LinearGradient>
-        </Defs>
-        <Circle cx={9} cy={9} r={8} fill={`url(#${id})`} stroke={colors.card} strokeWidth={2} />
-      </Svg>
-      {/* Значок — поверх кружка (на вебе абсолютный кружок иначе ложится сверху). */}
-      <View style={{ zIndex: 1 }}>
-        <Icon name={KIND_ICON[kind]} size={9} color="#FFFFFF" strokeWidth={2.6} />
-      </View>
-    </View>
-  );
-}
+/** Порядок значков под днём: сначала своё, праздник — последним. */
+const GRID_ORDER = ['birthday', 'date', 'meeting', 'holiday'] as const;
 
 /** Строка события: аватар (у встречи без друга — часы), что за событие, когда. Нажатие — к другу или к делу. */
 function EventRow({ event: e, today }: { event: CalendarEvent; today: string }) {
@@ -381,6 +343,23 @@ function EventRow({ event: e, today }: { event: CalendarEvent; today: string }) 
   const diff = daysBetween(today, e.date);
   const when = relativeDay(e.date, today);
   const tag = <Tag text={when} tone={diff === 0 ? 'solid' : diff > 0 && diff <= 7 ? 'accent' : 'neutral'} />;
+  if (e.kind === 'holiday') {
+    const where = e.holidays.map((h) => holidayCountry(h.country)).filter((c) => c !== undefined);
+    const estimated = e.holidays.some((h) => h.estimated);
+    return (
+      <ListRow
+        onPress={() => router.push({ pathname: '/holiday', params: { id: e.holidays[0].id, date: e.date, also: e.holidays.slice(1).map((h) => h.id).join(',') } })}
+        leading={
+          <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: colors.chip, alignItems: 'center', justifyContent: 'center' }}>
+            <KindIcon kind="holiday" size={20} strokeWidth={2} />
+          </View>
+        }
+        title={e.name}
+        subtitle={`${where.map((c) => `${c.flag} ${c.name}`).join(' · ')}${estimated ? ' · дата примерная' : ''}`}
+        trailing={tag}
+      />
+    );
+  }
   if (e.kind === 'meeting') {
     const r = e.reminder;
     // У повторяющегося «сделано» — только этот раз.

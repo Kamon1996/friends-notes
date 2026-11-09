@@ -148,6 +148,8 @@ export interface Settings {
   showZodiac?: boolean;
   /** «Умный календарь»: магия сама решает, какие дела — события для календаря. Нет — включён. */
   smartCalendar?: boolean;
+  /** Праздники каких стран показывать в календаре (коды стран). Нет — страна телефона, если она есть в базе. */
+  holidayCountries?: string[];
 }
 
 export interface AppData {

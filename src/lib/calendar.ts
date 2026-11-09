@@ -1,17 +1,20 @@
 import { inCalendar, smartCalendarOn } from './calendarAi';
 import { addInterval, ageOn, hasYear, occurrences, parseISODate, sameDayInYear, toISODate } from './dates';
 import { seriesStart } from './events';
+import { holidayCountries, holidayName, holidaysIn, type Holiday } from './holidays';
 import type { AppData, Friend, ISODate, Reminder, Settings } from './types';
 
 /**
  * Событие в календаре: день рождения, важная дата друга (годовщина, знакомство…) или дело-событие: стоматолог в 15:00,
- * тренировка по вторникам (какие дела — события, решает «Умный календарь», src/lib/calendarAi.ts). Дела «до срока»
- * и обычные дела — только в «Напоминаниях».
+ * тренировка по вторникам (какие дела — события, решает «Умный календарь», src/lib/calendarAi.ts), праздник выбранных
+ * стран (src/lib/holidays.ts; один праздник нескольких стран в один день — одно событие). Дела «до срока» и обычные
+ * дела — только в «Напоминаниях».
  */
 export type CalendarEvent =
   | { kind: 'birthday'; key: string; date: ISODate; friend: Friend; age: number | null }
   | { kind: 'date'; key: string; date: ISODate; friend: Friend; title: string; years: number | null }
-  | { kind: 'meeting'; key: string; date: ISODate; reminder: Reminder; friend: Friend | null };
+  | { kind: 'meeting'; key: string; date: ISODate; reminder: Reminder; friend: Friend | null }
+  | { kind: 'holiday'; key: string; date: ISODate; name: string; holidays: Holiday[] };
 
 export const MONTHS = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
 /** «в ноябре» — для подписи. */
@@ -30,7 +33,8 @@ export function monthRange(year: number, month: number): [ISODate, ISODate] {
   return [toISODate(new Date(year, month, 1)), toISODate(new Date(year, month + 1, 0))];
 }
 
-const ORDER: Record<CalendarEvent['kind'], number> = { birthday: 0, date: 1, meeting: 2 };
+// Праздник — про весь день, поэтому сверху.
+const ORDER: Record<CalendarEvent['kind'], number> = { holiday: -1, birthday: 0, date: 1, meeting: 2 };
 
 /** Ежегодное в диапазоне: по разу в каждом году, не раньше самой даты (если год известен). */
 function yearly(date: ISODate, from: ISODate, to: ISODate): ISODate[] {
@@ -75,12 +79,31 @@ export function calendarEvents(data: Pick<AppData, 'friends' | 'reminders'> & { 
       if (date >= from) out.push({ kind: 'meeting', key: `m-${r.id}-${date}`, date, reminder: r, friend });
     }
   }
+  const merged = new Map<string, Extract<CalendarEvent, { kind: 'holiday' }>>();
+  for (const h of holidaysIn(holidayCountries(data.settings), from, to)) {
+    const name = holidayName(h.id);
+    const same = merged.get(`${h.date}|${name}`);
+    if (same) same.holidays.push(h);
+    else merged.set(`${h.date}|${name}`, { kind: 'holiday', key: `h-${h.id}-${h.date}`, date: h.date, name, holidays: [h] });
+  }
+  out.push(...merged.values());
   const time = (e: CalendarEvent) => (e.kind === 'meeting' ? e.reminder.time : '');
-  const name = (e: CalendarEvent) => (e.kind === 'meeting' ? e.reminder.title : e.friend.name);
+  const name = (e: CalendarEvent) => (e.kind === 'meeting' ? e.reminder.title : e.kind === 'holiday' ? '' : e.friend.name);
   return out.sort((a, b) => a.date.localeCompare(b.date) || ORDER[a.kind] - ORDER[b.kind] || time(a).localeCompare(time(b)) || name(a).localeCompare(name(b), 'ru'));
 }
 
-/** Ближайшие события после `after` (не включая его) — не дальше двух месяцев: «через 365 дней» никому не нужно. */
+/**
+ * Ближайшие события после `after` (не включая его) — не дальше двух месяцев: «через 365 дней» никому не нужно.
+ * Праздник на несколько дней (новогодние каникулы) — один раз, первым днём.
+ */
 export function nextEvents(data: Pick<AppData, 'friends' | 'reminders'> & { settings?: Settings }, after: ISODate, limit = 5): CalendarEvent[] {
-  return calendarEvents(data, addInterval(after, 'day', 1), addInterval(after, 'month', 2)).slice(0, limit);
+  const seen = new Set<string>();
+  return calendarEvents(data, addInterval(after, 'day', 1), addInterval(after, 'month', 2))
+    .filter((e) => {
+      if (e.kind !== 'holiday') return true;
+      if (seen.has(e.name)) return false;
+      seen.add(e.name);
+      return true;
+    })
+    .slice(0, limit);
 }

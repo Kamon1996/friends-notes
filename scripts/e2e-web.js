@@ -1236,6 +1236,41 @@ scenario('Календарь: «Новое событие» — на выбра�
   await ui.see('Среда, 10 июня · сегодня');
 });
 
+scenario('Праздники: страна телефона сразу, выбор стран галочками, праздник с описанием из Википедии', async ({ ui, page }) => {
+  await ui.go('/calendar');
+  await ui.see('Июнь 2026');
+  // Язык телефона ru-RU — сразу праздники России: 12 июня — День России, флажок в легенде.
+  await ui.see('Праздники');
+  await ui.see('Пятница, 12 июня, 1 событие', { label: true });
+  await ui.tap('Пятница, 12 июня, 1 событие');
+  await ui.see('День России');
+  await ui.see('🇷🇺 Россия');
+  await ui.tap('День России');
+  await ui.see('Пятница, 12 июня');
+  await ui.see('Читать в Википедии');
+  await ui.see('Текст — из Википедии, лицензия CC BY-SA 4.0.');
+  await page.goBack();
+  await ui.see('Июнь 2026');
+  // Флажок в шапке — какие страны: снимаем Россию, ставим США.
+  await ui.tap('Праздники стран');
+  await ui.see('Выбрано: 1');
+  await ui.tap('Россия');
+  await ui.see('Ничего не выбрано');
+  await ui.tap('США');
+  await ui.see('Выбрано: 1');
+  const data = await ui.waitData((x) => JSON.stringify(x.settings.holidayCountries) === '["US"]', 'выбор стран не сохранился');
+  assert.deepEqual(data.settings.holidayCountries, ['US']);
+  await page.goBack();
+  await ui.see('Июнь 2026');
+  await ui.notSee('Пятница, 12 июня, 1 событие', { label: true });
+  // 19 июня — Джунтин, 4 июля — День независимости США.
+  await ui.see('Пятница, 19 июня, 1 событие', { label: true });
+  await ui.tap('Следующий месяц');
+  await ui.tap('Суббота, 4 июля, 1 событие');
+  await ui.see('День независимости США');
+  await ui.see('🇺🇸 США');
+});
+
 scenario('Умный календарь: «до срока» не бывает, событие с повтором — каждую неделю, «В календаре» правится в деле; выключается в настройках', async ({ ui, page }) => {
   await ui.go('/calendar');
   await ui.see('Стоматолог');

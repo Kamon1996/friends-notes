@@ -22,7 +22,7 @@ const R = (id: string, patch: Partial<Reminder> = {}): Reminder => ({
   ...patch,
 });
 const shape = (events: ReturnType<typeof calendarEvents>) =>
-  events.map((e) => `${e.date} ${e.kind === 'meeting' ? e.reminder.title : e.friend.name}${e.kind === 'birthday' ? ` ${e.age ?? '-'}` : e.kind === 'date' ? ` ${e.title} ${e.years ?? '-'}` : ''}`);
+  events.map((e) => `${e.date} ${e.kind === 'meeting' ? e.reminder.title : e.kind === 'holiday' ? e.name : e.friend.name}${e.kind === 'birthday' ? ` ${e.age ?? '-'}` : e.kind === 'date' ? ` ${e.title} ${e.years ?? '-'}` : ''}`);
 
 describe('сетка месяца', () => {
   test('шесть недель с понедельника; ноябрь 2026 начинается в воскресенье', () => {
