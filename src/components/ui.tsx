@@ -288,6 +288,7 @@ export function SwitchRow({
       <Switch
         value={value}
         onValueChange={onChange}
+        accessibilityLabel={label}
         trackColor={{ true: colors.accent, false: colors.checkbox }}
         thumbColor="#fff"
         {...({ activeThumbColor: '#fff' } as object)}

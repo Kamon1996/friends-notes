@@ -6,6 +6,7 @@ import { AccentDots } from '@/components/AccentPicker';
 import { DateField } from '@/components/DateField';
 import { Icon } from '@/components/Icon';
 import { Button, Card, Group, IconCircle, ListRow, SectionTitle, SwitchRow, useTheme } from '@/components/ui';
+import { smartCalendarOn } from '@/lib/calendarAi';
 import { calendarItems } from '@/lib/calendarPlan';
 import { APP_VERSION } from '@/lib/changelog';
 import { confirm, notify } from '@/lib/confirm';
@@ -261,6 +262,15 @@ export default function SettingsScreen() {
 
       <View style={{ gap: 8 }}>
         <SectionTitle style={{ marginBottom: 0 }}>Календарь</SectionTitle>
+        <Card style={{ paddingVertical: 4 }}>
+          <SwitchRow
+            icon="stars"
+            label="Умный календарь"
+            sub="Магия сама решает, какие дела — встречи и записи, и показывает их во вкладке «Календарь». На разбор уходят только названия дел."
+            value={smartCalendarOn(settings)}
+            onChange={(v) => updateSettings({ smartCalendar: v })}
+          />
+        </Card>
         {deviceCalendarAvailable && (
           <Card style={{ paddingVertical: 4 }}>
             <SwitchRow

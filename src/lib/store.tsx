@@ -12,6 +12,7 @@ import { genderOnSave } from './gender';
 import { applyGenderUpdate, genderPending, retractUnisexGuess } from './genderDetect';
 import { genderSync } from './genderRun';
 import { ai } from './ai';
+import { applyCalendarUpdate, calendarPass, calendarPending, smartCalendarOn } from './calendarAi';
 import { applyNotesUpdate, notesPass, notesPending, notesSummary, retidySeen, type NotesSummary } from './notesAi';
 
 const STORAGE_KEY = 'friends-notes/data/v1';
@@ -224,11 +225,37 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return () => clearTimeout(t);
   }, [queuedNotes, ready, canPersist, readNotes]);
 
+  // «Умный календарь»: новые и переименованные дела «на дату и время» и повторяющиеся — к магии, в фоне. ИИ недоступен —
+  // остаются по типу дела, спросим при следующем изменении или возвращении в приложение.
+  const calendarRunRef = useRef(false);
+  const calendarWaiting = smartCalendarOn(data.settings) && data.reminders.some(calendarPending);
+  const syncCalendarAi = useCallback(async () => {
+    const d = dataRef.current;
+    if (calendarRunRef.current || !liveRef.current || !smartCalendarOn(d.settings)) return;
+    calendarRunRef.current = true;
+    try {
+      const names = new Map(d.friends.map((f) => [f.id, f.name]));
+      const updates = await calendarPass(d.reminders, ai, (id) => names.get(id));
+      if (updates.length) {
+        const byId = new Map(updates.map((u) => [u.id, u]));
+        setData((x) => ({ ...x, reminders: x.reminders.map((r) => applyCalendarUpdate(r, byId.get(r.id))) }));
+      }
+    } finally {
+      calendarRunRef.current = false;
+    }
+  }, []);
+  useEffect(() => {
+    if (!ready || !canPersist || !calendarWaiting) return;
+    const t = setTimeout(() => void syncCalendarAi(), 2500);
+    return () => clearTimeout(t);
+  }, [calendarWaiting, data.reminders, ready, canPersist, syncCalendarAi]);
+
   // При возврате в приложение — пересчитываем окно уведомлений (их число ограничено).
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'active' && liveRef.current) {
         rollDay();
+        void syncCalendarAi();
         syncNotifications(dataRef.current);
         // Пока приложение было свёрнуто, события могли удалить прямо в календаре — проверим и вернём.
         markCalendarStale();
@@ -240,7 +267,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
     });
     return () => sub.remove();
-  }, [syncGenders, readNotes, rollDay]);
+  }, [syncGenders, readNotes, rollDay, syncCalendarAi]);
 
   const saveFriend = useCallback((input: Friend) => {
     setData((d) => {

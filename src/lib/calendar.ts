@@ -1,9 +1,12 @@
-import { addInterval, ageOn, hasYear, parseISODate, sameDayInYear, toISODate } from './dates';
-import type { AppData, Friend, ISODate, Reminder } from './types';
+import { inCalendar, smartCalendarOn } from './calendarAi';
+import { addInterval, ageOn, hasYear, occurrences, parseISODate, sameDayInYear, toISODate } from './dates';
+import { seriesStart } from './events';
+import type { AppData, Friend, ISODate, Reminder, Settings } from './types';
 
 /**
- * Событие в календаре: день рождения, важная дата друга (годовщина, знакомство…) или дело «на дату и время» (встреча,
- * визит). Дела «до срока» и повторяющиеся — не события: им место в «Напоминаниях».
+ * Событие в календаре: день рождения, важная дата друга (годовщина, знакомство…) или дело-событие: стоматолог в 15:00,
+ * тренировка по вторникам (какие дела — события, решает «Умный календарь», src/lib/calendarAi.ts). Дела «до срока»
+ * и обычные дела — только в «Напоминаниях».
  */
 export type CalendarEvent =
   | { kind: 'birthday'; key: string; date: ISODate; friend: Friend; age: number | null }
@@ -40,7 +43,7 @@ function yearly(date: ISODate, from: ISODate, to: ISODate): ISODate[] {
 }
 
 /** События с `from` по `to` включительно — по дате; в один день: дни рождения, важные даты, встречи по времени. */
-export function calendarEvents(data: Pick<AppData, 'friends' | 'reminders'>, from: ISODate, to: ISODate): CalendarEvent[] {
+export function calendarEvents(data: Pick<AppData, 'friends' | 'reminders'> & { settings?: Settings }, from: ISODate, to: ISODate): CalendarEvent[] {
   const out: CalendarEvent[] = [];
   const byId = new Map(data.friends.map((f) => [f.id, f]));
   for (const friend of data.friends) {
@@ -58,9 +61,19 @@ export function calendarEvents(data: Pick<AppData, 'friends' | 'reminders'>, fro
       }
     }
   }
+  const smart = smartCalendarOn(data.settings);
   for (const r of data.reminders) {
-    if (r.repeat || r.kind !== 'at' || r.date < from || r.date > to) continue;
-    out.push({ kind: 'meeting', key: `m-${r.id}`, date: r.date, reminder: r, friend: r.friendId ? (byId.get(r.friendId) ?? null) : null });
+    if (!inCalendar(r, smart)) continue;
+    const friend = r.friendId ? (byId.get(r.friendId) ?? null) : null;
+    if (!r.repeat) {
+      if (r.date >= from && r.date <= to) out.push({ kind: 'meeting', key: `m-${r.id}`, date: r.date, reminder: r, friend });
+      continue;
+    }
+    // Повторяющееся событие (тренировка по вторникам) — каждый раз в диапазоне.
+    for (const date of occurrences(seriesStart(r), r.repeat)) {
+      if (date > to) break;
+      if (date >= from) out.push({ kind: 'meeting', key: `m-${r.id}-${date}`, date, reminder: r, friend });
+    }
   }
   const time = (e: CalendarEvent) => (e.kind === 'meeting' ? e.reminder.time : '');
   const name = (e: CalendarEvent) => (e.kind === 'meeting' ? e.reminder.title : e.friend.name);
@@ -68,6 +81,6 @@ export function calendarEvents(data: Pick<AppData, 'friends' | 'reminders'>, fro
 }
 
 /** Ближайшие события после `after` (не включая его) — не дальше двух месяцев: «через 365 дней» никому не нужно. */
-export function nextEvents(data: Pick<AppData, 'friends' | 'reminders'>, after: ISODate, limit = 5): CalendarEvent[] {
+export function nextEvents(data: Pick<AppData, 'friends' | 'reminders'> & { settings?: Settings }, after: ISODate, limit = 5): CalendarEvent[] {
   return calendarEvents(data, addInterval(after, 'day', 1), addInterval(after, 'month', 2)).slice(0, limit);
 }

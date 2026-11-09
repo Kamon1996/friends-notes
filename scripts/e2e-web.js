@@ -1196,6 +1196,46 @@ scenario('Свайп по экрану листает вкладки; свайп
   assert.equal(path(), '/', 'свайп по фильтрам не должен менять вкладку');
 });
 
+scenario('Умный календарь: «до срока» не бывает, событие с повтором — каждую неделю, «В календаре» правится в деле; выключается в настройках', async ({ ui, page }) => {
+  await ui.go('/calendar');
+  await ui.see('Стоматолог');
+  await ui.see('Позвонить маме'); // без магии (в тестах ИИ недоступен) «на дату и время» — в календаре
+  await ui.notSee('Настольный теннис'); // повторяющееся — нет, пока не решат
+  await ui.notSee('Купить корм'); // «до срока» — никогда
+  // Звонок — не событие: убираем из календаря в самом деле.
+  await ui.go('/reminder/edit?id=call');
+  await ui.see('Магия решит после сохранения', { exact: false });
+  await page.getByRole('switch', { name: 'В календаре' }).click();
+  await ui.see('Выбрано вручную.');
+  await ui.tap('Сохранить');
+  await ui.waitData((x) => x.reminders.find((r) => r.id === 'call').calendar === false, 'выбор не сохранился');
+  // Теннис — событие: добавляем.
+  await ui.go('/reminder/edit?id=tennis');
+  await page.getByRole('switch', { name: 'В календаре' }).click();
+  await ui.tap('Сохранить');
+  await ui.waitData((x) => x.reminders.find((r) => r.id === 'tennis').calendar === true, 'выбор не сохранился');
+  await ui.go('/calendar');
+  await ui.notSee('Позвонить маме');
+  await ui.see('Четверг, 18 июня, 1 событие', { label: true }); // теннис каждую неделю: 11, 18, 25
+  await ui.see('Четверг, 25 июня, 1 событие', { label: true });
+  // В деле «до срока» переключателя нет.
+  await ui.go('/reminder/edit?id=food');
+  await ui.notSee('В календаре');
+  // Настройки: «Умный календарь» выключается.
+  await ui.go('/settings');
+  await page.getByRole('switch', { name: 'Умный календарь' }).click();
+  await ui.waitData((x) => x.settings.smartCalendar === false, 'не выключилось');
+}, {
+  data: seed({
+    reminders: [
+      R({ id: 'v', title: 'Стоматолог', kind: 'at', date: d(5), time: '15:00' }),
+      R({ id: 'call', title: 'Позвонить маме', kind: 'at', date: d(2), time: '18:00' }),
+      R({ id: 'tennis', title: 'Настольный теннис', date: d(1), time: '19:00', repeat: { every: 1, unit: 'week' } }),
+      R({ id: 'food', title: 'Купить корм', date: d(3) }),
+    ],
+  }),
+});
+
 scenario('Открывается на «Напоминаниях»: две вкладки, в шапке — настройки; старая ссылка /reminders ведёт туда же', async ({ ui, page }) => {
   await ui.go('/');
   await ui.see('Написать Диме');

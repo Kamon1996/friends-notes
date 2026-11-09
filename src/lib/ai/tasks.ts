@@ -13,8 +13,12 @@ import type { ProviderId } from './types';
  *
  * notes — соцсети и подсказки для карточки из заметок и «О себе» (src/lib/notesAi.ts): длинные тексты и строгий
  *   JSON — Gemini первым, OpenRouter — запасной.
+ *
+ * calendar — «Умный календарь» (src/lib/calendarAi.ts): какие напоминания — события для календаря, а какие — обычные
+ *   дела. Короткие названия пачкой — Gemini первым, OpenRouter — запасной.
  */
 export const TASK_PROVIDERS = {
   gender: ['gemini', 'openrouter'],
   notes: ['gemini', 'openrouter'],
+  calendar: ['gemini', 'openrouter'],
 } satisfies Record<string, ProviderId[]>;

@@ -7,6 +7,7 @@ import { DateField } from '@/components/DateField';
 import { Button, Card, Chip, Empty, Field, Label, SectionTitle, Segmented, SwitchRow, useTheme } from '@/components/ui';
 import { confirm, notify } from '@/lib/confirm';
 import { addInterval, formatDateCompact, formatRepeat, todayISO } from '@/lib/dates';
+import { calendarCandidate, calendarSource, inCalendar, smartCalendarOn } from '@/lib/calendarAi';
 import { completeReminder, reopenReminder } from '@/lib/events';
 import { DURATIONS, PRIORITY_LABELS, formatMinutes } from '@/lib/reminderList';
 import { newId, useStore } from '@/lib/store';
@@ -106,6 +107,21 @@ function ReminderForm() {
   );
   const set = <K extends keyof Reminder>(key: K, value: Reminder[K]) => setR((prev) => ({ ...prev, [key]: value }));
   const kind: Kind = r.repeat ? 'repeat' : r.kind === 'at' ? 'at' : 'due';
+  // «Умный календарь»: в календарь ли это дело — решает магия, человек может поправить.
+  const smart = smartCalendarOn(data.settings);
+  const calendarHint = (x: Reminder) => {
+    const yes = inCalendar(x, smart);
+    switch (calendarSource(x, smart)) {
+      case 'manual':
+        return 'Выбрано вручную.';
+      case 'ai':
+        return yes ? 'Магия решила: это событие — в календаре.' : 'Магия решила: обычное дело — не в календаре.';
+      case 'waiting':
+        return 'Магия решит после сохранения: событие — в календарь, обычное дело — нет.';
+      default:
+        return yes ? 'Дела на дату и время — в календаре.' : 'Повторяющиеся дела — не в календаре, если не включить.';
+    }
+  };
   // Повтор, который был до переключения на разовое: вернётся, если передумать.
   const lastRepeat = useRef<Repeat>(r.repeat ?? { every: 1, unit: 'week' });
   const setKind = (k: Kind) =>
@@ -300,7 +316,13 @@ function ReminderForm() {
           </>
         )}
 
-        <SectionTitle style={{ marginTop: kind === 'at' ? 0 : 18, marginBottom: 8 }}>Важность</SectionTitle>
+        {calendarCandidate(r) && (
+          <View style={{ marginTop: kind === 'at' ? -6 : 10, marginBottom: 6 }}>
+            <SwitchRow icon="calendar" label="В календаре" sub={calendarHint(r)} value={inCalendar(r, smart)} onChange={(v) => set('calendar', v)} />
+          </View>
+        )}
+
+        <SectionTitle style={{ marginTop: 18, marginBottom: 8 }}>Важность</SectionTitle>
         <Segmented options={PRIORITIES} value={r.priority ?? 0} onChange={(p) => set('priority', p || undefined)} />
 
         <SectionTitle style={{ marginTop: 18, marginBottom: 8 }}>Сколько займёт</SectionTitle>

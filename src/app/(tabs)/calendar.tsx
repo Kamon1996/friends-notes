@@ -147,9 +147,9 @@ export default function CalendarScreen() {
                       {d.getDate()}
                     </Text>
                   </View>
-                  <View style={{ position: 'absolute', bottom: 3, flexDirection: 'row', gap: 3, height: 5 }}>
+                  <View style={{ position: 'absolute', bottom: 1, flexDirection: 'row', gap: 3, height: 13, opacity: own ? 1 : 0.5 }}>
                     {kinds.map((k) => (
-                      <View key={k} style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: kindColor[k], opacity: own ? 1 : 0.5 }} />
+                      <Icon key={k} name={KIND_ICON[k]} size={12} color={kindColor[k]} strokeWidth={2.2} />
                     ))}
                   </View>
                 </Pressable>
@@ -165,7 +165,7 @@ export default function CalendarScreen() {
               ] as const
             ).map(([k, label]) => (
               <View key={k} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: kindColor[k] }} />
+                <Icon name={KIND_ICON[k]} size={12} color={kindColor[k]} strokeWidth={2.2} />
                 <Text style={[s.caption, { fontSize: 12 }]}>{label}</Text>
               </View>
             ))}
@@ -209,22 +209,60 @@ export default function CalendarScreen() {
   );
 }
 
-/** Строка события: аватар (у встречи без друга — значок календаря), что за событие, когда. Нажатие — к другу или к делу. */
-function EventRow({ event: e, today }: { event: CalendarEvent; today: string }) {
+/** Значок события — в днях месяца, в подписи под ним и на аватаре в списке (набор «Линии»). Праздникам — флажок. */
+const KIND_ICON = { birthday: 'cake', date: 'heart', meeting: 'clock' } as const;
+
+/** Значок типа события в углу аватара. */
+function KindBadge({ kind }: { kind: CalendarEvent['kind'] }) {
   const { colors } = useTheme();
   const kindColor = useKindColors();
+  return (
+    <View
+      style={{
+        position: 'absolute',
+        right: -3,
+        bottom: -3,
+        width: 18,
+        height: 18,
+        borderRadius: 9,
+        backgroundColor: kindColor[kind],
+        borderWidth: 2,
+        borderColor: colors.card,
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <Icon name={KIND_ICON[kind]} size={9} color={colors.onAccent} strokeWidth={2.6} />
+    </View>
+  );
+}
+
+/** Строка события: аватар (у встречи без друга — часы), что за событие, когда. Нажатие — к другу или к делу. */
+function EventRow({ event: e, today }: { event: CalendarEvent; today: string }) {
+  const { colors } = useTheme();
   const diff = daysBetween(today, e.date);
   const when = relativeDay(e.date, today);
   const tag = <Tag text={when} tone={diff === 0 ? 'solid' : diff > 0 && diff <= 7 ? 'accent' : 'neutral'} />;
   if (e.kind === 'meeting') {
     const r = e.reminder;
+    // У повторяющегося «сделано» — только этот раз.
+    const done = r.done && (!r.repeat || e.date === r.date);
     return (
       <ListRow
         onPress={() => router.push({ pathname: '/reminder/edit', params: { id: r.id } })}
-        leading={e.friend ? <Avatar friend={e.friend} size={40} /> : <IconCircle icon="calendar" tone="info" size={40} />}
+        leading={
+          e.friend ? (
+            <View>
+              <Avatar friend={e.friend} size={40} />
+              <KindBadge kind="meeting" />
+            </View>
+          ) : (
+            <IconCircle icon="clock" tone="info" size={40} />
+          )
+        }
         title={r.title}
-        titleStyle={r.done ? { textDecorationLine: 'line-through', color: colors.text3 } : undefined}
-        subtitle={`${r.time}${e.friend ? ` · ${e.friend.name}` : ''}${r.done ? ' · сделано' : ''}`}
+        titleStyle={done ? { textDecorationLine: 'line-through', color: colors.text3 } : undefined}
+        subtitle={`${r.time}${e.friend ? ` · ${e.friend.name}` : ''}${done ? ' · сделано' : ''}`}
         trailing={tag}
       />
     );
@@ -240,23 +278,7 @@ function EventRow({ event: e, today }: { event: CalendarEvent; today: string }) 
       leading={
         <View>
           <Avatar friend={f} size={40} />
-          <View
-            style={{
-              position: 'absolute',
-              right: -3,
-              bottom: -3,
-              width: 18,
-              height: 18,
-              borderRadius: 9,
-              backgroundColor: kindColor[e.kind],
-              borderWidth: 2,
-              borderColor: colors.card,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <Icon name={e.kind === 'birthday' ? 'cake' : 'heart'} size={9} color={colors.onAccent} strokeWidth={2.6} />
-          </View>
+          <KindBadge kind={e.kind} />
         </View>
       }
       title={f.name}

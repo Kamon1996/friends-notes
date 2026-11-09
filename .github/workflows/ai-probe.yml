@@ -1,7 +1,8 @@
 name: AI probe
 
 # Проба ИИ-задачи на настоящих моделях: тот же вопрос, что в приложении, на трудных примерах; итог — в сводке
-# запуска, подробности — в логе. Сейчас — «соцсети и подсказки из заметок» (scripts/ai-bench/notes.ts).
+# запуска, подробности — в логе. Сейчас — «соцсети и подсказки из заметок» (scripts/ai-bench/notes.ts) и «умный
+# календарь» (scripts/ai-bench/calendar.ts).
 # Запуск: коммитом со словом «[probe]» в первой строке или вручную (Actions → AI probe → Run workflow).
 # Ключи — те же секреты, что для сборки: GEMINI_API_KEY, OPENROUTER_API_KEY.
 on:
@@ -34,3 +35,10 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           PROBE_OPENROUTER: ${{ github.event.inputs.openrouter || '6' }}
         run: npx tsx scripts/ai-bench/notes.ts
+      - name: Probe calendar task
+        if: always()
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          PROBE_OPENROUTER: ${{ github.event.inputs.openrouter || '6' }}
+        run: npx tsx scripts/ai-bench/calendar.ts

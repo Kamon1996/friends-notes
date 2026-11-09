@@ -78,7 +78,7 @@ function genderFields(v: Record<string, unknown>): Pick<Friend, 'gender' | 'gend
 function normalizeReminder(v: unknown): Reminder | null {
   if (!isObject(v) || typeof v.id !== 'string' || typeof v.date !== 'string') return null;
   const repeat = isObject(v.repeat) && typeof v.repeat.every === 'number' && typeof v.repeat.unit === 'string' ? (v.repeat as unknown as Reminder['repeat']) : null;
-  const { daily, kind, priority, minutes, doneAt, ...rest } = v;
+  const { daily, kind, priority, minutes, doneAt, calendar, calendarAi, calendarSeen, ...rest } = v;
   const done = v.done === true;
   return {
     ...(rest as unknown as Reminder),
@@ -88,6 +88,8 @@ function normalizeReminder(v: unknown): Reminder | null {
     ...(priority === 1 || priority === 2 || priority === 3 ? { priority } : {}),
     ...(typeof minutes === 'number' && Number.isInteger(minutes) && minutes > 0 && minutes <= 24 * 60 ? { minutes } : {}),
     ...(done && typeof doneAt === 'number' && doneAt > 0 ? { doneAt } : {}),
+    ...(typeof calendar === 'boolean' ? { calendar } : {}),
+    ...(typeof calendarAi === 'boolean' && typeof calendarSeen === 'string' ? { calendarAi, calendarSeen } : {}),
     title: str(v.title),
     note: str(v.note),
     friendId: typeof v.friendId === 'string' ? v.friendId : null,
