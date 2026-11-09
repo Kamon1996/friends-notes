@@ -153,3 +153,9 @@ test('страны праздника: до трёх — все, больше �
   assert.equal(formatCountries(c(24)), '🏳 Страна 1, 🏳 Страна 2 и ещё 22 страны');
   assert.equal(formatCountries(c(7)), '🏳 Страна 1, 🏳 Страна 2 и ещё 5 стран');
 });
+
+test('«дальше»: один праздник нескольких стран в те же дни — одной строкой (каникулы России с 1-го и Киргизии со 2-го)', () => {
+  const next = nextEvents({ ...empty, settings: settings(['RU', 'KG']) }, '2026-12-25', 10).filter((e) => e.kind === 'holiday' && e.name === 'Новогодние каникулы');
+  assert.equal(next.length, 1);
+  assert.deepEqual(next[0].kind === 'holiday' && [next[0].date, next[0].holidays.map((h) => h.country)], ['2027-01-01', ['RU', 'KG']]);
+});

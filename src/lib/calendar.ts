@@ -1,7 +1,7 @@
 import { inCalendar, smartCalendarOn } from './calendarAi';
 import { addInterval, ageOn, hasYear, occurrences, parseISODate, sameDayInYear, toISODate } from './dates';
 import { seriesStart } from './events';
-import { holidayCountries, holidayName, holidaysIn, type Holiday } from './holidays';
+import { holidayCountries, holidayDatesInYear, holidayName, holidaysIn, type Holiday } from './holidays';
 import type { AppData, Friend, ISODate, Reminder, Settings } from './types';
 
 /**
@@ -97,20 +97,33 @@ export function calendarEvents(data: Pick<AppData, 'friends' | 'reminders'> & { 
  * Праздник на несколько дней (новогодние каникулы) — один раз, первым днём.
  */
 export function nextEvents(data: Pick<AppData, 'friends' | 'reminders'> & { settings?: Settings }, after: ISODate, limit = 5): CalendarEvent[] {
+  // Праздник — один раз, первым днём: каждый id показываем однажды. Тот же праздник другой страны в те же дни
+  // («Новогодние каникулы» России с 1-го и Киргизии со 2-го) — в ту же строку, а не второй строкой. Одноимённые в
+  // разные дни («Рождество» 25 декабря и 7 января) — разные строки.
   const seen = new Set<string>();
-  return calendarEvents(data, addInterval(after, 'day', 1), addInterval(after, 'month', 2))
-    .filter((e) => {
-      if (e.kind !== 'holiday') return true;
-      // Один и тот же праздник (те же страны) — по набору id, а не по названию: «Рождество» России и Украины — разные дни.
-      const id = e.holidays
-        .map((h) => h.id)
-        .sort()
-        .join('|');
-      if (seen.has(id)) return false;
-      seen.add(id);
-      return true;
-    })
-    .slice(0, limit);
+  const rows: { event: Extract<CalendarEvent, { kind: 'holiday' }>; days: Set<ISODate> }[] = [];
+  const out: CalendarEvent[] = [];
+  for (const e of calendarEvents(data, addInterval(after, 'day', 1), addInterval(after, 'month', 2))) {
+    if (e.kind !== 'holiday') {
+      out.push(e);
+      continue;
+    }
+    const fresh = e.holidays.filter((h) => !seen.has(h.id));
+    if (!fresh.length) continue;
+    for (const h of fresh) seen.add(h.id);
+    const year = parseISODate(e.date).getFullYear();
+    const daysOf = (list: readonly Holiday[]) => list.flatMap((h) => holidayDatesInYear(h.id, year));
+    const row = rows.find((r) => r.event.name === e.name && r.days.has(e.date));
+    if (row) {
+      row.event.holidays.push(...fresh);
+      for (const d of daysOf(fresh)) row.days.add(d);
+      continue;
+    }
+    const copy = { ...e, holidays: [...fresh] };
+    rows.push({ event: copy, days: new Set([e.date, ...daysOf(fresh)]) });
+    out.push(copy);
+  }
+  return out.slice(0, limit);
 }
 
 /** Сколько чего в месяце — для обозначений под календарём. Праздник на несколько дней считаем один раз. */
