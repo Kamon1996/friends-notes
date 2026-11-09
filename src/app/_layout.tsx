@@ -17,19 +17,34 @@ import { warmContacts } from '@/lib/contactsCache';
 
 import { ThemeProvider, useTheme } from '@/lib/themeContext';
 
-/** Переход по нажатию на уведомление или на его кнопку («Позвонить», «Написать»). */
-function useNotificationNavigation() {
+/** Уже обработанные нажатия: последнее нажатие (с которого открылось приложение) отдаётся снова при каждой подписке. */
+const handledResponses = new Set<string>();
+
+/**
+ * Нажатие на уведомление или на его кнопку: переход на экран, «Позвонить», «Написать», «Сделано». Ждёт загрузки
+ * данных — иначе «Сделано» при холодном старте отметило бы напоминание в ещё пустом списке.
+ */
+function NotificationResponses() {
+  const { ready, setRemindersDone } = useStore();
   useEffect(() => {
-    if (Platform.OS === 'web') return;
-    const open = (response: Notifications.NotificationResponse | null) => {
+    if (Platform.OS === 'web' || !ready) return;
+    const handle = (response: Notifications.NotificationResponse | null) => {
       if (!response) return;
-      const url = handleNotificationResponse(response);
-      if (url) router.push(url as never);
+      const key = `${response.notification.request.identifier}:${response.actionIdentifier}`;
+      if (handledResponses.has(key)) return;
+      handledResponses.add(key);
+      const what = handleNotificationResponse(response);
+      if (!what) return;
+      if ('done' in what) {
+        setRemindersDone([what.done], true);
+        router.navigate('/reminders');
+      } else router.push(what.open as never);
     };
-    open(Notifications.getLastNotificationResponse());
-    const sub = Notifications.addNotificationResponseReceivedListener(open);
+    handle(Notifications.getLastNotificationResponse());
+    const sub = Notifications.addNotificationResponseReceivedListener(handle);
     return () => sub.remove();
-  }, []);
+  }, [ready, setRemindersDone]);
+  return null;
 }
 
 /** Отчёты о сбоях включаются, как только известны настройки, и выключаются переключателем. */
@@ -73,6 +88,7 @@ function AppShell() {
       </Stack>
       <WhatsNewSheet />
       <CrashReportsGate />
+      <NotificationResponses />
     </>
   );
 }
@@ -88,7 +104,6 @@ export default function RootLayout() {
     GolosText_700Bold,
   });
   const system = useColorScheme();
-  useNotificationNavigation();
 
   useEffect(() => {
     setupNotifications().catch(() => {});

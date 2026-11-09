@@ -55,3 +55,23 @@ test('разбор заметок ИИ: отпечаток и «разобрат
   );
   assert.equal('notesQueue' in data.friends[2], false);
 });
+
+test('«каждый день до срока»: остаётся только явное true у разового, у повторяющегося и мусора — пропадает', () => {
+  const data = normalizeData({
+    reminders: [
+      { id: 'a', title: 'Билеты', date: '2026-11-20', daily: true },
+      { id: 'b', title: 'Таблетки', date: '2026-11-20', daily: true, repeat: { every: 1, unit: 'day' } },
+      { id: 'c', title: 'Счета', date: '2026-11-20', daily: 'да' },
+      { id: 'd', title: 'Врач', date: '2026-11-20' },
+    ],
+  });
+  assert.deepEqual(
+    data.reminders.map((r) => [r.id, 'daily' in r ? r.daily : '—']),
+    [
+      ['a', true],
+      ['b', '—'],
+      ['c', '—'],
+      ['d', '—'],
+    ],
+  );
+});

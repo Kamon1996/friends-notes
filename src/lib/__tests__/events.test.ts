@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
 import { addInterval, toISODate } from '../dates';
-import { birthdayHint, completeReminder, notificationActions, planNotifications, upcomingItems } from '../events';
+import { birthdayHint, completeReminder, countdown, notificationActions, planNotifications, upcomingItems } from '../events';
 import { DEFAULT_SETTINGS, EMPTY_DATA, type AppData, type Friend, type Reminder, type Settings } from '../types';
 
 const friend = (patch: Partial<Friend> = {}): Friend => ({
@@ -204,6 +204,21 @@ describe('расписание уведомлений', () => {
     assert.equal(stamp(plan[11].at), '2027-03-22 10:00');
   });
 
+  test('у разовых напоминаний кнопка «Сделано», у повторяющихся и праздников — нет', () => {
+    const plan = planNotifications(
+      appData({
+        friends: [friend({ birthday: '1990-03-20' })],
+        reminders: [reminder({ id: 'once', date: '2027-03-21', advance: 60 }), reminder({ id: 'rep', date: '2027-03-11', repeat: { every: 1, unit: 'week' } })],
+      }),
+      now,
+    );
+    assert.deepEqual(
+      plan.filter((n) => n.url.includes('once')).map((n) => n.reminderId),
+      ['once', 'once'],
+    );
+    assert.ok(plan.filter((n) => !n.url.includes('once')).every((n) => n.reminderId === undefined));
+  });
+
   test('праздник ведёт в карточку друга, кнопки — позвонить и написать', () => {
     const f = friend({ birthday: '1990-03-20', phone: '+7 999 123-45-67', telegramId: 42, whatsapp: '79991234567' });
     const [n] = planNotifications(appData({ friends: [f] }), now);
@@ -226,5 +241,63 @@ describe('кнопки и подсказки в уведомлениях', () =>
     assert.equal(birthdayHint({ flowers: '', food: '', gifts: '' }), null);
     const long = birthdayHint({ flowers: 'а'.repeat(100), food: '', gifts: '' }) ?? '';
     assert.ok(long.length < 80 && long.includes('…'), long);
+  });
+});
+
+describe('каждый день до срока', () => {
+  // Сейчас — 10 марта 2027, 12:00.
+  const now = new Date(2027, 2, 10, 12, 0);
+  const daily = (patch: Partial<Reminder> = {}) => reminder({ id: 'd', title: 'Билеты на самолёт', date: '2027-03-14', time: '12:30', daily: true, ...patch });
+
+  test('с сегодняшнего дня до срока, в выбранное время, с обратным отсчётом; в день срока — «Сегодня срок»', () => {
+    const plan = planNotifications(appData({ reminders: [daily()] }), now);
+    assert.deepEqual(
+      plan.map((n) => [stamp(n.at), n.title, n.body]),
+      [
+        ['2027-03-10 12:30', 'Билеты на самолёт', 'Осталось 4 дня — до 14 мар'],
+        ['2027-03-11 12:30', 'Билеты на самолёт', 'Осталось 3 дня — до 14 мар'],
+        ['2027-03-12 12:30', 'Билеты на самолёт', 'Осталось 2 дня — до 14 мар'],
+        ['2027-03-13 12:30', 'Билеты на самолёт', 'Завтра срок'],
+        ['2027-03-14 12:30', 'Билеты на самолёт', 'Сегодня срок'],
+      ],
+    );
+    assert.ok(plan.every((n) => n.reminderId === 'd' && n.url === '/reminder/edit?id=d'), 'везде кнопка «Сделано» и переход в напоминание');
+  });
+
+  test('сегодняшнее время уже прошло — начинаем с завтра; «заранее» не добавляется', () => {
+    const plan = planNotifications(appData({ reminders: [daily({ time: '09:00', advance: 1440 })] }), now);
+    assert.deepEqual(plan.map((n) => stamp(n.at)), ['2027-03-11 09:00', '2027-03-12 09:00', '2027-03-13 09:00', '2027-03-14 09:00']);
+  });
+
+  test('заметка или имя друга — после отсчёта', () => {
+    const [a] = planNotifications(appData({ reminders: [daily({ note: 'Взять паспорт' })] }), now);
+    assert.equal(a.body, 'Осталось 4 дня — до 14 мар · Взять паспорт');
+    const [b] = planNotifications(appData({ friends: [friend({ id: 'm', name: 'Мама' })], reminders: [daily({ friendId: 'm' })] }), now);
+    assert.equal(b.body, 'Осталось 4 дня — до 14 мар · Мама');
+  });
+
+  test('срок сегодня — одно уведомление; срок прошёл или сделано — ничего', () => {
+    assert.deepEqual(planNotifications(appData({ reminders: [daily({ date: '2027-03-10' })] }), now).map((n) => [stamp(n.at), n.body]), [['2027-03-10 12:30', 'Сегодня срок']]);
+    assert.equal(planNotifications(appData({ reminders: [daily({ date: '2027-03-09' })] }), now).length, 0);
+    assert.equal(planNotifications(appData({ reminders: [daily({ done: true })] }), now).length, 0);
+  });
+
+  test('далёкий срок: ближайшие 12 дней и сам срок — остальное запланируется при следующем открытии', () => {
+    const plan = planNotifications(appData({ reminders: [daily({ date: '2027-06-01' })] }), now);
+    assert.equal(plan.length, 13);
+    assert.equal(stamp(plan[11].at), '2027-03-21 12:30');
+    assert.deepEqual([stamp(plan[12].at), plan[12].body], ['2027-06-01 12:30', 'Сегодня срок']);
+  });
+
+  test('у повторяющегося флаг не действует — обычная серия', () => {
+    const plan = planNotifications(appData({ reminders: [daily({ date: '2027-03-11', repeat: { every: 1, unit: 'week' } })] }), now);
+    assert.equal(plan[0].body, 'Напоминание');
+  });
+
+  test('отсчёт: склонения и «завтра»', () => {
+    assert.deepEqual(
+      [1, 2, 5, 11, 21, 22].map((k) => countdown(k, '2027-11-20')),
+      ['Завтра срок', 'Осталось 2 дня — до 20 ноя', 'Осталось 5 дней — до 20 ноя', 'Осталось 11 дней — до 20 ноя', 'Остался 21 день — до 20 ноя', 'Осталось 22 дня — до 20 ноя'],
+    );
   });
 });

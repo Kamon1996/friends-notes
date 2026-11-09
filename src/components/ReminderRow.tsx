@@ -38,9 +38,13 @@ export function ReminderRow({
   const overdue = !reminder.done && combine(reminder.date, reminder.time) < new Date();
   const diff = daysBetween(today, reminder.date);
 
-  const when = showDate ? `${formatDayShort(reminder.date)} · ${reminder.time}` : reminder.time;
+  // «Каждый день до срока»: срок в первой строке, а под ним — когда напоминаем (как повтор у повторяющихся).
+  const daily = !reminder.repeat && !!reminder.daily;
+  const when = daily && showDate ? `до ${formatDayShort(reminder.date)}` : showDate ? `${formatDayShort(reminder.date)} · ${reminder.time}` : reminder.time;
   const subtitle = reminder.done ? `Сделано · ${formatDayShort(reminder.date)}` : when;
-  const repeat = !reminder.done && reminder.repeat ? formatRepeat(reminder.repeat) : null;
+  // Вторая строка: повтор или «каждый день в 12:00»; после срока ежедневные уже не приходят — строки нет.
+  const dailyText = showDate ? `каждый день в ${reminder.time}` : 'каждый день до срока';
+  const repeat = reminder.done ? null : reminder.repeat ? formatRepeat(reminder.repeat) : daily && !overdue ? dailyText : null;
 
   const trailing = reminder.done ? null : overdue ? (
     <Tag text="просрочено" tone="danger" />

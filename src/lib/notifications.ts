@@ -8,13 +8,14 @@ import type { AppData } from './types';
 const CHANNEL_ID = 'reminders';
 const supported = Platform.OS === 'ios' || Platform.OS === 'android';
 
-/** Кнопки прямо в уведомлении: позвонить и написать в мессенджер. */
+/** Кнопки прямо в уведомлении: позвонить и написать в мессенджер; у разовых напоминаний — «Сделано». */
 const CATEGORIES = {
   'friend-call-write': ['call', 'write'],
   'friend-call': ['call'],
   'friend-write': ['write'],
+  'reminder-done': ['done'],
 } as const;
-const ACTION_TITLES = { call: 'Позвонить', write: 'Написать' } as const;
+const ACTION_TITLES = { call: 'Позвонить', write: 'Написать', done: 'Сделано' } as const;
 
 if (supported) {
   Notifications.setNotificationHandler({
@@ -55,6 +56,7 @@ export async function notificationsAllowed(): Promise<boolean> {
 }
 
 function categoryFor(n: PlannedNotification): string | undefined {
+  if (n.reminderId) return 'reminder-done';
   if (n.callUrl && n.writeUrl) return 'friend-call-write';
   if (n.callUrl) return 'friend-call';
   if (n.writeUrl) return 'friend-write';
@@ -76,7 +78,7 @@ export function syncNotifications(data: AppData): Promise<void> {
           content: {
             title: n.title,
             body: n.body,
-            data: { url: n.url, callUrl: n.callUrl, writeUrl: n.writeUrl },
+            data: { url: n.url, callUrl: n.callUrl, writeUrl: n.writeUrl, reminderId: n.reminderId },
             sound: true,
             categoryIdentifier: categoryFor(n),
           },
@@ -95,16 +97,21 @@ export function syncNotifications(data: AppData): Promise<void> {
 }
 
 /**
- * Что делать по нажатию на уведомление или его кнопку.
- * Возвращает адрес экрана, который надо открыть, или null, если действие уже выполнено.
+ * Что делать по нажатию на уведомление или его кнопку: «Позвонить» и «Написать» выполняются сразу (null),
+ * «Сделано» — отметить напоминание (`done`), просто нажатие — открыть экран (`open`).
  */
-export function handleNotificationResponse(response: Notifications.NotificationResponse): string | null {
+export function handleNotificationResponse(response: Notifications.NotificationResponse): { open: string } | { done: string } | null {
   const data = (response.notification.request.content.data ?? {}) as Record<string, unknown>;
   const action = response.actionIdentifier;
+  if (action === 'done' && typeof data.reminderId === 'string') {
+    // Кнопка не закрывает уведомление сама (Android) — убираем, чтобы «Сделано» не нажали второй раз.
+    Notifications.dismissNotificationAsync(response.notification.request.identifier).catch(() => {});
+    return { done: data.reminderId };
+  }
   const link = action === 'call' ? data.callUrl : action === 'write' ? data.writeUrl : null;
   if (typeof link === 'string') {
     Linking.openURL(link).catch(() => {});
     return null;
   }
-  return typeof data.url === 'string' ? data.url : null;
+  return typeof data.url === 'string' ? { open: data.url } : null;
 }

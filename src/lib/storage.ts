@@ -78,8 +78,11 @@ function genderFields(v: Record<string, unknown>): Pick<Friend, 'gender' | 'gend
 function normalizeReminder(v: unknown): Reminder | null {
   if (!isObject(v) || typeof v.id !== 'string' || typeof v.date !== 'string') return null;
   const repeat = isObject(v.repeat) && typeof v.repeat.every === 'number' && typeof v.repeat.unit === 'string' ? (v.repeat as unknown as Reminder['repeat']) : null;
+  const { daily, ...rest } = v;
   return {
-    ...(v as unknown as Reminder),
+    ...(rest as unknown as Reminder),
+    // «Каждый день до срока» — только у разовых и только явное true.
+    ...(daily === true && !repeat ? { daily: true } : {}),
     title: str(v.title),
     note: str(v.note),
     friendId: typeof v.friendId === 'string' ? v.friendId : null,

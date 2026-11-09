@@ -6,7 +6,7 @@ import { FriendPicker } from '@/components/FriendPicker';
 import { DateField } from '@/components/DateField';
 import { Button, Card, Chip, Empty, Field, Label, SectionTitle, SwitchRow, useTheme } from '@/components/ui';
 import { confirm, notify } from '@/lib/confirm';
-import { addInterval, formatRepeat, todayISO } from '@/lib/dates';
+import { addInterval, formatDateCompact, formatRepeat, todayISO } from '@/lib/dates';
 import { newId, useStore } from '@/lib/store';
 import type { Advance, Reminder, Repeat, RepeatUnit } from '@/lib/types';
 
@@ -116,7 +116,9 @@ function ReminderForm() {
     }
     // Новая дата или другой повтор — новая серия: старый якорь больше не нужен.
     const sameSeries = !!existing && existing.date === r.date && sameRepeat(existing.repeat, r.repeat);
-    saveReminder({ ...r, title: r.title.trim(), anchor: sameSeries ? r.anchor : undefined });
+    // «Каждый день до срока» — только у разовых: у повторяющегося своё расписание.
+    const { daily, ...rest } = r;
+    saveReminder({ ...rest, ...(daily && !r.repeat ? { daily: true, advance: 0 } : {}), title: r.title.trim(), anchor: sameSeries ? r.anchor : undefined });
     router.back();
   };
 
@@ -234,9 +236,20 @@ function ReminderForm() {
             <SectionTitle style={{ marginTop: 18, marginBottom: 8 }}>Напомнить заранее</SectionTitle>
             <View style={s.chips}>
               {ADVANCES.map((a) => (
-                <Chip key={a.value} label={a.label} selected={r.advance === a.value} onPress={() => set('advance', a.value)} />
+                <Chip
+                  key={a.value}
+                  label={a.label}
+                  selected={!r.daily && r.advance === a.value}
+                  onPress={() => setR((prev) => ({ ...prev, advance: a.value, daily: false }))}
+                />
               ))}
+              <Chip label="Каждый день до срока" selected={!!r.daily} onPress={() => setR((prev) => ({ ...prev, advance: 0, daily: true }))} />
             </View>
+            {r.daily && (
+              <Text style={[s.caption, { marginTop: 8, paddingHorizontal: 4 }]}>
+                Каждый день в {r.time} до {formatDateCompact(r.date, false)} — пока не отметишь «Сделано».
+              </Text>
+            )}
           </>
         )}
 

@@ -91,6 +91,11 @@ export interface Reminder {
    */
   anchor?: ISODate;
   advance: Advance;
+  /**
+   * Только у разовых: напоминать каждый день в `time` — с сегодняшнего дня до срока `date`, с обратным отсчётом,
+   * пока не отмечено «сделано». Вместо `advance`.
+   */
+  daily?: boolean;
   done: boolean;
   createdAt: number;
 }

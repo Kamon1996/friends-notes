@@ -519,6 +519,38 @@ scenario('Напоминание: свой интервал и «за 3 дня»
   await ui.see('каждые 3 недели');
 });
 
+scenario('Напоминание: «каждый день до срока» — подпись в форме и в списке; «за день» и повтор его снимают', async ({ ui }) => {
+  await ui.go('/reminders');
+  await ui.tap('Новое напоминание');
+  await ui.fill('Например, сдать отчёт', 'Билеты на самолёт');
+  await ui.typeInto('ДД.ММ.ГГГГ', '20062026', { clear: true });
+  await ui.typeInto('ЧЧ:ММ', '1200', { clear: true });
+  await ui.tap('Каждый день до срока');
+  await ui.see('Каждый день в 12:00 до 20 июн — пока не отметишь «Сделано».');
+  await ui.tap('Сохранить');
+  let data = await ui.waitData((x) => x.reminders.some((r) => r.title === 'Билеты на самолёт'), 'не сохранилось');
+  let r = data.reminders.find((x) => x.title === 'Билеты на самолёт');
+  assert.deepEqual([r.date, r.time, r.repeat, r.advance, r.daily], ['2026-06-20', '12:00', null, 0, true]);
+  await ui.see('до сб, 20 июн');
+  await ui.see('каждый день в 12:00');
+  // «За день» вместо ежедневных — флаг снимается.
+  await ui.tap('Билеты на самолёт');
+  await ui.tap('За день');
+  await ui.notSee('пока не отметишь «Сделано»');
+  await ui.tap('Сохранить');
+  data = await ui.waitData((x) => x.reminders.find((y) => y.id === r.id).advance === 1440, '«за день» не сохранилось');
+  assert.ok(!('daily' in data.reminders.find((y) => y.id === r.id)), 'флаг остался');
+  // Снова ежедневно, но потом «Каждый день» в повторе: у повторяющегося своего «до срока» нет.
+  await ui.tap('Билеты на самолёт');
+  await ui.tap('Каждый день до срока');
+  await ui.tap('Каждый день');
+  await ui.notSee('Каждый день до срока');
+  await ui.tap('Сохранить');
+  data = await ui.waitData((x) => !!x.reminders.find((y) => y.id === r.id).repeat, 'повтор не сохранился');
+  r = data.reminders.find((y) => y.id === r.id);
+  assert.deepEqual([r.repeat, 'daily' in r], [{ every: 1, unit: 'day' }, false]);
+});
+
 scenario('Напоминание: без текста не сохраняется', async ({ ui }) => {
   await ui.go('/reminders');
   await ui.tap('Новое напоминание');

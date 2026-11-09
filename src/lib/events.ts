@@ -3,6 +3,7 @@ import {
   ageOn,
   combine,
   daysBetween,
+  formatDateCompact,
   hasYear,
   nextAnniversary,
   nextOccurrenceAfter,
@@ -88,6 +89,8 @@ export interface PlannedNotification {
   /** Ссылки для кнопок «Позвонить» и «Написать» в самом уведомлении. */
   callUrl?: string;
   writeUrl?: string;
+  /** Разовое напоминание: в уведомлении кнопка «Сделано» — отмечает его. */
+  reminderId?: string;
 }
 
 const clip = (s: string, max = 60) => (s.length > max ? s.slice(0, max - 1).trimEnd() + '…' : s);
@@ -180,10 +183,25 @@ export function planNotifications(data: AppData, now = new Date()): PlannedNotif
 
     if (!r.repeat) {
       const at = combine(r.date, r.time);
-      if (at > now) out.push({ at, title, body, url });
+      const reminderId = r.id;
+      if (r.daily) {
+        // Каждый день до срока: с сегодняшнего дня (если время ещё не прошло) и до дня перед сроком — с обратным отсчётом.
+        const extra = r.note || friend?.name;
+        const withExtra = (text: string) => (extra ? `${text} · ${extra}` : text);
+        let n = 0;
+        for (let day = today; day < r.date && n < MAX_PER_SERIES; day = addInterval(day, 'day', 1)) {
+          const nudge = combine(day, r.time);
+          if (nudge <= now) continue;
+          out.push({ at: nudge, title, body: withExtra(countdown(daysBetween(day, r.date), r.date)), url, reminderId });
+          n++;
+        }
+        if (at > now) out.push({ at, title, body: withExtra('Сегодня срок'), url, reminderId });
+        continue;
+      }
+      if (at > now) out.push({ at, title, body, url, reminderId });
       if (r.advance > 0) {
         const early = new Date(at.getTime() - r.advance * 60_000);
-        if (early > now) out.push({ at: early, title, body: `Скоро: ${formatAdvance(r.advance)} — ${body}`, url });
+        if (early > now) out.push({ at: early, title, body: `Скоро: ${formatAdvance(r.advance)} — ${body}`, url, reminderId });
       }
       continue;
     }
@@ -202,6 +220,13 @@ export function planNotifications(data: AppData, now = new Date()): PlannedNotif
 
   out.sort((a, b) => a.at.getTime() - b.at.getTime());
   return out.slice(0, MAX_SCHEDULED);
+}
+
+/** «Осталось 5 дней — до 20 ноя», «Завтра срок» — для напоминаний «каждый день до срока». */
+export function countdown(left: number, deadline: ISODate): string {
+  if (left <= 0) return 'Сегодня срок';
+  if (left === 1) return 'Завтра срок';
+  return `${plural(left, 'Остался', 'Осталось', 'Осталось')} ${left} ${plural(left, 'день', 'дня', 'дней')} — до ${formatDateCompact(deadline, false)}`;
 }
 
 export function formatAdvance(minutes: number): string {
