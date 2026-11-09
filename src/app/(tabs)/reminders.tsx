@@ -173,8 +173,8 @@ export default function RemindersScreen() {
 }
 
 /**
- * Свайп вправо открывает зелёную кнопку «Сделано» (или «Вернуть» у сделанного) и срабатывает сам при полном свайпе;
- * свайп влево — красную «Удалить» с подтверждением.
+ * Свайп вправо — «Сделано» (у сделанного — «Вернуть»): срабатывает сам, как только зелёная кнопка открылась.
+ * Свайп влево — только открывает красную «Удалить»; удаление — по нажатию и с подтверждением.
  */
 function SwipeActions({
   enabled,
@@ -211,8 +211,10 @@ function SwipeActions({
       overshootLeft={false}
       overshootRight={false}
       childrenContainerStyle={{ backgroundColor: colors.card }}
+      // Направление — куда сдвинули строку (react-native-gesture-handler 3): 'right' — свайп вправо, открылась левая,
+      // зелёная кнопка. Было 'left' — и свайп влево к «Удалить» отмечал сделанным: повторяющееся уезжало на следующий раз.
       onSwipeableOpen={(direction) => {
-        if (direction === 'left') {
+        if (direction === 'right') {
           onDone();
           ref.current?.close();
         }

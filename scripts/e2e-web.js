@@ -105,6 +105,33 @@ scenario('Напоминание на дату прошлого года пок�
   await ui.see('1 янв 2025');
 }, { data: seed({ reminders: [R({ id: 'old', title: 'Старое дело', date: '2025-01-01' })] }) });
 
+scenario('Напоминания: свайп влево только открывает «Удалить» — дата и «сделано» не меняются; «Удалить» спрашивает и удаляет', async ({ ui }) => {
+  await ui.go('/reminders');
+  await ui.see('Подстаканник купить');
+  await ui.swipe('Подстаканник купить', -160);
+  await ui.see('Удалить', { label: true });
+  await ui.pause(400);
+  let r = (await ui.data()).reminders.find((x) => x.id === 'daily');
+  assert.deepEqual([r.date, r.done], [d(1), false], 'свайп влево ничего не отмечает и не переносит');
+  await ui.tap('Удалить');
+  await ui.waitData((x) => !x.reminders.some((x) => x.id === 'daily'), 'не удалилось');
+  assert.match(ui.dialogs.join('\n'), /Удалить/);
+}, { data: seed({ reminders: [R({ id: 'daily', title: 'Подстаканник купить', date: d(1), repeat: { every: 1, unit: 'day' } })] }) });
+
+scenario('Напоминания: свайп вправо отмечает сделанным — разовое уходит в сделанные, повторяющееся переносится на следующий раз', async ({ ui }) => {
+  await ui.go('/reminders');
+  await ui.swipe('Билеты на самолёт', 160);
+  let data = await ui.waitData((x) => x.reminders.find((r) => r.id === 'once').done, 'разовое не отмечено');
+  assert.equal(data.reminders.find((r) => r.id === 'once').date, d(2));
+  await ui.swipe('Подстаканник купить', 160);
+  data = await ui.waitData((x) => x.reminders.find((r) => r.id === 'daily').date !== d(1), 'повторяющееся не перенесено');
+  assert.deepEqual([data.reminders.find((r) => r.id === 'daily').date, data.reminders.find((r) => r.id === 'daily').done], [d(2), false]);
+}, {
+  data: seed({
+    reminders: [R({ id: 'daily', title: 'Подстаканник купить', date: d(1), repeat: { every: 1, unit: 'day' } }), R({ id: 'once', title: 'Билеты на самолёт', date: d(2) })],
+  }),
+});
+
 scenario('Лента: «сделано» у повторяющегося переносит его на следующий раз', async ({ ui }) => {
   await ui.go('/');
   await ui.check('Купить цветы — Аня');
@@ -1150,6 +1177,23 @@ function helpers(page, dialogs) {
       await page.mouse.down(); await page.waitForTimeout(700); await page.mouse.up(); await page.waitForTimeout(300);
     },
     async box(target) { return (await find(target)).boundingBox(); },
+    /** Провести пальцем по строке с этим текстом: dx < 0 — влево, dx > 0 — вправо. */
+    async swipe(target, dx) {
+      const h = await find(target);
+      const b = await h.boundingBox();
+      const x = b.x + b.width / 2;
+      const y = b.y + b.height / 2;
+      // Настоящими касаниями (CDP): движение мышью жесты свайпа на вебе принимают за нажатие.
+      const cdp = await page.context().newCDPSession(page);
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+      for (let k = 1; k <= 24; k++) {
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + (dx * k) / 24, y }] });
+        await page.waitForTimeout(10);
+      }
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      await cdp.detach();
+      await page.waitForTimeout(600);
+    },
     /** Отметить кружок «сделано» в строке с этим текстом. */
     async check(title) {
       const h = await find(title);
