@@ -59,6 +59,14 @@ export function genderFromName(name: string): Gender | null {
   return genders.size === 1 ? deciding[0].gender : null;
 }
 
+/**
+ * Имя само по себе бывает и мужским, и женским (Валя, Ника, Саша). Без другого признака пол по нему не угадать — ни нам,
+ * ни Genderize, ни ИИ: они видят только имя и ответили бы «как чаще», а это ошибка в половине случаев.
+ */
+export function isUnisexName(name: string | null | undefined): boolean {
+  return !!name && AMBIGUOUS_NAMES.has(norm(name));
+}
+
 /** Страна для подсказки Genderize — по коду номера: казахские имена лучше узнаются с KZ. */
 export function countryByPhone(phone: string | null | undefined): string | undefined {
   const digits = (phone ?? '').replace(/\D/g, '');

@@ -9,7 +9,7 @@ import { syncNotifications } from './notifications';
 import { parseStored } from './storage';
 import { EMPTY_DATA, type AppData, type Friend, type Reminder, type Settings } from './types';
 import { genderOnSave } from './gender';
-import { applyGenderUpdate, genderPending } from './genderDetect';
+import { applyGenderUpdate, genderPending, retractUnisexGuess } from './genderDetect';
 import { genderSync } from './genderRun';
 import { ai } from './ai';
 import { applyNotesUpdate, notesPass, notesPending, notesSummary, retidySeen, type NotesSummary } from './notesAi';
@@ -86,7 +86,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
       // Заметки, разобранные прошлой версией, доочищаем по новым правилам («О себе: инст:» → пусто) — без ИИ.
       // Повторяющиеся, сделанные в прошлые дни, снова активны — на ближайший раз.
-      if (loaded) setData({ ...loaded, friends: loaded.friends.map(retidySeen), reminders: loaded.reminders.map((r) => rollReminder(r)) });
+      // Пол, угаданный по имени, общему для обоих (Валя, Ника), снимаем — спросим у человека.
+      if (loaded) setData({ ...loaded, friends: loaded.friends.map((f) => retractUnisexGuess(retidySeen(f))), reminders: loaded.reminders.map((r) => rollReminder(r)) });
     })().finally(() => setReady(true));
   }, []);
 

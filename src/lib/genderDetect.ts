@@ -1,7 +1,7 @@
 import { TASK_PROVIDERS } from './ai/tasks';
 import { extractJson } from './ai/providers';
 import type { AiRunner, AiTask } from './ai/types';
-import { countryByPhone, firstNameForLookup, genderFromName, type Gender, type GenderSource } from './gender';
+import { countryByPhone, firstNameForLookup, genderFromName, isUnisexName, type Gender, type GenderSource } from './gender';
 
 /**
  * Пол друзей определяется сам, в фоне, по ступеням:
@@ -103,7 +103,9 @@ export function parseGenderize(body: unknown): Map<string, Gender | null> {
 export function genderPrompt(names: string[]): string {
   return [
     'Ниже — имена людей, как их записали в телефонной книге: полное имя, уменьшительное или прозвище; имена русские, казахские и другие.',
-    'Определи пол каждого. Если по имени нельзя понять уверенно (например, Саша, Женя, Валя бывают и мужскими, и женскими), ответь "u". Не угадывай.',
+    'Определи пол каждого — только если уверен: почти все люди с таким именем одного пола (Анна, Дмитрий, Айгерим).',
+    'Имена и уменьшительные, которые бывают и у мужчин, и у женщин (Саша, Женя, Валя, Ника, Слава, Стася, Шура, Сима, Аля, Тоша, Ким, Крис, Алекс, Мишель), — всегда "u".',
+    'Незнакомое имя, прозвище, слово вместо имени или хоть малейшее сомнение — "u". Не угадывай по тому, «как чаще»: ошибка хуже, чем "u".',
     'Ответ — только JSON вида {"answers":[{"i":0,"g":"f"}]}, где i — номер строки, g — "f" (женщина), "m" (мужчина) или "u".',
     ...names.map((n, i) => `${i}: ${n}`),
   ].join('\n');
@@ -135,7 +137,7 @@ export const GENDER_TASK: AiTask<string[], Map<number, Gender>> = {
 
 /** Вопрос встроенному ИИ телефона: модель маленькая, поэтому по одному имени и ответ одним словом. */
 export function devicePrompt(name: string): string {
-  return `Человек записан в телефонной книге как «${name}». Это женщина или мужчина? Имена вроде Саша, Женя, Валя бывают и мужскими, и женскими — тогда ответь «неизвестно». Ответь одним словом: женщина, мужчина или неизвестно.`;
+  return `Человек записан в телефонной книге как «${name}». Это женщина или мужчина? Отвечай «женщина» или «мужчина», только если уверен: почти все люди с таким именем одного пола. Имена вроде Саша, Женя, Валя, Ника, Слава, Стася бывают и мужскими, и женскими — тогда «неизвестно». Незнакомое имя, прозвище или малейшее сомнение — тоже «неизвестно». Ответь одним словом: женщина, мужчина или неизвестно.`;
 }
 
 export function parseDeviceAnswer(text: string): Gender | null {
@@ -181,6 +183,9 @@ export async function genderPass(friends: GenderSubject[], deps: GenderDeps, opt
     if (g) found.set(p.id, { gender: g, by: 'names' });
     else if (at(p, 'names')) mark(p, 'names');
   }
+  // Имя бывает у обоих (Валя, Ника, Саша), а другого признака нет — наружу не отправляем: Genderize и ИИ видят только
+  // имя и ответили бы «как чаще». Сразу «загадка» — спросим у человека.
+  for (const p of people) if (!found.has(p.id) && isUnisexName(lookup.get(p.id))) mark(p, 'ai');
 
   // 2. Genderize — по 10 имён, отдельно для каждой страны, одинаковые имена — один раз.
   const forGenderize = people.filter((p) => at(p, 'genderize'));
@@ -280,6 +285,18 @@ export async function genderPass(friends: GenderSubject[], deps: GenderDeps, opt
     else if (last.get(p.id)! > stageIndex(p.genderStage)) updates.push({ id: p.id, stage: GENDER_STAGES[last.get(p.id)!] });
   }
   return { updates, backoff, problems };
+}
+
+/**
+ * Пол, который раньше угадали Genderize или ИИ по имени, общему для обоих (Валя, Ника), — снимаем: это была догадка
+ * «как чаще». Друг становится «загадкой» — спросим у человека. Своя база, ручной выбор и имя с признаком
+ * («Валя Сидорова», «Тётя Валя») не трогаем.
+ */
+export function retractUnisexGuess<T extends GenderSubject>(f: T): T {
+  if (!f.gender || (f.genderBy !== 'genderize' && f.genderBy !== 'device-ai' && f.genderBy !== 'ai')) return f;
+  if (genderFromName(f.name) || !isUnisexName(firstNameForLookup(f.name))) return f;
+  const { gender: _g, genderBy: _b, ...rest } = f;
+  return { ...rest, genderStage: 'ai' } as T;
 }
 
 /**

@@ -827,15 +827,15 @@ scenario('Пол сам при запуске: своя база, в Genderize �
     ['a', 'f', 'names', null],
     ['b', 'm', 'names', null],
     ['c', 'f', 'names', null],
-    ['s', null, null, 'genderize'],
+    ['s', null, null, 'ai'], // Саша бывает у обоих — сразу «загадка», наружу не уходит
     ['k', 'f', 'genderize', null],
   ]);
-  assert.deepEqual(asked.map((a) => [a.country, a.names]).sort(), [[null, ['Саша']], ['KZ', ['Алуашка']]]);
+  assert.deepEqual(asked.map((a) => [a.country, a.names]).sort(), [['KZ', ['Алуашка']]]);
   assert.ok(!asked.some((a) => /Смирнова|Ветров|707|606|999/.test(a.raw)), 'ни фамилий, ни номеров');
   // Перезапуск: всех уже спросили — запросов нет, ничего не поменялось.
   await page.reload();
   await ui.pause(4000);
-  assert.equal(asked.length, 2, 'никого не переспросили');
+  assert.equal(asked.length, 1, 'никого не переспросили');
   assert.deepEqual((await ui.data()).friends.map(genderOf), data.friends.map(genderOf));
   // Пол нигде не показывается, кроме формы друга: в настройках его нет.
   await ui.go('/settings');
@@ -846,12 +846,12 @@ scenario('Пол без интернета: своя база сразу, ост
   await ui.go('/');
   await ui.waitData((x) => x.friends.find((f) => f.id === 'a').gender === 'f', 'своя база не сработала');
   await ui.pause(1500);
-  assert.deepEqual((await ui.data()).friends.map(genderOf).slice(3), [['s', null, null, 'names'], ['k', null, null, 'names']]);
-  // Сеть появилась — при следующем открытии спрашиваем.
+  assert.deepEqual((await ui.data()).friends.map(genderOf).slice(3), [['s', null, null, 'ai'], ['k', null, null, 'names']]);
+  // Сеть появилась — при следующем открытии спрашиваем (Сашу — нет: имя бывает у обоих).
   const asked = await genderizeStub(page, { 'Алуашка': 'female' });
   await page.reload();
   await ui.waitData((x) => x.friends.find((f) => f.id === 'k').genderBy === 'genderize', 'при следующем запуске не спросили');
-  assert.equal(asked.length, 2);
+  assert.equal(asked.length, 1);
 }, { data: seed({ friends: GENDER_FRIENDS }) });
 
 scenario('Пол в форме: угаданное — без подписи, сомнительное — «подскажешь?»; ручной выбор главнее, и после переименования', async ({ ui }) => {
@@ -942,6 +942,24 @@ scenario('ИИ: без друзей значка нет', async ({ ui }) => {
   await ui.notSee('ИИ для друзей', { label: true });
 }, { data: seed({ friends: [], reminders: [] }) });
 
+scenario('Пол: Валя и Ника бывают у обоих — наружу не уходят, сразу «загадка»; угаданное раньше снимаем', async ({ ui, page }) => {
+  const asked = await genderizeStub(page, { 'Валя': 'female', 'Ника': 'female' });
+  await ui.go('/');
+  const data = await ui.waitData((x) => x.friends.find((f) => f.id === 'n').genderStage === 'ai' && !x.friends.find((f) => f.id === 'v').gender, 'не стали загадками');
+  assert.deepEqual(data.friends.map(genderOf), [
+    ['a', 'f', 'names', null],
+    ['v', null, null, 'ai'],
+    ['n', null, null, 'ai'],
+    ['m', 'f', 'manual', null],
+  ]);
+  await ui.pause(1500);
+  assert.equal(asked.length, 0, 'Валю и Нику никуда не отправляли');
+}, {
+  data: seed({
+    friends: [ANYA, F({ id: 'v', name: 'Валя', gender: 'f', genderBy: 'genderize' }), F({ id: 'n', name: 'Ника' }), F({ id: 'm', name: 'Валя', gender: 'f', genderBy: 'manual' })],
+  }),
+});
+
 scenario('Новый друг: пол по имени сразу; сомнительное имя — в фон, один раз; «Не указан» вручную не перезаписывается', async ({ ui, page }) => {
   const asked = await genderizeStub(page);
   await ui.go('/friend/edit');
@@ -953,11 +971,18 @@ scenario('Новый друг: пол по имени сразу; сомните
   assert.deepEqual([v.gender, v.genderBy], ['f', 'names']);
 
   await ui.go('/friend/edit');
-  await ui.fill('Например, Аня', 'Женя');
+  await ui.fill('Например, Аня', 'Ардак');
   await ui.notSee('подскажешь');
   await ui.tap('Сохранить');
-  await ui.waitData((x) => x.friends.find((f) => f.name === 'Женя')?.genderStage === 'genderize', 'Женю не отправили в Genderize');
-  assert.deepEqual(asked.map((a) => a.names), [['Женя']]);
+  await ui.waitData((x) => x.friends.find((f) => f.name === 'Ардак')?.genderStage === 'genderize', 'Ардака не отправили в Genderize');
+  assert.deepEqual(asked.map((a) => a.names), [['Ардак']]);
+
+  // Женя бывает у обоих — никуда не отправляем, сразу «загадка».
+  await ui.go('/friend/edit');
+  await ui.fill('Например, Аня', 'Женя');
+  await ui.tap('Сохранить');
+  await ui.waitData((x) => x.friends.find((f) => f.name === 'Женя')?.genderStage === 'ai', 'Женя должна стать загадкой');
+  assert.deepEqual(asked.map((a) => a.names), [['Ардак']], 'Женю не спрашивали');
 
   await ui.go(`/friend/edit?id=${v.id}`);
   await ui.tap('Не указан');
@@ -1105,6 +1130,42 @@ scenario('«Что нового»: «Вся история изменений» 
   await ui.see(`Установлена версия ${VERSION}`);
   await ui.see('1.19.0');
 }, { data: seed({ settings: { lastSeenVersion: '1.12.0' } }) });
+
+scenario('Календарь: дни рождения, годовщины и встречи; дел «до срока» и повторяющихся нет; листание месяцев', async ({ ui, page }) => {
+  await ui.go('/calendar');
+  await ui.see('Июнь 2026');
+  // Сегодня у Ани день рождения — в списке дня.
+  await ui.see('Среда, 10 июня · сегодня');
+  await ui.see('День рождения · 31 год');
+  // Дальше — годовщина «Познакомились» и встреча.
+  await ui.see('Познакомились · 8 лет');
+  await ui.see('Стоматолог');
+  await ui.notSee('Написать Диме'); // дело «до срока»
+  await ui.notSee('Купить цветы — Аня'); // повторяющееся
+  await ui.see('Важные даты');
+  // Точки в днях: у 22 июня — событие.
+  await ui.see('Понедельник, 22 июня, 1 событие', { label: true });
+  await ui.tap('Понедельник, 22 июня, 1 событие');
+  await ui.see('Понедельник, 22 июня');
+  await ui.see('через 12 дней');
+  // Следующий месяц — день рождения Мамы.
+  await ui.tap('Следующий месяц');
+  await ui.see('Июль 2026');
+  await ui.see('Мама');
+  await ui.tap('Сегодня');
+  await ui.see('Июнь 2026');
+  await ui.tap('Настройки');
+  await ui.see('Уведомления');
+  void page;
+}, {
+  data: seed({
+    reminders: [
+      R({ id: 'r1', title: 'Купить цветы — Аня', friendId: 'a', date: d(0), time: '18:00', repeat: { every: 2, unit: 'month' } }),
+      R({ id: 'r3', title: 'Написать Диме', date: d(1), time: '20:00' }),
+      R({ id: 'v', title: 'Стоматолог', kind: 'at', date: d(5), time: '15:00' }),
+    ],
+  }),
+});
 
 scenario('Открывается на «Напоминаниях»: две вкладки, в шапке — настройки; старая ссылка /reminders ведёт туда же', async ({ ui, page }) => {
   await ui.go('/');
