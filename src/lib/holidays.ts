@@ -142,8 +142,8 @@ export function holidayDatesInYear(id: string, year: number): ISODate[] {
     .map((h) => h.date);
 }
 
-/** Дни коротко: «1–6 и 8 января», «31 декабря, 1–2 января». */
-export function formatHolidayDays(dates: readonly ISODate[]): string {
+/** Дни коротко: «1–6 и 8 января», «31 декабря, 1–2 января»; `short` — с месяцем в три буквы («1–6 и 8 янв»), для правого края строк. */
+export function formatHolidayDays(dates: readonly ISODate[], short = false): string {
   const months: { month: number; days: number[] }[] = [];
   for (const iso of [...dates].sort()) {
     const d = parseISODate(iso);
@@ -161,7 +161,7 @@ export function formatHolidayDays(dates: readonly ISODate[]): string {
         i = j + 1;
       }
       const list = parts.length > 1 ? `${parts.slice(0, -1).join(', ')} и ${parts[parts.length - 1]}` : parts[0];
-      return `${list} ${MONTHS_GEN[month]}`;
+      return `${list} ${short ? MONTHS_GEN[month].slice(0, 3) : MONTHS_GEN[month]}`;
     })
     .join(', ');
 }

@@ -16,7 +16,7 @@ import { TabSwipe } from '@/components/TabSwipe';
 import { useTabBarSeam } from '@/components/pagerLock';
 import { Button, Fab, Group, IconButton, ListRow, ScreenHeader, Tag, useTheme } from '@/components/ui';
 import { MONTHS, MONTHS_IN, WEEKDAYS_MON, calendarEvents, monthCounts, monthGrid, monthRange, nextEvents, type CalendarEvent } from '@/lib/calendar';
-import { addInterval, daysBetween, formatDate, formatDateLong, parseISODate, plural, relativeDay, todayISO } from '@/lib/dates';
+import { addInterval, daysBetween, formatDate, formatDateLong, formatDayShort, parseISODate, plural, relativeDay, todayISO } from '@/lib/dates';
 import { formatHolidayDays, holidayCountries, holidayCountry, holidayDatesInYear } from '@/lib/holidays';
 import { messageChannel } from '@/lib/messageChannel';
 import { useStore } from '@/lib/store';
@@ -896,18 +896,28 @@ function EventRow({
   /** Кнопка «Поздравить»/«Написать» у человека: с подписью или, где тесно («гармошка»), одним значком. */
   contact?: 'pill' | 'icon';
 }) {
-  const { colors } = useTheme();
+  const { colors, fonts } = useTheme();
   const diff = daysBetween(today, e.date);
   const when = relativeDay(e.date, today);
   const tag = <Tag text={when} tone={diff === 0 ? 'solid' : diff > 0 && diff <= 7 ? 'accent' : 'neutral'} />;
-  // Само число («16 ноября») — в «Ближайших» рядом с «через 7 дней»; в подробностях дня оно и так понятно.
-  const day = formatDate(e.date, false);
+  // «Ближайшие»: под «через 7 дней» — день недели и число («пн, 16 ноя»), у всех строк столбиком справа.
+  // В подробностях дня число и так понятно — там справа «Поздравить»/«Написать».
+  const whenColumn = (date: string) => (
+    <View style={{ alignItems: 'flex-end', gap: 4 }}>
+      {tag}
+      <Text style={{ fontFamily: fonts.medium, fontSize: 12, lineHeight: 15, color: colors.text3, paddingRight: 4 }} numberOfLines={1}>
+        {date}
+      </Text>
+    </View>
+  );
   if (e.kind === 'holiday') {
     const where = e.holidays.map((h) => holidayCountry(h.country)).filter((c) => c !== undefined);
     const estimated = e.holidays.some((h) => h.estimated);
-    // Когда: многодневный — все его дни («1–6 и 8 января»), иначе — само число («25 декабря»).
+    // Когда: многодневный — все его дни («1–6 и 8 января», справа — «1–6 и 8 янв»), иначе — само число.
     const days = holidayDatesInYear(e.holidays[0].id, parseISODate(e.date).getFullYear());
-    const when = days.length > 1 ? formatHolidayDays(days) : formatDate(e.date, false);
+    const multi = days.length > 1;
+    const countries = where.map((c) => `${c.flag} ${c.name}`).join(', ');
+    const about = [countries, estimated ? 'дата примерная' : ''];
     return (
       <ListRow
         onPress={() =>
@@ -929,8 +939,8 @@ function EventRow({
           </View>
         }
         title={<OneLine text={e.name} />}
-        subtitle={<Subline parts={[when, where.map((c) => `${c.flag} ${c.name}`).join(', '), estimated ? 'дата примерная' : '']} />}
-        trailing={showWhen ? tag : undefined}
+        subtitle={<Subline parts={showWhen ? about : [multi ? formatHolidayDays(days) : formatDate(e.date, false), ...about]} />}
+        trailing={showWhen ? whenColumn(multi ? formatHolidayDays(days, true) : formatDayShort(e.date, today)) : undefined}
       />
     );
   }
@@ -954,18 +964,15 @@ function EventRow({
           )
         }
         title={<OneLine text={r.title} style={done ? { textDecorationLine: 'line-through', color: colors.text3 } : undefined} />}
-        subtitle={<Subline parts={[showWhen ? [day, r.time].filter(Boolean).join(', ') : r.time, e.friend?.name ?? '', done ? 'сделано' : '']} />}
-        trailing={showWhen ? tag : contact && e.friend ? <ContactPill friend={e.friend} label="Написать" iconOnly={contact === 'icon'} /> : undefined}
+        subtitle={<Subline parts={[r.time, e.friend?.name ?? '', done ? 'сделано' : '']} />}
+        trailing={showWhen ? whenColumn(formatDayShort(e.date, today)) : contact && e.friend ? <ContactPill friend={e.friend} label="Написать" iconOnly={contact === 'icon'} /> : undefined}
       />
     );
   }
   const f = e.friend;
-  // Что за событие и сколько лет исполняется. В «Ближайших» — ещё и число, как у праздников: у дня рождения оно
-  // встаёт вместо «День рождения» (торт на аватаре говорит то же), у важной даты — перед названием.
+  // Что за событие и сколько лет исполняется — двумя частями: влезают в строку — через точку, нет — столбиком.
   const n = e.kind === 'birthday' ? e.age : e.years;
-  const age = n ? `${n} ${plural(n, 'год', 'года', 'лет')}` : '';
-  const label = e.kind === 'birthday' ? 'День рождения' : e.title;
-  const what = !showWhen ? [label, age] : e.kind === 'birthday' ? [day, age || label] : [day, label, age];
+  const what = [e.kind === 'birthday' ? 'День рождения' : e.title, n ? `${n} ${plural(n, 'год', 'года', 'лет')}` : ''];
   return (
     <ListRow
       onPress={() => router.push({ pathname: '/friend/[id]', params: { id: f.id } })}
@@ -977,7 +984,7 @@ function EventRow({
       }
       title={<OneLine text={f.name} />}
       subtitle={<Subline parts={what} />}
-      trailing={showWhen ? tag : contact ? <ContactPill friend={f} label="Поздравить" iconOnly={contact === 'icon'} /> : undefined}
+      trailing={showWhen ? whenColumn(formatDayShort(e.date, today)) : contact ? <ContactPill friend={f} label="Поздравить" iconOnly={contact === 'icon'} /> : undefined}
     />
   );
 }

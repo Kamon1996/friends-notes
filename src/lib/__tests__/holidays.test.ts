@@ -139,4 +139,7 @@ test('дни праздника в году и подпись: «1–6 и 8 ян
   assert.equal(formatHolidayDays(['2026-12-31', '2027-01-01', '2027-01-02']), '31 декабря, 1–2 января');
   assert.equal(formatHolidayDays(['2026-05-01']), '1 мая');
   assert.equal(formatHolidayDays(['2026-05-01', '2026-05-03', '2026-05-09']), '1, 3 и 9 мая');
+  // Коротко — для правого края строк в «Ближайших».
+  assert.equal(formatHolidayDays(holidayDatesInYear(id, 2027), true), '1–6 и 8 янв');
+  assert.equal(formatHolidayDays(['2026-12-31', '2027-01-01', '2027-01-02'], true), '31 дек, 1–2 янв');
 });
