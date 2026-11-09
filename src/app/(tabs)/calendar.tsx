@@ -343,9 +343,19 @@ function MonthPage({ k, active, onTitle, onStep, grid }: { k: number; active: bo
   );
 }
 
+/**
+ * Цвета пилюли «Сегодня» — спокойный голубой, а не цвет оформления: так кнопка не спорит с выбранным днём и
+ * красными праздниками. Текст на фоне — контраст не ниже 4.5:1 в обеих темах.
+ */
+const TODAY_PILL = {
+  light: { fg: '#2F6BA3', bg: '#E1ECF6' },
+  dark: { fg: '#9CC4E8', bg: '#1E2B38' },
+} as const;
+
 /** Пилюля «↶ Сегодня» — в правом верхнем углу карточки, поверх листаемых месяцев. */
 function TodayPill({ onPress }: { onPress: () => void }) {
-  const { colors, fonts } = useTheme();
+  const { fonts, scheme } = useTheme();
+  const { fg, bg } = TODAY_PILL[scheme === 'dark' ? 'dark' : 'light'];
   return (
     <Pressable
       onPress={onPress}
@@ -360,15 +370,15 @@ function TodayPill({ onPress }: { onPress: () => void }) {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 5,
-        backgroundColor: colors.soft,
+        backgroundColor: bg,
         borderRadius: 999,
         paddingHorizontal: 10,
         paddingVertical: 6,
         opacity: pressed ? 0.7 : 1,
       })}
     >
-      <Icon name="undo" size={14} color={colors.accentText} strokeWidth={2.2} />
-      <Text style={{ fontFamily: fonts.semibold, fontSize: 13, color: colors.accentText }}>Сегодня</Text>
+      <Icon name="undo" size={14} color={fg} strokeWidth={2.2} />
+      <Text style={{ fontFamily: fonts.semibold, fontSize: 13, color: fg }}>Сегодня</Text>
     </Pressable>
   );
 }
