@@ -127,7 +127,7 @@ export default function CalendarScreen() {
             right={
               <>
                 {/* Праздники каких стран показывать. */}
-                <IconButton icon="flag" label="Праздники стран" onPress={() => router.push('/holidays')} />
+                <IconButton icon="redDay" label="Праздники стран" onPress={() => router.push('/holidays')} />
                 <IconButton icon="sliders" label="Настройки" onPress={() => router.push('/settings')} />
               </>
             }
