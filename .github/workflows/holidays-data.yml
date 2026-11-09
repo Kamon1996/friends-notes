@@ -1,0 +1,36 @@
+name: Holidays data
+
+# Праздники стран для вкладки «Календарь»: даты — python-holidays, описания — Википедия (scripts/holidays/build.py).
+# Готовый src/data/holidays.json коммитится в ту же ветку; таблица для проверки — в сводке запуска.
+# Запуск: коммитом со словом «[holidays]» в первой строке или вручную (Actions → Holidays data → Run workflow).
+on:
+  push:
+    branches: [main, claude/mobile-project-creation-pgqs46]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[holidays]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install holidays requests
+      - name: Build holidays.json
+        run: python scripts/holidays/build.py
+      - name: Commit data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/data/holidays.json
+          if git diff --cached --quiet; then echo "без изменений"; exit 0; fi
+          git commit -m "Праздники: данные обновлены (python-holidays, Википедия)"
+          git push origin HEAD:${{ github.ref_name }}
