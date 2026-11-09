@@ -1,4 +1,4 @@
-import { addInterval, toISODate } from './dates';
+import { addInterval, daysBetween, formatRepeat, plural, toISODate } from './dates';
 import type { ISODate, Priority, Reminder } from './types';
 
 /** Фильтры вкладки «Напоминания». */
@@ -18,6 +18,32 @@ export function formatMinutes(m: number): string {
   if (m === 240) return 'полдня';
   if (m < 60) return `${m} мин`;
   return m % 60 ? `${Math.floor(m / 60)} ч ${m % 60} мин` : `${m / 60} ч`;
+}
+
+/**
+ * Что написано в кольце строки «Напоминаний» — сколько осталось до срока: «3» и «дня», «сег.», у просроченного — «!».
+ * Дальше 99 дней — месяцы, дальше года — годы: в кольцо помещаются две цифры.
+ */
+export function ringLabel(date: ISODate, today: ISODate, overdue: boolean): { main: string; unit?: string } {
+  if (overdue) return { main: '!' };
+  const d = daysBetween(today, date);
+  if (d <= 0) return { main: 'сег.' };
+  if (d < 100) return { main: String(d), unit: plural(d, 'день', 'дня', 'дней') };
+  if (d < 365) return { main: String(Math.round(d / 30.4)), unit: 'мес' };
+  const y = Math.floor(d / 365);
+  return { main: String(y), unit: plural(y, 'год', 'года', 'лет') };
+}
+
+/**
+ * Подпись строки «Напоминаний» — какой это срок (дата — справа, сколько осталось — в кольце): «до срока»,
+ * «до конца дня», «просрочено на 2 дня», «в 15:00», «каждую неделю в 19:00».
+ */
+export function taskWhen(r: Pick<Reminder, 'date' | 'time' | 'kind' | 'repeat'>, today: ISODate, overdue: boolean): string {
+  if (r.repeat) return `${formatRepeat(r.repeat)} в ${r.time}`;
+  const d = daysBetween(today, r.date);
+  if (r.kind === 'at') return overdue ? `просрочено · было в ${r.time}` : `в ${r.time}`;
+  if (overdue) return d < 0 ? `просрочено на ${-d} ${plural(-d, 'день', 'дня', 'дней')}` : 'просрочено';
+  return d <= 0 ? 'до конца дня' : 'до срока';
 }
 
 export interface ReminderSection {

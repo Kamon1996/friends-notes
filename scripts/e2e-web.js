@@ -540,8 +540,10 @@ scenario('Напоминание: «каждый день до срока» — 
   let data = await ui.waitData((x) => x.reminders.some((r) => r.title === 'Билеты на самолёт'), 'не сохранилось');
   let r = data.reminders.find((x) => x.title === 'Билеты на самолёт');
   assert.deepEqual([r.date, r.time, r.repeat, r.advance, r.daily], ['2026-06-20', '12:00', null, 0, true]);
-  await ui.see('до сб, 20 июн');
-  await ui.see('каждый день', { label: true });
+  // Строка: «до срока», дата справа, звенящий колокольчик — «каждый день».
+  await ui.see('до срока');
+  await ui.see('сб, 20 июн');
+  await ui.see('Напоминаю каждый день', { label: true });
   // «За день» вместо ежедневных — флаг снимается.
   await ui.tap('Билеты на самолёт');
   await ui.tap('За день');
@@ -561,7 +563,7 @@ scenario('Напоминание: «каждый день до срока» — 
   assert.deepEqual([r.repeat, 'daily' in r], [{ every: 1, unit: 'day' }, false]);
 });
 
-scenario('Напоминания: разделы по сроку, при одинаковом сроке важное выше; чипы времени и важности (прочерк), фитиль; «Быстрые» и «Важные»', async ({ ui, page }) => {
+scenario('Напоминания: разделы по сроку, при одинаковом сроке важное выше; детали значками (не задано — не видно), кольцо-фитиль; «Быстрые» и «Важные»', async ({ ui, page }) => {
   await ui.go('/');
   await ui.see('Продлить страховку');
   for (const t of ['Сегодня', 'На неделе', 'В течение месяца', 'Позже']) await ui.see(t);
@@ -573,8 +575,13 @@ scenario('Напоминания: разделы по сроку, при оди�
   await ui.see('в 15:00');
   await ui.see('Сколько займёт: 30 мин', { label: true });
   await ui.see('Важность: Важно', { label: true });
-  await ui.see('Сколько займёт: не задано', { label: true });
-  await ui.see('Важность: не задано', { label: true });
+  await ui.see('Важность: Низкая', { label: true });
+  // Не задано — значка нет, прочерков тоже.
+  await ui.notSee('не задано', { label: true });
+  // В кольце — сколько осталось: «сег.» у сегодняшних, «!» у просроченного, «2 дня», «60 дней».
+  await ui.see('Просрочено', { label: true });
+  await ui.see('Осталось 2 дня', { label: true });
+  await ui.see('Осталось 60 дней', { label: true });
   assert.equal(await page.locator('[data-testid="fuse"]').count(), 6, 'фитиль у всех, кроме догоревшего просроченного');
   await ui.tap('Быстрые');
   await ui.see('Оплатить интернет'); await ui.see('Билеты на самолёт');
@@ -611,7 +618,8 @@ scenario('Напоминание: «Дата и время», важность �
   const data = await ui.waitData((x) => x.reminders.some((r) => r.title === 'Стоматолог'), 'не сохранилось');
   const r = data.reminders.find((x) => x.title === 'Стоматолог');
   assert.deepEqual([r.kind, r.date, r.time, r.priority, r.minutes, r.advance, r.repeat], ['at', '2026-06-20', '15:00', 3, 60, 0, null]);
-  await ui.see('сб, 20 июн · 15:00');
+  await ui.see('в 15:00');
+  await ui.see('сб, 20 июн');
   await ui.see('Важность: Важно', { label: true });
   await ui.see('Сколько займёт: 1 ч', { label: true });
 });

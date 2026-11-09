@@ -20,7 +20,7 @@ import type { Reminder } from '@/lib/types';
 const FILTERS: { key: ReminderFilter; label: string; icon?: IconName }[] = [
   { key: 'all', label: 'Все' },
   { key: 'quick', label: 'Быстрые', icon: 'bolt' },
-  { key: 'important', label: 'Важные', icon: 'flag' },
+  { key: 'important', label: 'Важные', icon: 'chevronsUp' },
   { key: 'personal', label: 'Для себя' },
   { key: 'friends', label: 'Друзья' },
   { key: 'done', label: 'Сделанные', icon: 'check' },

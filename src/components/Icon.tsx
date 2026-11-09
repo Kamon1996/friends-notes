@@ -56,7 +56,10 @@ export type IconName =
   | 'globe'
   | 'link'
   | 'open'
-  | 'copy';
+  | 'copy'
+  | 'stopwatch'
+  | 'bellRing'
+  | 'chevronsUp';
 
 const PATHS: Record<IconName, ReactNode> = {
   calendar: (
@@ -78,6 +81,15 @@ const PATHS: Record<IconName, ReactNode> = {
     </>
   ),
   bell: <Path d="M6 10a6 6 0 0 1 12 0v4l2 3H4l2-3zM10 20a2 2 0 0 0 4 0" />,
+  // «Каждый день до срока» — колокольчик звенит.
+  bellRing: <Path d="M6.5 10a5.5 5.5 0 0 1 11 0v4l2 3h-15l2-3zM10 20a2 2 0 0 0 4 0M3 7.5a9 9 0 0 1 2.2-3.8M21 7.5a9 9 0 0 0-2.2-3.8" />,
+  // «Сколько займёт» — секундомер: часы уже значат встречу.
+  stopwatch: (
+    <>
+      <Circle cx={12} cy={13.5} r={7.5} />
+      <Path d="M12 10v3.5l2.5 1.8M9.5 2.5h5M12 2.5V6" />
+    </>
+  ),
   sliders: (
     <>
       <Path d="M4 7h9M19 7h1M4 17h3M13 17h7" />
@@ -109,6 +121,7 @@ const PATHS: Record<IconName, ReactNode> = {
     </>
   ),
   chevronUp: <Path d="M6 15l6-6 6 6" />,
+  chevronsUp: <Path d="M6 13l6-6 6 6M6 19l6-6 6 6" />,
   check: <Path d="M5 12l5 5 9-10" />,
   cake: (
     // Свеча с пламенем: и на торт похоже, и рисунок стоит по центру квадрата (без пламени он сидел ниже).

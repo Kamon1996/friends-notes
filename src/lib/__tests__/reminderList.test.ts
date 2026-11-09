@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
-import { byDeadline, formatMinutes, fuseColor, mix, reminderSections } from '../reminderList';
+import { byDeadline, formatMinutes, fuseColor, mix, reminderSections, ringLabel, taskWhen } from '../reminderList';
 import type { Reminder } from '../types';
 
 const R = (id: string, date: string, patch: Partial<Reminder> = {}): Reminder => ({
@@ -73,5 +73,27 @@ describe('мелочи', () => {
     assert.equal(fuseColor(0.25, c), '#ffaa00');
     assert.equal(fuseColor(0, c), '#ff0000');
     assert.equal(mix('#000000', '#ffffff', 0.5), '#808080');
+  });
+});
+
+describe('строка дела: кольцо и подпись', () => {
+  const today = '2026-11-09';
+  test('в кольце — сколько осталось: дни, сегодня, месяцы, годы; просрочено — «!»', () => {
+    assert.deepEqual(ringLabel('2026-11-12', today, false), { main: '3', unit: 'дня' });
+    assert.deepEqual(ringLabel('2026-11-10', today, false), { main: '1', unit: 'день' });
+    assert.deepEqual(ringLabel('2026-12-07', today, false), { main: '28', unit: 'дней' });
+    assert.deepEqual(ringLabel('2026-11-09', today, false), { main: 'сег.' });
+    assert.deepEqual(ringLabel('2027-04-09', today, false), { main: '5', unit: 'мес' });
+    assert.deepEqual(ringLabel('2028-12-01', today, false), { main: '2', unit: 'года' });
+    assert.deepEqual(ringLabel('2026-11-07', today, true), { main: '!' });
+  });
+  test('подпись: какой срок — дата справа, а не здесь', () => {
+    const due = { time: '12:00', repeat: null };
+    assert.equal(taskWhen({ ...due, date: '2026-11-12' }, today, false), 'до срока');
+    assert.equal(taskWhen({ ...due, date: today }, today, false), 'до конца дня');
+    assert.equal(taskWhen({ ...due, date: '2026-11-07' }, today, true), 'просрочено на 2 дня');
+    assert.equal(taskWhen({ kind: 'at', time: '15:00', repeat: null, date: today }, today, false), 'в 15:00');
+    assert.equal(taskWhen({ kind: 'at', time: '15:00', repeat: null, date: today }, today, true), 'просрочено · было в 15:00');
+    assert.equal(taskWhen({ kind: 'at', time: '19:00', repeat: { every: 1, unit: 'week' }, date: '2026-11-12' }, today, false), 'каждую неделю в 19:00');
   });
 });
