@@ -727,7 +727,7 @@ function DaySheet({
       </GestureDetector>
       {/* Шапка и кнопка снизу на месте, список между ними прокручивается — хоть двадцать событий. */}
       <ScrollView style={{ flexGrow: 0 }} contentContainerStyle={{ paddingHorizontal: 20 }}>
-        <DayEvents key={d} events={shown.events} today={today} />
+        <DayEvents key={d} events={shown.events} today={today} compact />
       </ScrollView>
       <NewEventButton date={d} style={{ marginHorizontal: 20, marginTop: 10 }} />
     </Animated.View>
