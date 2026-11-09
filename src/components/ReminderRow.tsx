@@ -142,7 +142,7 @@ function TaskRow({ reminder: r, friend, selected = false, selecting = false, onP
       {friend ? <Avatar friend={friend} size={40} /> : <IconCircle icon="check" tone="success" size={40} />}
     </View>
   ) : (
-    <CountRing r={r} friend={friend} today={today} overdue={overdue} />
+    <CountRing r={r} friend={friend} today={today} overdue={overdue} corner={!(selecting && selected)} />
   );
 
   return (
@@ -216,13 +216,14 @@ const RING = 44;
 const STROKE = 2.5;
 
 /** Кольцо-фитиль со сроком внутри; у дела для друга — его аватар в углу, у встречи и повтора — значок типа. */
-function CountRing({ r, friend, today, overdue }: { r: Reminder; friend?: Friend | null; today: string; overdue: boolean }) {
+function CountRing({ r, friend, today, overdue, corner }: { r: Reminder; friend?: Friend | null; today: string; overdue: boolean; corner: boolean }) {
   const { colors, fonts } = useTheme();
   const fuse = reminderFuse(r) ?? 0;
   const { main, unit } = ringLabel(r.date, today, overdue);
   const rad = (RING - STROKE) / 2;
   const circ = 2 * Math.PI * rad;
-  const badge: IconName | null = friend ? null : r.repeat ? 'repeat' : r.kind === 'at' ? 'calendar' : null;
+  // Угол занят галочкой выбора — значок прячем.
+  const badge: IconName | null = !corner || friend ? null : r.repeat ? 'repeat' : r.kind === 'at' ? 'calendar' : null;
   return (
     <View
       style={{ width: RING, height: RING, alignItems: 'center', justifyContent: 'center' }}
@@ -249,7 +250,9 @@ function CountRing({ r, friend, today, overdue }: { r: Reminder; friend?: Friend
         <View testID="fuse" accessibilityLabel={`Осталось ${Math.round(fuse * 100)}% времени до срока`} pointerEvents="none" style={StyleSheet.absoluteFill} />
       )}
       <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: colors.chip, alignItems: 'center', justifyContent: 'center' }}>
+        {/* Кружок фиксированного размера — крупный системный шрифт растим не больше чем на 20 %. */}
         <Text
+          maxFontSizeMultiplier={1.2}
           style={{
             fontFamily: fonts.bold,
             fontSize: main.length > 2 ? 11 : 15,
@@ -260,9 +263,13 @@ function CountRing({ r, friend, today, overdue }: { r: Reminder; friend?: Friend
         >
           {main}
         </Text>
-        {unit && <Text style={{ fontFamily: fonts.medium, fontSize: 8, lineHeight: 10, color: colors.text3 }}>{unit}</Text>}
+        {unit && (
+          <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: fonts.medium, fontSize: 8, lineHeight: 10, color: colors.text3 }}>
+            {unit}
+          </Text>
+        )}
       </View>
-      {friend ? (
+      {friend && corner ? (
         // Чуть за кольцом — не закрывает «дней» внутри.
         <View style={{ position: 'absolute', right: -8, bottom: -5, borderRadius: 12, borderWidth: 2, borderColor: colors.card }}>
           <Avatar friend={friend} size={18} />

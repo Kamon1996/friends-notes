@@ -39,7 +39,7 @@ export function ringLabel(date: ISODate, today: ISODate, overdue: boolean): { ma
  * «до конца дня», «просрочено на 2 дня», «в 15:00», «каждую неделю в 19:00».
  */
 export function taskWhen(r: Pick<Reminder, 'date' | 'time' | 'kind' | 'repeat'>, today: ISODate, overdue: boolean): string {
-  if (r.repeat) return `${formatRepeat(r.repeat)} в ${r.time}`;
+  if (r.repeat) return overdue ? `просрочено · ${formatRepeat(r.repeat)}` : `${formatRepeat(r.repeat)} в ${r.time}`;
   const d = daysBetween(today, r.date);
   if (r.kind === 'at') return overdue ? `просрочено · было в ${r.time}` : `в ${r.time}`;
   if (overdue) return d < 0 ? `просрочено на ${-d} ${plural(-d, 'день', 'дня', 'дней')}` : 'просрочено';

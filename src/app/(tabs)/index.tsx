@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, useIsFocused } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { FlatList, Text, View } from 'react-native';
 // Строка фильтров — прокрутка из обработчика жестов: свайп по ней листает фильтры, а не вкладки.
@@ -46,8 +46,10 @@ let sentToFriends = false;
 
 export default function RemindersScreen() {
   const { ready, data, setRemindersDone, deleteReminders } = useStore();
-  // Первый запуск — сначала «Друзья»: без них приложению нечего показать, а импорт — там.
-  const firstRun = ready && !sentToFriends && data.friends.length === 0 && data.reminders.length === 0;
+  // Первый запуск — сначала «Друзья»: без них приложению нечего показать, а импорт — там. Только если открыта именно
+  // эта вкладка: соседние вкладки подгружаются заранее, и открытый по ссылке «Календарь» не должен уезжать.
+  const focused = useIsFocused();
+  const firstRun = ready && focused && !sentToFriends && data.friends.length === 0 && data.reminders.length === 0;
   useEffect(() => {
     if (!firstRun) return;
     sentToFriends = true;
@@ -155,7 +157,8 @@ export default function RemindersScreen() {
               <Text style={[s.sectionLabel, { paddingHorizontal: 24, paddingTop: 12, paddingBottom: 8 }]}>{item.text}</Text>
             ) : (
               <View style={{ paddingHorizontal: 20 }}>
-                <GroupedRow first={item.first} last={item.last}>
+                {/* Разделитель — от начала текста: кольцо шире аватара (44 вместо 40). */}
+                <GroupedRow first={item.first} last={item.last} inset={70}>
                   <ReminderSwipe reminder={item.reminder} enabled={!selecting} hint={item.key === hintKey}>
                     <ReminderRow
                       detailed

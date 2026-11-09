@@ -9,6 +9,7 @@ import {
   HOLIDAY_YEARS,
   defaultHolidayCountries,
   deviceHolidayCountry,
+  formatCountries,
   formatHolidayDays,
   holidayCountries,
   holidayCountryCount,
@@ -142,4 +143,13 @@ test('дни праздника в году и подпись: «1–6 и 8 ян
   // Коротко — для правого края строк в «Ближайших».
   assert.equal(formatHolidayDays(holidayDatesInYear(id, 2027), true), '1–6 и 8 янв');
   assert.equal(formatHolidayDays(['2026-12-31', '2027-01-01', '2027-01-02'], true), '31 дек, 1–2 янв');
+});
+
+test('страны праздника: до трёх — все, больше — две и «и ещё N»', () => {
+  const c = (n: number) => Array.from({ length: n }, (_, i) => ({ flag: '🏳', name: `Страна ${i + 1}` }));
+  assert.equal(formatCountries(c(1)), '🏳 Страна 1');
+  assert.equal(formatCountries(c(3)), '🏳 Страна 1, 🏳 Страна 2, 🏳 Страна 3');
+  assert.equal(formatCountries(c(4)), '🏳 Страна 1, 🏳 Страна 2 и ещё 2 страны');
+  assert.equal(formatCountries(c(24)), '🏳 Страна 1, 🏳 Страна 2 и ещё 22 страны');
+  assert.equal(formatCountries(c(7)), '🏳 Страна 1, 🏳 Страна 2 и ещё 5 стран');
 });

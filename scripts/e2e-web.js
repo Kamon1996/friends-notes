@@ -1348,6 +1348,14 @@ scenario('Календарь: шторка дня не двигает стран
   });
   assert.ok(free, 'последняя неделя сетки должна выглядывать над шторкой');
   assert.ok((await scrollTop()) > 0, 'страница должна была подкатиться — иначе шторка накрыла бы низ сетки');
+  // Закрыли высокую шторку, вернулись наверх, открыли день с одним событием — по старой высоте страница не уезжает.
+  await ui.tap('Закрыть');
+  await page.evaluate(() => { for (const d of document.querySelectorAll('div')) if (d.scrollTop > 0) d.scrollTop = 0; });
+  await ui.pause(300);
+  await ui.tap('Среда, 10 июня, сегодня, 1 событие');
+  await ui.see('Поздравить в Telegram', { label: true });
+  await ui.pause(600);
+  assert.equal(await scrollTop(), 0, 'после высокой шторки низкая не должна двигать страницу');
 }, {
   viewport: { width: 412, height: 915 },
   data: seed({

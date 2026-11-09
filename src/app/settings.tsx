@@ -244,7 +244,7 @@ export default function SettingsScreen() {
           <ListRow
             leading={<IconCircle icon="stars" />}
             title="Знаки зодиака"
-            subtitle="В карточке, в списке и в «Сегодня»"
+            subtitle="В карточке друга и в списке друзей"
             trailing={
               <Switch
                 value={zodiacShown(settings)}

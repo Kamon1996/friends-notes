@@ -95,5 +95,6 @@ describe('строка дела: кольцо и подпись', () => {
     assert.equal(taskWhen({ kind: 'at', time: '15:00', repeat: null, date: today }, today, false), 'в 15:00');
     assert.equal(taskWhen({ kind: 'at', time: '15:00', repeat: null, date: today }, today, true), 'просрочено · было в 15:00');
     assert.equal(taskWhen({ kind: 'at', time: '19:00', repeat: { every: 1, unit: 'week' }, date: '2026-11-12' }, today, false), 'каждую неделю в 19:00');
+    assert.equal(taskWhen({ kind: 'at', time: '19:00', repeat: { every: 1, unit: 'week' }, date: '2026-11-05' }, today, true), 'просрочено · каждую неделю');
   });
 });

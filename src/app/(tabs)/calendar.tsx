@@ -1,6 +1,6 @@
 import { router, useIsFocused } from 'expo-router';
-import { Fragment, useEffect, useMemo, useRef, useState, type ComponentRef, type ReactNode } from 'react';
-import { BackHandler, Platform, Pressable, ScrollView, Text, View, useWindowDimensions, type TextStyle, type ViewStyle } from 'react-native';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ComponentRef, type ReactNode } from 'react';
+import { BackHandler, PixelRatio, Platform, Pressable, ScrollView, Text, type TextStyle, type ViewStyle, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated';
@@ -17,7 +17,7 @@ import { useTabBarSeam } from '@/components/pagerLock';
 import { Button, Fab, Group, IconButton, ListRow, ScreenHeader, Tag, useTheme } from '@/components/ui';
 import { MONTHS, MONTHS_IN, WEEKDAYS_MON, calendarEvents, monthCounts, monthGrid, monthRange, nextEvents, type CalendarEvent } from '@/lib/calendar';
 import { addInterval, daysBetween, formatDate, formatDateLong, formatDayShort, parseISODate, plural, relativeDay, todayISO } from '@/lib/dates';
-import { formatHolidayDays, holidayCountries, holidayCountry, holidayDatesInYear } from '@/lib/holidays';
+import { formatCountries, formatHolidayDays, holidayCountries, holidayCountry, holidayDatesInYear } from '@/lib/holidays';
 import { messageChannel } from '@/lib/messageChannel';
 import { useStore } from '@/lib/store';
 import type { Friend } from '@/lib/types';
@@ -81,23 +81,32 @@ export default function CalendarScreen() {
   // Шторка открылась — страница стоит на месте. Подкатываем, только если шторка накрыла бы сетку месяца (много
   // событий — шторка до половины экрана), и ровно настолько, чтобы сетка выглядывала над ней: можно жать другие дни.
   const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
-  const scrollY = useRef(0);
-  const [viewH, setViewH] = useState(0);
-  const [card, setCard] = useState({ y: 0, h: 0 });
-  const [legendH, setLegendH] = useState(0);
+  // Где что на экране — без перерисовок (высота карточки меняется каждый кадр, пока раскрывается «гармошка»).
+  const geo = useRef({ scrollY: 0, viewH: 0, cardY: 0, cardH: 0, legendH: 0, sheetH: 0 });
   const [sheetH, setSheetH] = useState(0);
+  const onSheetMeasure = useCallback((h: number) => {
+    geo.current.sheetH = h;
+    setSheetH(h);
+  }, []);
   const sheetOpen = isOpen && !inline;
-  const gridBottom = card.y + card.h - legendH;
+  const legend = data.settings.calendarLegend !== false;
   useEffect(() => {
-    if (!sheetOpen || !viewH || !sheetH) return;
-    const top = scrollY.current;
-    // Шторка стоит на 2 px ниже края экрана.
-    const covered = gridBottom + 12 - (top + viewH - (sheetH - 2));
-    if (covered <= 0) return;
-    // Не дальше, чем до верха карточки календаря.
-    const target = Math.min(top + covered, Math.max(top, card.y - 8));
-    if (target > top) scrollRef.current?.scrollTo({ y: target, animated: true });
-  }, [sheetOpen, sheetH, viewH, gridBottom, card.y]);
+    if (!sheetOpen) return;
+    // Чуть погодя: шторка успевает измерить новое содержимое — у другого дня другая высота, а по старой странице
+    // уехала бы зря.
+    const t = setTimeout(() => {
+      const g = geo.current;
+      if (!g.viewH || !g.sheetH) return;
+      const gridBottom = g.cardY + g.cardH - (legend ? g.legendH : 0);
+      // Шторка стоит на 2 px ниже края экрана.
+      const covered = gridBottom + 12 - (g.scrollY + g.viewH - (g.sheetH - 2));
+      if (covered <= 0) return;
+      // Не дальше, чем до верха карточки календаря.
+      const target = Math.min(g.scrollY + covered, Math.max(g.scrollY, g.cardY - 8));
+      if (target > g.scrollY) scrollRef.current?.scrollTo({ y: target, animated: true });
+    }, 120);
+    return () => clearTimeout(t);
+  }, [sheetOpen, lastOpened, sheetH, legend]);
   // «Гармошка»: высота раскрытой панели — на неё растёт карусель месяцев; меняется плавно.
   const panelH = useSharedValue(0);
   const [panelContentH, setPanelContentH] = useState(0);
@@ -107,7 +116,6 @@ export default function CalendarScreen() {
   // Ближайшие — начиная с выбранного дня (сегодняшний день рождения — первым).
   const later = useMemo(() => nextEvents(data, addInterval(selected, 'day', -1), 5), [data, selected]);
   const withHolidays = holidayCountries(data.settings).length > 0;
-  const legend = data.settings.calendarLegend !== false;
 
   // Показать месяц k (жест, выбор месяца, диктор). Уже он — ничего не трогаем: выбранный день остаётся.
   const show = (k: number) => {
@@ -135,9 +143,11 @@ export default function CalendarScreen() {
           ref={scrollRef}
           style={s.screen}
           contentContainerStyle={{ paddingBottom: 120 }}
-          onLayout={(e) => setViewH(e.nativeEvent.layout.height)}
+          onLayout={(e) => {
+            geo.current.viewH = e.nativeEvent.layout.height;
+          }}
           onScroll={(e) => {
-            scrollY.current = e.nativeEvent.contentOffset.y;
+            geo.current.scrollY = e.nativeEvent.contentOffset.y;
           }}
           scrollEventThrottle={32}
         >
@@ -156,7 +166,10 @@ export default function CalendarScreen() {
           />
 
           <View
-            onLayout={(e) => setCard({ y: e.nativeEvent.layout.y, h: e.nativeEvent.layout.height })}
+            onLayout={(e) => {
+              geo.current.cardY = e.nativeEvent.layout.y;
+              geo.current.cardH = e.nativeEvent.layout.height;
+            }}
             style={[s.group, { marginHorizontal: 20, marginTop: 14, paddingTop: 10, paddingBottom: legend ? 0 : 6 }]}
           >
             <MonthCarousel
@@ -204,7 +217,11 @@ export default function CalendarScreen() {
             {/* «↶ Сегодня» стоит на месте, пока месяц едет под ним. */}
             {awayFromToday && <TodayPill onPress={goToday} />}
             {legend && (
-              <View onLayout={(e) => setLegendH(e.nativeEvent.layout.height)}>
+              <View
+                onLayout={(e) => {
+                  geo.current.legendH = e.nativeEvent.layout.height;
+                }}
+              >
                 <Legend month={view.month} counts={counts} holidays={withHolidays} onHide={() => updateSettings({ calendarLegend: false })} />
               </View>
             )}
@@ -239,7 +256,7 @@ export default function CalendarScreen() {
             events={openEvents}
             today={today}
             onClose={() => setOpened(null)}
-            onMeasure={setSheetH}
+            onMeasure={onSheetMeasure}
           />
         )}
         <MonthPicker visible={picking} k={cur} onPick={(k) => show(k)} onClose={() => setPicking(false)} />
@@ -889,7 +906,8 @@ function Subline({ parts }: { parts: string[] }) {
   const level = list.length < 2 ? 0 : fit?.text === text ? fit.level : 0;
   const lines = level === 0 ? [text] : level === 1 ? [list[0], list.slice(1).join(' · ')] : list;
   const next = level === 0 && list.length > 2 ? 1 : 2;
-  const lineHeight = s.muted.lineHeight ?? 18;
+  // Высота одной строки с учётом крупного системного шрифта — иначе любая подпись считалась бы «перенесённой».
+  const lineHeight = (s.muted.lineHeight ?? 18) * PixelRatio.getFontScale();
   return (
     <View>
       {lines.map((line, i) => (
@@ -946,7 +964,7 @@ function EventRow({
     // Когда: многодневный — все его дни («1–6 и 8 января», справа — «1–6 и 8 янв»), иначе — само число.
     const days = holidayDatesInYear(e.holidays[0].id, parseISODate(e.date).getFullYear());
     const multi = days.length > 1;
-    const countries = where.map((c) => `${c.flag} ${c.name}`).join(', ');
+    const countries = formatCountries(where);
     const about = [countries, estimated ? 'дата примерная' : ''];
     return (
       <ListRow

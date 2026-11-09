@@ -1,6 +1,6 @@
 import raw from '@/data/holidays.json';
 
-import { MONTHS_GEN, parseISODate } from './dates';
+import { MONTHS_GEN, parseISODate, plural } from './dates';
 import type { ISODate, Settings } from './types';
 
 /**
@@ -140,6 +140,17 @@ export function holidayDatesInYear(id: string, year: number): ISODate[] {
   return countryDays(code)
     .filter((h) => h.id === id && h.date.startsWith(`${year}-`))
     .map((h) => h.date);
+}
+
+/**
+ * Страны праздника для подписи: до трёх — все («🇷🇺 Россия, 🇧🇾 Беларусь»), больше — первые две и «и ещё 22 страны»:
+ * «Новый год» отмечают почти все, и список на десять строк в строке события ни к чему.
+ */
+export function formatCountries(list: readonly { flag: string; name: string }[], max = 2): string {
+  const all = list.map((c) => `${c.flag} ${c.name}`);
+  if (all.length <= max + 1) return all.join(', ');
+  const rest = all.length - max;
+  return `${all.slice(0, max).join(', ')} и ещё ${rest} ${plural(rest, 'страна', 'страны', 'стран')}`;
 }
 
 /** Дни коротко: «1–6 и 8 января», «31 декабря, 1–2 января»; `short` — с месяцем в три буквы («1–6 и 8 янв»), для правого края строк. */
