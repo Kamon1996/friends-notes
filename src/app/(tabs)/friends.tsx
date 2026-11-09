@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { FlatList, Pressable, Text, View } from 'react-native';
 import ReanimatedSwipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 
@@ -22,7 +22,7 @@ import { voice } from '@/lib/voice';
 import { zodiacShown } from '@/lib/zodiac';
 
 export default function FriendsScreen() {
-  const { data, deleteFriends, updateFriends, genderBusy, genderNews, clearGenderNews, readNotes, notesBusy, notesNews, clearNotesNews } = useStore();
+  const { data, deleteFriends, updateFriends, genderBusy, clearGenderNews, readNotes, notesBusy, notesNews, clearNotesNews } = useStore();
   const [aiOpen, setAiOpen] = useState(false);
   // «Пол друзей» идёт прямо здесь, слоем поверх списка: ему нужно, где начинается список, и список — с начала.
   const listRef = useRef<FlatList<FriendListItem>>(null);
@@ -42,9 +42,8 @@ export default function FriendsScreen() {
   const n = data.friends.length;
   const notesWaiting = useMemo(() => data.friends.filter((f) => notesPending(f, 'all')).length, [data.friends]);
 
-  // Тихий тост магии: сперва про пол, потом про соцсети из «О себе». Фраза выбирается один раз на новость.
+  // Тихий тост магии — про соцсети из «О себе». Про пол новых друзей молчим: пол просто появляется в карточке.
   const toast = useMemo(() => {
-    if (genderNews) return voice.say('gender.quiet', { k: genderNews });
     if (notesNews)
       return notesNews.links
         ? voice.say('notes.quiet', {
@@ -53,8 +52,8 @@ export default function FriendsScreen() {
           })
         : voice.say('notes.tidy');
     return null;
-  }, [genderNews, notesNews]);
-  const toastDone = useCallback(() => (genderNews ? clearGenderNews() : clearNotesNews()), [genderNews, clearGenderNews, clearNotesNews]);
+  }, [notesNews]);
+  const toastDone = clearNotesNews;
 
   const toggle = (id: string) =>
     setSelected((prev) => {
