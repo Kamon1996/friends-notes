@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react';
-import Svg, { Circle, Path, Rect } from 'react-native-svg';
+import { useId, type ReactNode } from 'react';
+import Svg, { Circle, Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 
 export type IconName =
   | 'archive'
@@ -253,13 +253,17 @@ export function Icon({
   color = '#221C18',
   strokeWidth = 1.75,
   fill = 'none',
+  gradient,
 }: {
   name: IconName;
   size?: number;
   color?: string;
   strokeWidth?: number;
   fill?: string;
+  /** Линия градиентом — слева сверху вправо вниз (значок дня рождения в календаре). */
+  gradient?: readonly string[];
 }) {
+  const id = 'ig' + useId().replace(/[^a-zA-Z0-9_-]/g, '');
   return (
     <Svg
       width={size}
@@ -267,11 +271,20 @@ export function Icon({
       viewBox="0 0 24 24"
       color={color}
       fill={fill}
-      stroke={color}
+      stroke={gradient ? `url(#${id})` : color}
       strokeWidth={strokeWidth}
       strokeLinecap="round"
       strokeLinejoin="round"
     >
+      {gradient && (
+        <Defs>
+          <LinearGradient id={id} x1="3" y1="3" x2="21" y2="21" gradientUnits="userSpaceOnUse">
+            {gradient.map((c, i) => (
+              <Stop key={i} offset={i / Math.max(1, gradient.length - 1)} stopColor={c} />
+            ))}
+          </LinearGradient>
+        </Defs>
+      )}
       {PATHS[name]}
     </Svg>
   );

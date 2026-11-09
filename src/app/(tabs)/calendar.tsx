@@ -1,11 +1,13 @@
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
 
 import { Avatar } from '@/components/Avatar';
+import { useSvgId } from '@/components/ai/AiIcon';
 import { Icon } from '@/components/Icon';
 import { TabSwipe } from '@/components/TabSwipe';
-import { Group, IconButton, IconCircle, ListRow, ScreenHeader, Tag, useTheme } from '@/components/ui';
+import { Group, IconButton, ListRow, ScreenHeader, Tag, useTheme } from '@/components/ui';
 import { MONTHS, MONTHS_IN, WEEKDAYS_MON, calendarEvents, monthGrid, monthRange, nextEvents, type CalendarEvent } from '@/lib/calendar';
 import { daysBetween, formatDateLong, parseISODate, plural, relativeDay, todayISO } from '@/lib/dates';
 import { useStore } from '@/lib/store';
@@ -30,10 +32,24 @@ function atDay(date: string): CalView {
   return { year: d.getFullYear(), month: d.getMonth(), selected: date };
 }
 
-/** Цвет точки и значка события: дни рождения — акцент, важные даты — тёплый, встречи — синий. */
+/**
+ * Цвета значков событий — палитра «В тон приложению»: торт — градиент от мёда к терракоте, сердце — пыльная роза,
+ * встречи — спокойный голубой. В светлой теме — те же оттенки темнее, чтобы читались на бумаге.
+ */
+const KIND_PALETTE = {
+  dark: { birthday: ['#E9B44C', '#E0704F'], date: ['#E45D7B'], meeting: ['#86B6E0'] },
+  light: { birthday: ['#C98A1E', '#C4502F'], date: ['#C2405F'], meeting: ['#3F78AE'] },
+} as const;
+
 function useKindColors() {
-  const { colors } = useTheme();
-  return { birthday: colors.accent, date: colors.warn, meeting: colors.info } as const;
+  const { scheme } = useTheme();
+  return KIND_PALETTE[scheme === 'dark' ? 'dark' : 'light'];
+}
+
+/** Значок события: цвет или градиент из палитры. */
+function KindIcon({ kind, size, strokeWidth = 2.2 }: { kind: CalendarEvent['kind']; size: number; strokeWidth?: number }) {
+  const stops = useKindColors()[kind];
+  return <Icon name={KIND_ICON[kind]} size={size} strokeWidth={strokeWidth} color={stops[stops.length - 1]} gradient={stops.length > 1 ? stops : undefined} />;
 }
 
 /**
@@ -43,7 +59,6 @@ function useKindColors() {
 export default function CalendarScreen() {
   const { data } = useStore();
   const { s, colors, fonts } = useTheme();
-  const kindColor = useKindColors();
   const today = todayISO();
   const [view, setView] = useState<CalView>(() => atDay(today));
   const { selected } = view;
@@ -149,7 +164,7 @@ export default function CalendarScreen() {
                   </View>
                   <View style={{ position: 'absolute', bottom: 1, flexDirection: 'row', gap: 3, height: 13, opacity: own ? 1 : 0.5 }}>
                     {kinds.map((k) => (
-                      <Icon key={k} name={KIND_ICON[k]} size={12} color={kindColor[k]} strokeWidth={2.2} />
+                      <KindIcon key={k} kind={k} size={13} />
                     ))}
                   </View>
                 </Pressable>
@@ -165,7 +180,7 @@ export default function CalendarScreen() {
               ] as const
             ).map(([k, label]) => (
               <View key={k} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                <Icon name={KIND_ICON[k]} size={12} color={kindColor[k]} strokeWidth={2.2} />
+                <KindIcon kind={k} size={13} />
                 <Text style={[s.caption, { fontSize: 12 }]}>{label}</Text>
               </View>
             ))}
@@ -212,27 +227,27 @@ export default function CalendarScreen() {
 /** Значок события — в днях месяца, в подписи под ним и на аватаре в списке (набор «Линии»). Праздникам — флажок. */
 const KIND_ICON = { birthday: 'cake', date: 'heart', meeting: 'clock' } as const;
 
-/** Значок типа события в углу аватара. */
+/** Значок типа события в углу аватара: кружок цвета события (у дня рождения — градиентом) с белым значком. */
 function KindBadge({ kind }: { kind: CalendarEvent['kind'] }) {
   const { colors } = useTheme();
-  const kindColor = useKindColors();
+  const stops = useKindColors()[kind];
+  const id = useSvgId('badge');
   return (
-    <View
-      style={{
-        position: 'absolute',
-        right: -3,
-        bottom: -3,
-        width: 18,
-        height: 18,
-        borderRadius: 9,
-        backgroundColor: kindColor[kind],
-        borderWidth: 2,
-        borderColor: colors.card,
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-    >
-      <Icon name={KIND_ICON[kind]} size={9} color={colors.onAccent} strokeWidth={2.6} />
+    <View style={{ position: 'absolute', right: -3, bottom: -3, width: 18, height: 18, alignItems: 'center', justifyContent: 'center' }}>
+      <Svg width={18} height={18} style={StyleSheet.absoluteFill}>
+        <Defs>
+          <LinearGradient id={id} x1="2" y1="2" x2="16" y2="16" gradientUnits="userSpaceOnUse">
+            {stops.map((c, i) => (
+              <Stop key={i} offset={i / Math.max(1, stops.length - 1)} stopColor={c} />
+            ))}
+          </LinearGradient>
+        </Defs>
+        <Circle cx={9} cy={9} r={8} fill={`url(#${id})`} stroke={colors.card} strokeWidth={2} />
+      </Svg>
+      {/* Значок — поверх кружка (на вебе абсолютный кружок иначе ложится сверху). */}
+      <View style={{ zIndex: 1 }}>
+        <Icon name={KIND_ICON[kind]} size={9} color="#FFFFFF" strokeWidth={2.6} />
+      </View>
     </View>
   );
 }
@@ -257,7 +272,9 @@ function EventRow({ event: e, today }: { event: CalendarEvent; today: string }) 
               <KindBadge kind="meeting" />
             </View>
           ) : (
-            <IconCircle icon="clock" tone="info" size={40} />
+            <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: colors.chip, alignItems: 'center', justifyContent: 'center' }}>
+              <KindIcon kind="meeting" size={20} strokeWidth={2} />
+            </View>
           )
         }
         title={r.title}
