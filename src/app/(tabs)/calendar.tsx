@@ -1,6 +1,6 @@
-import { router } from 'expo-router';
+import { router, useIsFocused } from 'expo-router';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { BackHandler, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
@@ -12,9 +12,9 @@ import { Icon } from '@/components/Icon';
 import { settleDuration } from '@/components/settle';
 import { Sheet, SheetHandle } from '@/components/Sheet';
 import { TabSwipe } from '@/components/TabSwipe';
-import { Fab, Group, IconButton, ListRow, ScreenHeader, Tag, useTheme } from '@/components/ui';
+import { Button, Fab, Group, IconButton, ListRow, ScreenHeader, Tag, useTheme } from '@/components/ui';
 import { MONTHS, MONTHS_IN, WEEKDAYS_MON, calendarEvents, monthCounts, monthGrid, monthRange, nextEvents, type CalendarEvent } from '@/lib/calendar';
-import { daysBetween, formatDate, formatDateLong, parseISODate, plural, relativeDay, todayISO } from '@/lib/dates';
+import { addInterval, daysBetween, formatDate, formatDateLong, parseISODate, plural, relativeDay, todayISO } from '@/lib/dates';
 import { formatHolidayDays, holidayCountries, holidayCountry, holidayDatesInYear } from '@/lib/holidays';
 import { useStore } from '@/lib/store';
 
@@ -41,9 +41,10 @@ function atDay(date: string): CalView {
 
 /**
  * Календарь: месяц карточкой — название, дни недели и числа листаются пальцем вместе; название — кнопка выбора
- * месяца и года, «↶ Сегодня» — когда ушли от сегодня. Под днём — значки событий, праздники — красным числом; внизу
- * карточки — обозначения со счётчиками (можно скрыть). Ниже — что в выбранный день и что дальше. События — дни
- * рождения, годовщины и важные даты друзей, дела-встречи, праздники выбранных стран.
+ * месяца и года, «↶ Сегодня» — когда ушли от сегодня. События дня — цветными точками в углу числа, праздники —
+ * красным числом; внизу карточки — обозначения со счётчиками (можно скрыть). Нажал на день с событиями — снизу
+ * шторка с ними (календарь над ней живой: другой день — другое содержимое, пустой — шторка закрылась). Ниже —
+ * ближайшие события. События — дни рождения, годовщины и важные даты друзей, дела-встречи, праздники стран.
  */
 export default function CalendarScreen() {
   const { data, updateSettings } = useStore();
@@ -51,6 +52,9 @@ export default function CalendarScreen() {
   const today = todayISO();
   const [view, setView] = useState<CalView>(() => atDay(today));
   const [picking, setPicking] = useState(false);
+  // Шторка дня: открыта, пока у выбранного дня есть события.
+  const [sheet, setSheet] = useState(false);
+  const focused = useIsFocused();
   const { selected } = view;
   const cur = view.year * 12 + view.month;
 
@@ -66,14 +70,25 @@ export default function CalendarScreen() {
   const inMonth = events.filter((e) => e.date >= monthFrom && e.date <= monthTo).length;
   const counts = useMemo(() => monthCounts(events, monthFrom, monthTo), [events, monthFrom, monthTo]);
   const dayEvents = byDay.get(selected) ?? [];
-  const later = useMemo(() => nextEvents(data, selected, 5), [data, selected]);
+  // Ближайшие — начиная с выбранного дня (сегодняшний день рождения — первым).
+  const later = useMemo(() => nextEvents(data, addInterval(selected, 'day', -1), 5), [data, selected]);
   const withHolidays = holidayCountries(data.settings).length > 0;
   const legend = data.settings.calendarLegend !== false;
 
   // Показать месяц k (жест, выбор месяца, диктор). Уже он — ничего не трогаем: выбранный день остаётся.
-  const show = (k: number) => setView((v) => (v.year * 12 + v.month === k ? v : monthView(k)));
-  const goToday = () => setView(atDay(today));
-  const pick = (date: string) => setView(atDay(date));
+  const show = (k: number) => {
+    setView((v) => (v.year * 12 + v.month === k ? v : monthView(k)));
+    setSheet(false);
+  };
+  const goToday = () => {
+    setView(atDay(today));
+    setSheet(false);
+  };
+  // Нажал на день: есть события — шторка с ними (или сменила содержимое), нет — шторка закрылась.
+  const pick = (date: string) => {
+    setView(atDay(date));
+    setSheet((byDay.get(date) ?? []).length > 0);
+  };
   const awayFromToday = selected !== today;
 
   return (
@@ -113,25 +128,9 @@ export default function CalendarScreen() {
             {legend && <Legend month={view.month} counts={counts} holidays={withHolidays} onHide={() => updateSettings({ calendarLegend: false })} />}
           </View>
 
-          <Text style={[s.sectionLabel, { paddingHorizontal: 24, paddingTop: 20, paddingBottom: 8 }]}>
-            {formatDateLong(selected)}
-            {selected === today ? ' · сегодня' : ''}
-          </Text>
-          {dayEvents.length ? (
-            <View style={{ paddingHorizontal: 20 }}>
-              <Group>
-                {dayEvents.map((e) => (
-                  <EventRow key={e.key} event={e} today={today} />
-                ))}
-              </Group>
-            </View>
-          ) : (
-            <Text style={[s.muted, { paddingHorizontal: 24 }]}>В этот день ничего нет.</Text>
-          )}
-
           {later.length > 0 && (
             <>
-              <Text style={[s.sectionLabel, { paddingHorizontal: 24, paddingTop: 20, paddingBottom: 8 }]}>Дальше</Text>
+              <Text style={[s.sectionLabel, { paddingHorizontal: 24, paddingTop: 20, paddingBottom: 8 }]}>Ближайшие</Text>
               <View style={{ paddingHorizontal: 20 }}>
                 <Group>
                   {later.map((e) => (
@@ -146,18 +145,22 @@ export default function CalendarScreen() {
             <Text style={[s.muted, { paddingHorizontal: 24, paddingTop: 16 }]}>Добавь друзей с днями рождения — они появятся в календаре сами.</Text>
           )}
         </ScrollView>
-        {/* Новое событие — на выбранный день, «Дата и время», сразу в календаре. */}
-        <Fab label="Новое событие" onPress={() => router.push({ pathname: '/reminder/edit', params: { date: selected, kind: 'at', calendar: '1' } })} />
+        {/* Новое событие — на выбранный день, «Дата и время», сразу в календаре. Пока открыта шторка — кнопка в ней. */}
+        {!(sheet && dayEvents.length) && (
+          <Fab label="Новое событие" onPress={() => router.push({ pathname: '/reminder/edit', params: { date: selected, kind: 'at', calendar: '1' } })} />
+        )}
+        <DaySheet open={sheet && dayEvents.length > 0} active={focused} date={selected} events={dayEvents} today={today} onClose={() => setSheet(false)} />
         <MonthPicker visible={picking} k={cur} onPick={(k) => show(k)} onClose={() => setPicking(false)} />
       </View>
     </TabSwipe>
   );
 }
 
-/** Высоты страницы месяца: название, дни недели, шесть недель по 56 px. */
+/** Высоты страницы месяца: название, дни недели, шесть недель по 44 px (точки событий — в углу числа, не под ним). */
 const TITLE_H = 40;
 const WEEK_H = 24;
-const PAGE_H = TITLE_H + WEEK_H + 6 * 56;
+const ROW_H = 44;
+const PAGE_H = TITLE_H + WEEK_H + 6 * ROW_H;
 
 /**
  * Месяцы каруселью: страница — месяц целиком (название, дни недели, числа); соседние стоят слева и справа и едут за
@@ -418,7 +421,8 @@ function MonthGrid({
   onPick: (date: string) => void;
 }) {
   const { colors, fonts } = useTheme();
-  const red = useKindColors().holiday[0];
+  const palette = useKindColors();
+  const red = palette.holiday[0];
   const days = monthGrid(year, month);
   // Неделя — отдельной строкой из семи клеток flex: 1. Не перенос по ширине 1/7: на Android сумма семи округлённых
   // «14,2857 %» бывала шире ряда, в строку влезало шесть дней, и числа съезжали со своих дней недели.
@@ -433,7 +437,7 @@ function MonthGrid({
             const isSel = date === selected && own;
             const list = byDay.get(date) ?? [];
             const kinds = GRID_ORDER.filter((k) => list.some((e) => e.kind === k));
-            // Праздник — «красный день календаря»: само число красное, значка нет — место под днём остаётся своим событиям.
+            // Праздник — «красный день календаря»: само число красное, без точки.
             const holiday = list.some((e) => e.kind === 'holiday');
             return (
               <Pressable
@@ -442,7 +446,7 @@ function MonthGrid({
                 accessibilityRole="button"
                 accessibilityState={{ selected: isSel }}
                 accessibilityLabel={`${formatDateLong(date)}${isToday ? ', сегодня' : ''}${list.length ? `, ${list.length} ${plural(list.length, 'событие', 'события', 'событий')}` : ''}`}
-                style={{ flex: 1, height: 56, alignItems: 'center', paddingTop: 4 }}
+                style={{ flex: 1, height: ROW_H, alignItems: 'center', justifyContent: 'center' }}
               >
                 <View style={{ width: 34, height: 34, alignItems: 'center', justifyContent: 'center' }}>
                   {/* Кружок — отдельным видом и заново при смене вида: на Android смена фона у вида со скруглением
@@ -464,11 +468,25 @@ function MonthGrid({
                   >
                     {d.getDate()}
                   </Text>
-                </View>
-                {/* Значки — сразу под кружком дня, с зазором: кружок 4…38, значки 42…55. */}
-                <View style={{ position: 'absolute', top: 42, flexDirection: 'row', gap: 3, height: 13, opacity: own ? 1 : 0.5 }}>
-                  {kinds.map((k) => (
-                    <KindIcon key={k} kind={k} size={13} />
+                  {/* События — цветными точками в правом верхнем углу числа, по точке на вид: персик — день рождения,
+                      роза — важная дата, голубой — встреча. Кайма цвета карточки отделяет точку от кружка дня. */}
+                  {kinds.map((k, i) => (
+                    <View
+                      key={k}
+                      style={{
+                        position: 'absolute',
+                        top: -2,
+                        right: -3 + i * 6,
+                        zIndex: 3 - i,
+                        width: 10,
+                        height: 10,
+                        borderRadius: 5,
+                        borderWidth: 1.5,
+                        borderColor: colors.card,
+                        backgroundColor: palette[k][0],
+                        opacity: own ? 1 : 0.5,
+                      }}
+                    />
                   ))}
                 </View>
               </Pressable>
@@ -480,11 +498,126 @@ function MonthGrid({
   );
 }
 
-/** Значки под днём — по порядку; праздник значком не отмечаем: он — красным числом. */
+/** Точки в углу числа — по порядку, первая — в самом углу; праздник точкой не отмечаем: он — красным числом. */
 const GRID_ORDER = ['birthday', 'date', 'meeting'] as const;
 
+/**
+ * Шторка дня — снизу, без затемнения: календарь над ней остаётся живым, нажатие на другой день меняет содержимое.
+ * Закрывается смахиванием вниз, крестиком, системной «Назад», сменой месяца или нажатием на пустой день. Пока уезжает —
+ * держит последнее содержимое.
+ */
+function DaySheet({
+  open,
+  active,
+  date,
+  events,
+  today,
+  onClose,
+}: {
+  open: boolean;
+  /** Вкладка на экране — только тогда «Назад» закрывает шторку. */
+  active: boolean;
+  date: string;
+  events: CalendarEvent[];
+  today: string;
+  onClose: () => void;
+}) {
+  const { s, colors, fonts } = useTheme();
+  const { height: screenH } = useWindowDimensions();
+  const [shown, setShown] = useState({ date, events });
+  if (open && (shown.date !== date || shown.events !== events)) setShown({ date, events });
+  const [h, setH] = useState(400);
+  const y = useSharedValue(800);
+  useEffect(() => {
+    y.set(withTiming(open ? 0 : h + 40, { duration: open ? 260 : 200, easing: open ? Easing.out(Easing.cubic) : Easing.in(Easing.quad) }));
+  }, [open, h, y]);
+  useEffect(() => {
+    if (!open || !active) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      onClose();
+      return true;
+    });
+    return () => sub.remove();
+  }, [open, active, onClose]);
+  // Смахнул вниз за шапку — закрылась; немного — вернулась на место.
+  const drag = Gesture.Pan()
+    .activeOffsetY([-8, 8])
+    .onUpdate((e) => {
+      'worklet';
+      y.set(Math.max(0, e.translationY));
+    })
+    .onEnd((e) => {
+      'worklet';
+      if (e.translationY > 70 || e.velocityY > 600) scheduleOnRN(onClose);
+      else y.set(withTiming(0, { duration: 180, easing: Easing.out(Easing.cubic) }));
+    });
+  const style = useAnimatedStyle(() => ({ transform: [{ translateY: y.get() }] }));
+  const d = shown.date;
+  const birthday = shown.events.find((e) => e.kind === 'birthday');
+  return (
+    <Animated.View
+      pointerEvents={open ? 'auto' : 'none'}
+      onLayout={(e) => setH(e.nativeEvent.layout.height)}
+      accessibilityViewIsModal={false}
+      aria-hidden={!open}
+      style={[
+        {
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          bottom: 0,
+          maxHeight: screenH * 0.55,
+          backgroundColor: colors.card,
+          borderTopLeftRadius: 24,
+          borderTopRightRadius: 24,
+          borderTopWidth: 1,
+          borderColor: colors.hairline,
+          boxShadow: '0 -8px 28px rgba(0, 0, 0, 0.28)',
+          paddingBottom: 12,
+        },
+        style,
+      ]}
+    >
+      <GestureDetector gesture={drag}>
+        <View style={{ paddingTop: 10, paddingHorizontal: 20 }}>
+          <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: colors.hairline, alignSelf: 'center' }} />
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingTop: 8 }}>
+            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+              <Text style={{ fontFamily: fonts.display, fontSize: 20, color: colors.text }} accessibilityRole="header">
+                {formatDateLong(d)}
+              </Text>
+              <Text style={[s.caption, { fontSize: 13 }]}>{relativeDay(d, today)}</Text>
+            </View>
+            <IconButton icon="close" label="Закрыть" onPress={onClose} />
+          </View>
+        </View>
+      </GestureDetector>
+      <ScrollView style={{ flexGrow: 0 }} contentContainerStyle={{ paddingHorizontal: 20 }}>
+        <Group style={{ backgroundColor: 'transparent', borderWidth: 0, borderRadius: 0 }} inset={52}>
+          {shown.events.map((e) => (
+            // «Когда» — уже в заголовке шторки.
+            <EventRow key={e.key} event={e} today={today} showWhen={false} />
+          ))}
+        </Group>
+      </ScrollView>
+      <View style={{ flexDirection: 'row', gap: 10, paddingHorizontal: 20, paddingTop: 10 }}>
+        {birthday && birthday.kind === 'birthday' && (
+          <Button title="Поздравить" style={{ flex: 1 }} onPress={() => router.push({ pathname: '/friend/[id]', params: { id: birthday.friend.id } })} />
+        )}
+        <Button
+          title="Событие"
+          icon="plus"
+          variant="soft"
+          style={{ flex: 1 }}
+          onPress={() => router.push({ pathname: '/reminder/edit', params: { date: d, kind: 'at', calendar: '1' } })}
+        />
+      </View>
+    </Animated.View>
+  );
+}
+
 /** Строка события: аватар (у встречи без друга — часы), что за событие, когда. Нажатие — к другу или к делу. */
-function EventRow({ event: e, today }: { event: CalendarEvent; today: string }) {
+function EventRow({ event: e, today, showWhen = true }: { event: CalendarEvent; today: string; showWhen?: boolean }) {
   const { colors } = useTheme();
   const diff = daysBetween(today, e.date);
   const when = relativeDay(e.date, today);
@@ -517,7 +650,7 @@ function EventRow({ event: e, today }: { event: CalendarEvent; today: string }) 
         }
         title={e.name}
         subtitle={`${when} · ${where.map((c) => `${c.flag} ${c.name}`).join(' · ')}${estimated ? ' · дата примерная' : ''}`}
-        trailing={tag}
+        trailing={showWhen ? tag : undefined}
       />
     );
   }
@@ -543,7 +676,7 @@ function EventRow({ event: e, today }: { event: CalendarEvent; today: string }) 
         title={r.title}
         titleStyle={done ? { textDecorationLine: 'line-through', color: colors.text3 } : undefined}
         subtitle={`${r.time}${e.friend ? ` · ${e.friend.name}` : ''}${done ? ' · сделано' : ''}`}
-        trailing={tag}
+        trailing={showWhen ? tag : undefined}
       />
     );
   }
@@ -563,7 +696,7 @@ function EventRow({ event: e, today }: { event: CalendarEvent; today: string }) 
       }
       title={f.name}
       subtitle={what}
-      trailing={tag}
+      trailing={showWhen ? tag : undefined}
     />
   );
 }
