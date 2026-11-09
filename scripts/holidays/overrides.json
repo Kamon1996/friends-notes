@@ -1,1 +1,949 @@
-{}
+{
+ "RU:New Year Holidays": {
+  "name": "Новогодние каникулы",
+  "wiki": "Новый год в России"
+ },
+ "RU:Holiday of Spring and Labor": {
+  "name": "Праздник Весны и Труда",
+  "wiki": "Первое мая (праздник)"
+ },
+ "BY:Women's Day": {
+  "name": "День женщин",
+  "wiki": "Международный женский день"
+ },
+ "BY:Catholic Easter": {
+  "name": "Католическая Пасха",
+  "wiki": "Пасха"
+ },
+ "BY:Orthodox Easter": {
+  "name": "Православная Пасха",
+  "wiki": "Пасха"
+ },
+ "BY:Radunitsa (Day of Rejoicing)": {
+  "name": "Радуница",
+  "wiki": "Радоница"
+ },
+ "BY:Labor Day": {
+  "name": "Праздник труда",
+  "wiki": "Первое мая (праздник)"
+ },
+ "BY:Independence Day of the Republic of Belarus (Day of the Republic)": {
+  "name": "День Независимости (День Республики)",
+  "wiki": [
+   "День Независимости Республики Беларусь",
+   "День независимости Белоруссии"
+  ]
+ },
+ "BY:October Revolution Day": {
+  "name": "День Октябрьской революции",
+  "wiki": "День Великой Октябрьской социалистической революции"
+ },
+ "BY:Catholic Christmas Day": {
+  "name": "Католическое Рождество",
+  "wiki": "Рождество Христово"
+ },
+ "KZ:Orthodox Christmas Day": {
+  "name": "Православное Рождество",
+  "wiki": "Рождество Христово"
+ },
+ "KZ:Nowruz Holiday": {
+  "name": "Наурыз",
+  "wiki": "Навруз"
+ },
+ "KZ:Kazakhstan's People Solidarity Holiday": {
+  "name": "Праздник единства народа Казахстана",
+  "wiki": "Праздник единства народа Казахстана"
+ },
+ "KZ:Defender of the Fatherland Day": {
+  "name": "День защитника Отечества",
+  "wiki": "День защитника Отечества"
+ },
+ "KZ:Victory Day": {
+  "name": "День Победы",
+  "wiki": "День Победы"
+ },
+ "KZ:Capital Day": {
+  "name": "День столицы",
+  "wiki": "День столицы (Казахстан)"
+ },
+ "KZ:Republic Day": {
+  "name": "День Республики",
+  "wiki": "День Республики (Казахстан)"
+ },
+ "KZ:Independence Day": {
+  "name": "День Независимости",
+  "wiki": "День независимости Казахстана"
+ },
+ "KZ:Constitution Day": {
+  "name": "День Конституции",
+  "wiki": [
+   "День Конституции Республики Казахстан",
+   "День Конституции Казахстана"
+  ]
+ },
+ "UA:Easter Sunday (Pascha)": {
+  "name": "Пасха",
+  "wiki": "Пасха"
+ },
+ "UA:Labor Day": {
+  "name": "День труда",
+  "wiki": "Первое мая (праздник)"
+ },
+ "UA:Day of Remembrance and Victory over Nazism in World War II 1939-1945": {
+  "name": "День памяти и победы над нацизмом",
+  "wiki": "День памяти и победы над нацизмом во Второй мировой войне 1939—1945 годов"
+ },
+ "UA:Day of the Constitution of Ukraine": {
+  "name": "День Конституции Украины",
+  "wiki": [
+   "День Конституции Украины"
+  ]
+ },
+ "UA:Ukrainian Statehood Day": {
+  "name": "День украинской государственности",
+  "wiki": "День украинской государственности"
+ },
+ "UA:Independence Day": {
+  "name": "День независимости Украины",
+  "wiki": "День независимости Украины"
+ },
+ "UA:Day of defenders of Ukraine": {
+  "name": "День защитников и защитниц Украины",
+  "wiki": "День защитников и защитниц Украины"
+ },
+ "UZ:Women's Day": {
+  "name": "Международный женский день",
+  "wiki": "Международный женский день"
+ },
+ "UZ:Day of Memory and Honor": {
+  "name": "День памяти и почестей",
+  "wiki": [
+   "День памяти и почестей"
+  ]
+ },
+ "UZ:Independence Day": {
+  "name": "День независимости",
+  "wiki": "День независимости Узбекистана"
+ },
+ "UZ:Teachers and Instructors Day": {
+  "name": "День учителя и наставника",
+  "wiki": "День учителя"
+ },
+ "UZ:Constitution Day": {
+  "name": "День Конституции",
+  "wiki": [
+   "День Конституции Узбекистана"
+  ]
+ },
+ "KG:New Year Holidays": {
+  "name": "Новогодние каникулы",
+  "wiki": "Новый год"
+ },
+ "KG:Nooruz Holiday": {
+  "name": "Нооруз",
+  "wiki": "Навруз"
+ },
+ "KG:Labor Day": {
+  "name": "Праздник труда",
+  "wiki": "Первое мая (праздник)"
+ },
+ "KG:May Holidays": {
+  "name": "Майские каникулы",
+  "wiki": null
+ },
+ "KG:Constitution Day": {
+  "name": "День Конституции",
+  "wiki": [
+   "День Конституции Киргизии"
+  ]
+ },
+ "KG:Victory Day": {
+  "name": "День Победы",
+  "wiki": "День Победы"
+ },
+ "KG:Independence Day": {
+  "name": "День независимости",
+  "wiki": [
+   "День независимости Киргизии"
+  ]
+ },
+ "AM:Christmas and Epiphany": {
+  "name": "Рождество и Богоявление",
+  "wiki": "Крещение Господне"
+ },
+ "AM:Day of Remembrance for the Fallen Defenders of the Fatherland": {
+  "name": "День памяти павших защитников Отечества",
+  "wiki": null
+ },
+ "AM:Army Day": {
+  "name": "День армии",
+  "wiki": "День армии (Армения)"
+ },
+ "AM:Women's Day": {
+  "name": "Международный женский день",
+  "wiki": "Международный женский день"
+ },
+ "AM:Day of Remembrance of the Victims of Armenian Genocide": {
+  "name": "День памяти жертв геноцида армян",
+  "wiki": "День памяти жертв геноцида армян"
+ },
+ "AM:Labor Day": {
+  "name": "Праздник труда",
+  "wiki": "Первое мая (праздник)"
+ },
+ "AM:Victory and Peace Day": {
+  "name": "День Победы и мира",
+  "wiki": "День Победы"
+ },
+ "AM:Republic Day": {
+  "name": "День Первой Республики",
+  "wiki": [
+   "День Республики (Армения)"
+  ]
+ },
+ "AM:Constitution Day": {
+  "name": "День Конституции",
+  "wiki": null
+ },
+ "AM:Independence Day": {
+  "name": "День независимости",
+  "wiki": "День независимости Армении"
+ },
+ "AM:New Year's Eve": {
+  "name": "Канун Нового года",
+  "wiki": [
+   "Новогодняя ночь"
+  ]
+ },
+ "GE:Mother's Day": {
+  "name": "День матери",
+  "wiki": "День матери"
+ },
+ "GE:National Unity Day": {
+  "name": "День национального единства",
+  "wiki": null
+ },
+ "GE:Holy Saturday": {
+  "name": "Великая суббота",
+  "wiki": "Великая суббота"
+ },
+ "GE:Day of Victory over Fascism": {
+  "name": "День Победы",
+  "wiki": "День Победы"
+ },
+ "GE:Saint Andrew's Day": {
+  "name": "День апостола Андрея Первозванного",
+  "wiki": "Андрей Первозванный"
+ },
+ "GE:Day of Family Sanctity and Respect for Parents": {
+  "name": "День святости семьи и почитания родителей",
+  "wiki": null
+ },
+ "GE:Independence Day": {
+  "name": "День независимости",
+  "wiki": "День независимости Грузии"
+ },
+ "GE:Dormition of the Mother of God": {
+  "name": "Успение Богородицы (Мариамоба)",
+  "wiki": "Успение Пресвятой Богородицы"
+ },
+ "GE:Holiday of Svetitskhovloba, Robe of Jesus": {
+  "name": "Светицховлоба (Мцхетоба)",
+  "wiki": [
+   "Мцхетоба",
+   "Светицховели"
+  ]
+ },
+ "GE:Saint George's Day": {
+  "name": "Гиоргоба (День святого Георгия)",
+  "wiki": [
+   "Гиоргоба",
+   "День святого Георгия"
+  ]
+ },
+ "AZ:Martyrs' Day": {
+  "name": "День всенародной скорби",
+  "wiki": "Чёрный январь"
+ },
+ "AZ:Women's Day": {
+  "name": "Международный женский день",
+  "wiki": "Международный женский день"
+ },
+ "AZ:Spring Festival": {
+  "name": "Новруз",
+  "wiki": "Навруз"
+ },
+ "AZ:Victory over Fascism Day": {
+  "name": "День победы над фашизмом",
+  "wiki": "День Победы"
+ },
+ "AZ:Independence Day": {
+  "name": "День независимости",
+  "wiki": "День независимости (Азербайджан)"
+ },
+ "AZ:National Liberation Day": {
+  "name": "День национального спасения",
+  "wiki": [
+   "День национального спасения азербайджанского народа"
+  ]
+ },
+ "AZ:Armed Forces Day": {
+  "name": "День Вооружённых сил",
+  "wiki": [
+   "День Вооружённых сил Азербайджана"
+  ]
+ },
+ "AZ:Victory Day": {
+  "name": "День Победы (8 ноября)",
+  "wiki": "День Победы (Азербайджан)"
+ },
+ "AZ:National Flag Day": {
+  "name": "День Государственного флага",
+  "wiki": [
+   "День Государственного флага Азербайджана"
+  ]
+ },
+ "AZ:International Azerbaijanis Solidarity Day": {
+  "name": "День солидарности азербайджанцев всего мира",
+  "wiki": "День солидарности азербайджанцев всего мира"
+ },
+ "MD:Christmas Day (by old style)": {
+  "name": "Рождество по старому стилю",
+  "wiki": "Рождество Христово"
+ },
+ "MD:Christmas Day (by new style)": {
+  "name": "Рождество по новому стилю",
+  "wiki": "Рождество Христово"
+ },
+ "MD:Easter": {
+  "name": "Пасха",
+  "wiki": "Пасха"
+ },
+ "MD:Day of Rejoicing": {
+  "name": "Пасха блаженных (Радоница)",
+  "wiki": "Радоница"
+ },
+ "MD:International Workers' Solidarity Day": {
+  "name": "День международной солидарности трудящихся",
+  "wiki": "Первое мая (праздник)"
+ },
+ "MD:Europe Day": {
+  "name": "День Европы",
+  "wiki": "День Европы"
+ },
+ "MD:Victory Day and Commemoration of the heroes fallen for Independence of Fatherland": {
+  "name": "День Победы и памяти героев",
+  "wiki": "День Победы"
+ },
+ "MD:International Children's Day": {
+  "name": "Международный день защиты детей",
+  "wiki": "Международный день защиты детей"
+ },
+ "MD:Republic of Moldova Independence Day": {
+  "name": "День независимости",
+  "wiki": [
+   "День независимости Молдавии",
+   "День независимости Республики Молдова"
+  ]
+ },
+ "MD:National Language Day": {
+  "name": "Праздник «Наша речь» (День языка)",
+  "wiki": [
+   "Лимба ноастрэ (праздник)",
+   "Limba noastră (праздник)"
+  ]
+ },
+ "LV:Constitutional Assembly Convocation Day": {
+  "name": "День созыва Учредительного собрания",
+  "wiki": null
+ },
+ "LV:Labor Day": {
+  "name": "Праздник труда",
+  "wiki": "Первое мая (праздник)"
+ },
+ "LV:Restoration of Independence Day": {
+  "name": "День восстановления независимости",
+  "wiki": null
+ },
+ "LV:Midsummer Eve": {
+  "name": "Лиго",
+  "wiki": "Лиго"
+ },
+ "LV:Midsummer Day": {
+  "name": "Янов день",
+  "wiki": "Лиго"
+ },
+ "LV:Republic of Latvia Proclamation Day": {
+  "name": "День провозглашения Латвийской Республики",
+  "wiki": [
+   "День провозглашения Латвийской Республики"
+  ]
+ },
+ "LV:Christmas Eve": {
+  "name": "Сочельник",
+  "wiki": "Рождественский сочельник"
+ },
+ "LV:New Year's Eve": {
+  "name": "Канун Нового года",
+  "wiki": [
+   "Новогодняя ночь"
+  ]
+ },
+ "LT:Day of Restoration of the State of Lithuania": {
+  "name": "День восстановления Литовского государства",
+  "wiki": [
+   "Акт о независимости Литвы"
+  ]
+ },
+ "LT:Day of Restoration of Independence of Lithuania": {
+  "name": "День восстановления независимости Литвы",
+  "wiki": [
+   "Акт о восстановлении Литовского государства"
+  ]
+ },
+ "LT:International Workers' Day": {
+  "name": "День труда",
+  "wiki": "Первое мая (праздник)"
+ },
+ "LT:Mother's Day": {
+  "name": "День матери",
+  "wiki": "День матери"
+ },
+ "LT:Father's Day": {
+  "name": "День отца",
+  "wiki": "День отца"
+ },
+ "LT:Day of Dew and Saint John": {
+  "name": "Йонинес (Купальская ночь)",
+  "wiki": [
+   "Йонинес",
+   "Иван Купала"
+  ]
+ },
+ "LT:Statehood Day": {
+  "name": "День государственности (коронация Миндаугаса)",
+  "wiki": [
+   "День государственности (Литва)"
+  ]
+ },
+ "LT:All Souls' Day": {
+  "name": "День поминовения усопших (Велинес)",
+  "wiki": [
+   "День поминовения всех усопших верных",
+   "День поминовения усопших"
+  ]
+ },
+ "LT:Christmas Eve": {
+  "name": "Сочельник (Кучюс)",
+  "wiki": "Рождественский сочельник"
+ },
+ "EE:Independence Day": {
+  "name": "День независимости",
+  "wiki": [
+   "День независимости Эстонии"
+  ]
+ },
+ "EE:May Day": {
+  "name": "Праздник весны",
+  "wiki": "Первое мая (праздник)"
+ },
+ "EE:Pentecost": {
+  "name": "Троица",
+  "wiki": "День Святой Троицы"
+ },
+ "EE:Victory Day": {
+  "name": "День победы (Вынудупюха)",
+  "wiki": [
+   "День победы (Эстония)"
+  ]
+ },
+ "EE:Midsummer Day": {
+  "name": "Иванов день (Яанипяэв)",
+  "wiki": [
+   "Иванов день",
+   "Иван Купала"
+  ]
+ },
+ "EE:Independence Restoration Day": {
+  "name": "День восстановления независимости",
+  "wiki": null
+ },
+ "EE:Christmas Eve": {
+  "name": "Сочельник",
+  "wiki": "Рождественский сочельник"
+ },
+ "PL:National Day": {
+  "name": "Государственный праздник 1 мая",
+  "wiki": "Первое мая (праздник)"
+ },
+ "PL:National Day of the Third of May": {
+  "name": "День Конституции 3 мая",
+  "wiki": [
+   "Конституция 3 мая 1791 года",
+   "Конституция 3 мая"
+  ]
+ },
+ "PL:Pentecost": {
+  "name": "Троица",
+  "wiki": "День Святой Троицы"
+ },
+ "PL:National Independence Day": {
+  "name": "День независимости",
+  "wiki": [
+   "День независимости Польши"
+  ]
+ },
+ "PL:Christmas Eve": {
+  "name": "Сочельник (Вигилия)",
+  "wiki": "Рождественский сочельник"
+ },
+ "DE:Labor Day": {
+  "name": "День труда",
+  "wiki": "Первое мая (праздник)"
+ },
+ "DE:Pentecost Monday": {
+  "name": "Духов день",
+  "wiki": "Духов день"
+ },
+ "DE:German Unity Day": {
+  "name": "День германского единства",
+  "wiki": "День германского единства"
+ },
+ "RS:Statehood Day": {
+  "name": "День государственности (Сретение)",
+  "wiki": [
+   "День государственности Сербии"
+  ]
+ },
+ "RS:Holy Saturday": {
+  "name": "Великая суббота",
+  "wiki": "Великая суббота"
+ },
+ "RS:Labor Day": {
+  "name": "Праздник труда",
+  "wiki": "Первое мая (праздник)"
+ },
+ "RS:Armistice Day": {
+  "name": "День перемирия",
+  "wiki": "День перемирия"
+ },
+ "TJ:Mother's Day": {
+  "name": "День матери",
+  "wiki": "День матери"
+ },
+ "TJ:International Nowruz Day": {
+  "name": "Навруз",
+  "wiki": "Навруз"
+ },
+ "TJ:Victory Day": {
+  "name": "День Победы",
+  "wiki": "День Победы"
+ },
+ "TJ:National Unity Day": {
+  "name": "День национального единства",
+  "wiki": [
+   "День национального единства (Таджикистан)"
+  ]
+ },
+ "TJ:Independence Day": {
+  "name": "День независимости",
+  "wiki": [
+   "День независимости Таджикистана"
+  ]
+ },
+ "TJ:Constitution Day": {
+  "name": "День Конституции",
+  "wiki": null
+ },
+ "ME:Labor Day": {
+  "name": "Праздник труда",
+  "wiki": "Первое мая (праздник)"
+ },
+ "ME:Independence Day": {
+  "name": "День независимости",
+  "wiki": null
+ },
+ "ME:Statehood Day": {
+  "name": "День государственности",
+  "wiki": null
+ },
+ "ME:Njegos Day": {
+  "name": "День Негоша",
+  "wiki": "Пётр II Петрович Негош"
+ },
+ "CY:Green Monday": {
+  "name": "Чистый понедельник",
+  "wiki": "Чистый понедельник"
+ },
+ "CY:Greek Independence Day": {
+  "name": "День независимости Греции",
+  "wiki": [
+   "День независимости Греции"
+  ]
+ },
+ "CY:Cyprus National Day": {
+  "name": "Национальный день Кипра",
+  "wiki": null
+ },
+ "CY:Labor Day": {
+  "name": "Праздник труда",
+  "wiki": "Первое мая (праздник)"
+ },
+ "CY:Pentecost Monday": {
+  "name": "Катаклизмос (Духов день)",
+  "wiki": "Духов день"
+ },
+ "CY:Dormition of the Mother of God": {
+  "name": "Успение Богородицы",
+  "wiki": "Успение Пресвятой Богородицы"
+ },
+ "CY:Cyprus Independence Day": {
+  "name": "День независимости Кипра",
+  "wiki": null
+ },
+ "CY:Ohi Day": {
+  "name": "День «Охи»",
+  "wiki": [
+   "День Охи"
+  ]
+ },
+ "CY:Day After Christmas": {
+  "name": "Второй день Рождества",
+  "wiki": "Рождество Христово"
+ },
+ "CZ:Independent Czech State Restoration Day": {
+  "name": "День восстановления независимого чешского государства",
+  "wiki": null
+ },
+ "CZ:Labor Day": {
+  "name": "Праздник труда",
+  "wiki": "Первое мая (праздник)"
+ },
+ "CZ:Victory Day": {
+  "name": "День Победы",
+  "wiki": "День победы в Европе"
+ },
+ "CZ:Saints Cyril and Methodius Day": {
+  "name": "День славянских просветителей Кирилла и Мефодия",
+  "wiki": "Кирилл и Мефодий"
+ },
+ "CZ:Jan Hus Day": {
+  "name": "День памяти Яна Гуса",
+  "wiki": "Ян Гус"
+ },
+ "CZ:Statehood Day": {
+  "name": "День чешской государственности (святого Вацлава)",
+  "wiki": [
+   "Вячеслав Чешский",
+   "Вацлав Святой"
+  ]
+ },
+ "CZ:Independent Czechoslovak State Day": {
+  "name": "День образования Чехословакии",
+  "wiki": null
+ },
+ "CZ:Struggle for Freedom and Democracy Day and International Students' Day": {
+  "name": "День борьбы за свободу и демократию",
+  "wiki": "Международный день студентов"
+ },
+ "CZ:Christmas Eve": {
+  "name": "Сочельник",
+  "wiki": "Рождественский сочельник"
+ },
+ "FR:Labor Day": {
+  "name": "Праздник труда",
+  "wiki": "Первое мая (праздник)"
+ },
+ "FR:Victory Day": {
+  "name": "День Победы",
+  "wiki": "День победы в Европе"
+ },
+ "FR:Pentecost Monday": {
+  "name": "Духов день",
+  "wiki": "Духов день"
+ },
+ "FR:National Day": {
+  "name": "День взятия Бастилии",
+  "wiki": "День взятия Бастилии"
+ },
+ "FR:Armistice Day": {
+  "name": "День перемирия",
+  "wiki": "День перемирия"
+ },
+ "IT:Liberation Day": {
+  "name": "День освобождения Италии",
+  "wiki": [
+   "День освобождения (Италия)"
+  ]
+ },
+ "IT:Labor Day": {
+  "name": "Праздник труда",
+  "wiki": "Первое мая (праздник)"
+ },
+ "IT:Republic Day": {
+  "name": "День Республики",
+  "wiki": [
+   "Праздник Республики (Италия)",
+   "Праздник Республики"
+  ]
+ },
+ "IT:Assumption Of Mary Day": {
+  "name": "Успение (Феррагосто)",
+  "wiki": "Феррагосто"
+ },
+ "IT:Saint Francis of Assisi, Patron Saint of Italy": {
+  "name": "День святого Франциска Ассизского",
+  "wiki": "Франциск Ассизский"
+ },
+ "IT:National Unity Day": {
+  "name": "День национального единства и вооружённых сил",
+  "wiki": null
+ },
+ "IT:Saint Stephen's Day": {
+  "name": "День святого Стефана",
+  "wiki": [
+   "День святого Стефана"
+  ]
+ },
+ "ES:Labor Day": {
+  "name": "Праздник труда",
+  "wiki": "Первое мая (праздник)"
+ },
+ "ES:National Day": {
+  "name": "День Испанидад (национальный праздник)",
+  "wiki": [
+   "День Испанидад",
+   "Праздник Испанидад"
+  ]
+ },
+ "ES:Constitution Day": {
+  "name": "День Конституции",
+  "wiki": null
+ },
+ "TR:National Sovereignty and Children's Day": {
+  "name": "День национального суверенитета и детей",
+  "wiki": [
+   "День национального суверенитета и детей"
+  ]
+ },
+ "TR:Labor and Solidarity Day": {
+  "name": "День труда и солидарности",
+  "wiki": "Первое мая (праздник)"
+ },
+ "TR:Commemoration of Atatürk, Youth and Sports Day": {
+  "name": "День памяти Ататюрка, молодёжи и спорта",
+  "wiki": [
+   "День памяти Ататюрка, молодёжи и спорта"
+  ]
+ },
+ "TR:Democracy and National Unity Day": {
+  "name": "День демократии и национального единства",
+  "wiki": null
+ },
+ "TR:Victory Day": {
+  "name": "День Победы (Зафер Байрамы)",
+  "wiki": [
+   "День Победы (Турция)"
+  ]
+ },
+ "TR:Republic Day": {
+  "name": "День Республики",
+  "wiki": [
+   "День Республики (Турция)"
+  ]
+ },
+ "IL:Pesach": {
+  "name": "Песах",
+  "wiki": "Песах"
+ },
+ "IL:Seventh day of Pesach": {
+  "name": "Седьмой день Песаха",
+  "wiki": "Песах"
+ },
+ "IL:Independence Day": {
+  "name": "День независимости Израиля",
+  "wiki": "День независимости Израиля"
+ },
+ "IL:Shavuot": {
+  "name": "Шавуот",
+  "wiki": "Шавуот"
+ },
+ "IL:Rosh Hashanah": {
+  "name": "Рош ха-Шана",
+  "wiki": "Рош ха-Шана"
+ },
+ "IL:Yom Kippur": {
+  "name": "Йом-кипур",
+  "wiki": "Йом-кипур"
+ },
+ "IL:Sukkot": {
+  "name": "Суккот",
+  "wiki": "Суккот"
+ },
+ "IL:Simchat Torah / Shemini Atzeret": {
+  "name": "Шмини Ацерет и Симхат Тора",
+  "wiki": "Симхат Тора"
+ },
+ "AE:Day of Arafah": {
+  "name": "День Арафа",
+  "wiki": "День Арафа"
+ },
+ "AE:Islamic New Year": {
+  "name": "Исламский Новый год",
+  "wiki": [
+   "Исламский Новый год",
+   "Хиджра (праздник)"
+  ]
+ },
+ "AE:Prophet's Birthday": {
+  "name": "Мавлид — день рождения Пророка",
+  "wiki": "Мавлид"
+ },
+ "AE:National Day": {
+  "name": "Национальный день ОАЭ",
+  "wiki": [
+   "Национальный день ОАЭ"
+  ]
+ },
+ "TH:National Children's Day": {
+  "name": "День детей",
+  "wiki": null
+ },
+ "TH:Makha Bucha": {
+  "name": "Макха Буча",
+  "wiki": [
+   "Магха-пуджа",
+   "Макха Буча"
+  ]
+ },
+ "TH:Chakri Memorial Day": {
+  "name": "День династии Чакри",
+  "wiki": null
+ },
+ "TH:Songkran Festival": {
+  "name": "Сонгкран",
+  "wiki": "Сонгкран"
+ },
+ "TH:National Labor Day": {
+  "name": "День труда",
+  "wiki": "Первое мая (праздник)"
+ },
+ "TH:Coronation Day": {
+  "name": "День коронации",
+  "wiki": null
+ },
+ "TH:Visakha Bucha": {
+  "name": "Висакха Буча (Весак)",
+  "wiki": "Весак"
+ },
+ "TH:HM Queen Suthida's Birthday": {
+  "name": "День рождения королевы Сутхиды",
+  "wiki": [
+   "Сутхида",
+   "Сутхида Ваджиралонгкорн"
+  ]
+ },
+ "TH:HM King Maha Vajiralongkorn's Birthday": {
+  "name": "День рождения короля Рамы X",
+  "wiki": "Маха Вачиралонгкорн"
+ },
+ "TH:Asarnha Bucha": {
+  "name": "Асаха Буча",
+  "wiki": [
+   "Асалха-пуджа",
+   "Асаха Буча"
+  ]
+ },
+ "TH:Buddhist Lent Day": {
+  "name": "Начало буддийского поста (Кхао Пханса)",
+  "wiki": [
+   "Васса"
+  ]
+ },
+ "TH:HM Queen Sirikit The Queen Mother's Birthday": {
+  "name": "День рождения королевы-матери Сирикит",
+  "wiki": "Сирикит"
+ },
+ "TH:National Mother's Day": {
+  "name": "День матери",
+  "wiki": "День матери"
+ },
+ "TH:HM King Bhumibol Adulyadej Memorial Day": {
+  "name": "День памяти короля Пхумипона",
+  "wiki": "Пхумипон Адульядет"
+ },
+ "TH:HM King Chulalongkorn Memorial Day": {
+  "name": "День короля Чулалонгкорна",
+  "wiki": "Чулалонгкорн"
+ },
+ "TH:HM King Bhumibol Adulyadej the Great's Birthday": {
+  "name": "День рождения короля Пхумипона",
+  "wiki": "Пхумипон Адульядет"
+ },
+ "TH:National Day": {
+  "name": "Национальный день Таиланда",
+  "wiki": null
+ },
+ "TH:National Father's Day": {
+  "name": "День отца",
+  "wiki": "День отца"
+ },
+ "TH:Constitution Day": {
+  "name": "День Конституции",
+  "wiki": null
+ },
+ "TH:New Year's Eve": {
+  "name": "Канун Нового года",
+  "wiki": [
+   "Новогодняя ночь"
+  ]
+ },
+ "GB:May Day": {
+  "name": "Майский банковский выходной",
+  "wiki": [
+   "Банковский выходной"
+  ]
+ },
+ "US:Martin Luther King Jr. Day": {
+  "name": "День Мартина Лютера Кинга",
+  "wiki": "День Мартина Лютера Кинга"
+ },
+ "US:Washington's Birthday": {
+  "name": "День президента (день рождения Вашингтона)",
+  "wiki": "День президента"
+ },
+ "US:Memorial Day": {
+  "name": "День памяти павших",
+  "wiki": [
+   "День памяти (США)",
+   "День поминовения (США)"
+  ]
+ },
+ "US:Juneteenth National Independence Day": {
+  "name": "Джунтин — день освобождения рабов",
+  "wiki": "Джунтин"
+ },
+ "US:Independence Day": {
+  "name": "День независимости США",
+  "wiki": "День независимости США"
+ },
+ "US:Labor Day": {
+  "name": "День труда (США)",
+  "wiki": [
+   "День труда (США)",
+   "День труда"
+  ]
+ },
+ "US:Columbus Day": {
+  "name": "День Колумба",
+  "wiki": "День Колумба"
+ },
+ "US:Veterans Day": {
+  "name": "День ветеранов",
+  "wiki": "День ветеранов"
+ },
+ "US:Thanksgiving Day": {
+  "name": "День благодарения",
+  "wiki": "День благодарения"
+ }
+}

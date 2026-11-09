@@ -5,7 +5,9 @@ src/data/holidays.json и таблицу для проверки в сводку
 
 Запуск — workflow «Holidays data» (коммит со словом «[holidays]» в первой строке или вручную); локально:
   pip install holidays requests && python scripts/holidays/build.py
-Поправки (название, статья Википедии) — scripts/holidays/overrides.json: { "KZ:Independence Day": {"name": "…", "wiki": "…"} }.
+Поправки — scripts/holidays/overrides.json: { "KZ:Independence Day": {"name": "…", "wiki": "статья" | ["статья", "запасная"] | null} }.
+Название — из поправки, иначе из русской локализации python-holidays, иначе английское. Статья — из поправки (null — без
+описания), иначе ищется в Википедии, и найденное берём, только если начало статьи — про праздник или памятный день.
 """
 import json, os, re, sys, time, urllib.parse
 from datetime import date
@@ -33,7 +35,7 @@ EN_COUNTRY = {'RU': 'Russia', 'BY': 'Belarus', 'KZ': 'Kazakhstan', 'UA': 'Ukrain
 # Общие праздники — одинаковые во многих странах: название и статья без поиска.
 GENERIC = {
     "New Year's Day": ('Новый год', 'Новый год'), 'Christmas Day': ('Рождество Христово', 'Рождество Христово'),
-    'Orthodox Christmas Day': ('Рождество Христово', 'Рождество Христово'), 'Christmas Eve': ('Сочельник', 'Сочельник'),
+    'Orthodox Christmas Day': ('Рождество Христово', 'Рождество Христово'), 'Christmas Eve': ('Сочельник', 'Рождественский сочельник'),
     'Second Day of Christmas': ('Второй день Рождества', 'Рождество Христово'), 'Boxing Day': ('День подарков', 'День подарков'),
     'Easter Sunday': ('Пасха', 'Пасха'), 'Easter Monday': ('Пасхальный понедельник', 'Светлый понедельник'),
     'Good Friday': ('Страстная пятница', 'Страстная пятница'), 'Orthodox Easter Sunday': ('Пасха', 'Пасха'),
@@ -43,7 +45,7 @@ GENERIC = {
     'Assumption Day': ('Успение Богородицы', 'Успение Пресвятой Богородицы'), 'Assumption of Mary': ('Успение Богородицы', 'Успение Пресвятой Богородицы'),
     "All Saints' Day": ('День всех святых', 'День всех святых'), 'Epiphany': ('Крещение Господне', 'Крещение Господне'),
     'Corpus Christi': ('Праздник Тела Христова', 'Праздник Тела и Крови Христовых'), 'Immaculate Conception': ('Непорочное зачатие', 'Непорочное зачатие Девы Марии'),
-    'Labor Day': ('День труда', 'Праздник труда'), 'Labour Day': ('День труда', 'Праздник труда'),
+    'Labor Day': ('Праздник труда', 'Первое мая (праздник)'), 'Labour Day': ('Праздник труда', 'Первое мая (праздник)'),
     "International Women's Day": ('Международный женский день', 'Международный женский день'),
     'Eid al-Fitr': ('Ураза-байрам', 'Ураза-байрам'), 'Eid al-Adha': ('Курбан-байрам', 'Курбан-байрам'), 'Nowruz': ('Навруз', 'Навруз'),
     'Nowruz Holiday': ('Навруз', 'Навруз'), 'Spring Bank Holiday': ('Весенний банковский выходной', 'Банковский выходной'),
@@ -51,6 +53,7 @@ GENERIC = {
 }
 # Украина: при военном положении праздники — рабочие дни, python-holidays кладёт их в категорию workday.
 CATEGORIES = {'UA': ('public', 'workday')}
+ABOUT_DAY = re.compile(r'праздн|памятн|годовщин|отмечается|отмечаемый|торжеств', re.I)
 SKIP_TITLE = re.compile(r'^(Public holidays|List of|Holidays in|Праздники |Список )', re.I)
 UA = {'User-Agent': 'FriendsNotesHolidays/1.0 (https://github.com/Kamon1996/friends-notes; build script)'}
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -155,16 +158,24 @@ def main():
                     continue
                 g = GENERIC.get(en_clean)
                 ov = OVERRIDES.get(f'{code}:{en_clean}') or ({'name': g[0], 'wiki': g[1]} if g else {})
-                # Статья: поправка → по русскому названию → через английскую статью и её русскую версию.
-                title = ov.get('wiki')
-                if not title and ru_name:
-                    title = search('ru', f'{ru_name} {name_ru}') or search('ru', ru_name)
-                if not title:
-                    en_title = search('en', f'{en_clean} {EN_COUNTRY[code]}')
-                    title = ru_title_from_en(en_title) if en_title else None
-                s = summary(title) if title else None
-                display = ov.get('name') or ru_name or (re.sub(r'\s*\(.*?\)\s*$', '', s['title']) if s else en_clean)
-                text = (s or {}).get('text', '')
+                s = None
+                if 'wiki' in ov:
+                    # Статья выбрана вручную (или null — описания нет).
+                    for title in [ov['wiki']] if isinstance(ov['wiki'], str) else ov['wiki'] or []:
+                        s = summary(title)
+                        if s and s['text']:
+                            break
+                else:
+                    # Поиск: по русскому названию, иначе через английскую статью и её русскую версию.
+                    title = search('ru', f'{ru_name} {name_ru}') if ru_name else None
+                    if not title:
+                        en_title = search('en', f'{en_clean} {EN_COUNTRY[code]}')
+                        title = ru_title_from_en(en_title) if en_title else None
+                    s = summary(title) if title else None
+                    if s and not ABOUT_DAY.search(s['text'][:300]):
+                        s = None  # нашлась статья не о празднике (страна, город…) — лучше без описания
+                display = ov.get('name') or ru_name or en_clean
+                text = (s or {}).get('text', '').replace('\u0301', '')  # без знаков ударения
                 if len(text) > 600:
                     cut = text[:600]
                     text = cut[: cut.rfind('. ') + 1] or cut
