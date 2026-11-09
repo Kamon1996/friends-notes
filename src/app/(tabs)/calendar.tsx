@@ -303,7 +303,6 @@ function TodayPill({ onPress }: { onPress: () => void }) {
 /** Обозначения внизу карточки: сетка 2×2 — значок, что это и сколько в месяце; «Скрыть» убирает (вернуть — в настройках). */
 function Legend({ month, counts, holidays, onHide }: { month: number; counts: Record<CalendarEvent['kind'], number>; holidays: boolean; onHide: () => void }) {
   const { s, colors, fonts } = useTheme();
-  const red = useKindColors().holiday[0];
   const items: [CalendarEvent['kind'], string][] = [
     ['birthday', 'Дни рождения'],
     ['date', 'Важные даты'],
@@ -322,8 +321,8 @@ function Legend({ month, counts, holidays, onHide }: { month: number; counts: Re
         {items.map(([kind, label]) => (
           <View key={kind} style={{ width: '50%', flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 5, paddingRight: 14 }}>
             <View style={{ width: 16, alignItems: 'center' }}>
-              {/* Праздник в сетке — красное число, поэтому и здесь — число. */}
-              {kind === 'holiday' ? <Text style={{ fontFamily: fonts.semibold, fontSize: 13, color: red }}>7</Text> : <KindIcon kind={kind} size={15} />}
+              {/* Праздник — листок «красный день календаря», как в списке дня. */}
+              <KindIcon kind={kind} size={15} />
             </View>
             <Text style={{ flex: 1, fontFamily: fonts.body, fontSize: 13, color: colors.text }} numberOfLines={1}>
               {label}
