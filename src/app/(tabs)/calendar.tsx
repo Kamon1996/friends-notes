@@ -138,7 +138,7 @@ export default function CalendarScreen() {
                   accessibilityRole="button"
                   accessibilityState={{ selected: isSel }}
                   accessibilityLabel={`${formatDateLong(date)}${isToday ? ', сегодня' : ''}${list.length ? `, ${list.length} ${plural(list.length, 'событие', 'события', 'событий')}` : ''}`}
-                  style={{ width: cellW, height: 50, alignItems: 'center', paddingTop: 6 }}
+                  style={{ width: cellW, height: 56, alignItems: 'center', paddingTop: 4 }}
                 >
                   <View
                     style={{
@@ -162,7 +162,8 @@ export default function CalendarScreen() {
                       {d.getDate()}
                     </Text>
                   </View>
-                  <View style={{ position: 'absolute', bottom: 1, flexDirection: 'row', gap: 3, height: 13, opacity: own ? 1 : 0.5 }}>
+                  {/* Значки — сразу под кружком дня, с зазором: кружок 4…38, значки 42…55. */}
+                  <View style={{ position: 'absolute', top: 42, flexDirection: 'row', gap: 3, height: 13, opacity: own ? 1 : 0.5 }}>
                     {kinds.map((k) => (
                       <KindIcon key={k} kind={k} size={13} />
                     ))}
