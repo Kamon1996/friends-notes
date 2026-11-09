@@ -3,7 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { AppState } from 'react-native';
 
 import { cleanupAvatars, deleteOwnedFiles } from './avatars';
-import { completeReminder } from './events';
+import { completeReminder, reopenReminder, rollReminder } from './events';
 import { markCalendarStale, syncDeviceCalendar } from './deviceCalendar';
 import { syncNotifications } from './notifications';
 import { parseStored } from './storage';
@@ -85,7 +85,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         await AsyncStorage.setItem(`${STORAGE_KEY}.broken-${Date.now()}`, raw).catch(() => setCanPersist(false));
       }
       // Заметки, разобранные прошлой версией, доочищаем по новым правилам («О себе: инст:» → пусто) — без ИИ.
-      if (loaded) setData({ ...loaded, friends: loaded.friends.map(retidySeen) });
+      // Повторяющиеся, сделанные в прошлые дни, снова активны — на ближайший раз.
+      if (loaded) setData({ ...loaded, friends: loaded.friends.map(retidySeen), reminders: loaded.reminders.map((r) => rollReminder(r)) });
     })().finally(() => setReady(true));
   }, []);
 
@@ -102,6 +103,31 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       clearTimeout(c);
     };
   }, [data, ready, canPersist]);
+
+  // Новый день: сделанные вчера повторяющиеся снова активны. При возврате в приложение и в полночь, если оно открыто.
+  const rollDay = useCallback(() => {
+    setData((d) => {
+      const now = new Date();
+      let changed = false;
+      const reminders = d.reminders.map((r) => {
+        const next = rollReminder(r, now);
+        if (next !== r) changed = true;
+        return next;
+      });
+      return changed ? { ...d, reminders } : d;
+    });
+  }, []);
+  const [dayTick, setDayTick] = useState(0);
+  useEffect(() => {
+    if (!ready) return;
+    const now = new Date();
+    const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 2);
+    const t = setTimeout(() => {
+      rollDay();
+      setDayTick((n) => n + 1);
+    }, midnight.getTime() - now.getTime());
+    return () => clearTimeout(t);
+  }, [ready, dayTick, rollDay]);
 
   // Пол друзей определяется сам, в фоне: при открытии приложения, при возвращении в него и когда появились новые друзья.
   // Каждый друг проходит ступени только один раз (см. genderDetect.ts); ручной выбор не трогается.
@@ -201,6 +227,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'active' && liveRef.current) {
+        rollDay();
         syncNotifications(dataRef.current);
         // Пока приложение было свёрнуто, события могли удалить прямо в календаре — проверим и вернём.
         markCalendarStale();
@@ -212,7 +239,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
     });
     return () => sub.remove();
-  }, [syncGenders, readNotes]);
+  }, [syncGenders, readNotes, rollDay]);
 
   const saveFriend = useCallback((input: Friend) => {
     setData((d) => {
@@ -265,9 +292,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setData((d) => ({
       ...d,
       reminders: d.reminders.map((r) => {
-        if (!chosen.has(r.id)) return r;
-        if (!done) return r.done ? { ...r, done: false } : r;
-        return r.done ? r : completeReminder(r);
+        if (!chosen.has(r.id) || r.done === done) return r;
+        return done ? completeReminder(r) : reopenReminder(r);
       }),
     }));
   }, []);
@@ -275,13 +301,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const toggleReminderDone = useCallback((id: string) => {
     setData((d) => ({
       ...d,
-      reminders: d.reminders.map((r) => {
-        if (r.id !== id) return r;
-        if (r.done) return { ...r, done: false };
-        return completeReminder(r);
-      }),
+      reminders: d.reminders.map((r) => (r.id !== id ? r : r.done ? reopenReminder(r) : completeReminder(r))),
     }));
   }, []);
+
 
   const updateSettings = useCallback((patch: Partial<Settings>) => {
     setData((d) => ({ ...d, settings: { ...d.settings, ...patch } }));

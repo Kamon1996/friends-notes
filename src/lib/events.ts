@@ -49,7 +49,7 @@ export function upcomingItems(data: AppData, horizonDays = 60, today: ISODate = 
   for (const r of data.reminders) {
     if (r.done) continue;
     if (r.date > limit) continue;
-    const overdue = combine(r.date, r.time) < now;
+    const overdue = reminderOverdue(r, now);
     items.push({
       kind: 'reminder',
       key: `r-${r.id}`,
@@ -65,14 +65,73 @@ export function upcomingItems(data: AppData, horizonDays = 60, today: ISODate = 
   return items;
 }
 
-/** «Сделано» для повторяющегося напоминания — перенос на следующее срабатывание. */
+/**
+ * «Сделано». Разовое — сделано. Повторяющееся — сделано до конца дня: дата не меняется (свайп ещё раз — вернуть как было),
+ * а со следующего дня rollReminder вернёт его в активные на ближайший раз.
+ */
 export function completeReminder(r: Reminder, now = new Date()): Reminder {
-  if (!r.repeat) return { ...r, done: true };
-  // Следующее срабатывание после текущего, но не в прошлом. Считаем от начала серии, чтобы 31-е не съехало на 28-е.
-  const afterCurrent = combine(r.date, r.time) > now ? combine(r.date, r.time) : now;
+  return { ...r, done: true, doneAt: now.getTime() };
+}
+
+/** Снова не сделано — как было до отметки. */
+export function reopenReminder(r: Reminder): Reminder {
+  const { doneAt: _, ...rest } = r;
+  return { ...rest, done: false };
+}
+
+/**
+ * Повторяющееся, отмеченное «сделано» в прошлые дни, снова активно — на ближайший раз после отмеченного, но не раньше
+ * сегодняшнего дня. Сегодняшнее «сделано» не трогаем. Считаем от начала серии, чтобы 31-е не съехало на 28-е.
+ */
+export function rollReminder(r: Reminder, now = new Date()): Reminder {
+  if (!r.repeat || !r.done) return r;
+  const today = toISODate(now);
+  if (r.doneAt && toISODate(new Date(r.doneAt)) >= today) return r;
+  const current = combine(r.date, r.time);
+  const dayStart = new Date(combine(today, '00:00').getTime() - 1);
   const anchor = seriesStart(r);
-  const next = nextOccurrenceAfter(anchor, r.time, r.repeat, afterCurrent);
-  return { ...r, anchor, date: next, done: false };
+  const next = nextOccurrenceAfter(anchor, r.time, r.repeat, current > dayStart ? current : dayStart);
+  return { ...reopenReminder(r), anchor, date: next };
+}
+
+/** Следующий раз повторяющегося после текущего — «снова завтра» у сделанного. */
+export function nextAfterCurrent(r: Reminder): ISODate | null {
+  return r.repeat ? nextOccurrenceAfter(seriesStart(r), r.time, r.repeat, combine(r.date, r.time)) : null;
+}
+
+/**
+ * Просрочено ли. «На дату и время» — как только прошло время; «до срока» и повторяющееся — когда прошёл весь день
+ * (дело на сегодня можно сделать и вечером).
+ */
+export function reminderOverdue(r: Reminder, now = new Date()): boolean {
+  if (r.done) return false;
+  if (!r.repeat && r.kind === 'at') return combine(r.date, r.time) < now;
+  return r.date < toISODate(now);
+}
+
+/** Сколько фитиля видно при большом запасе: всё, что дальше двух недель, — полный фитиль. */
+export const FUSE_DAYS = 14;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Фитиль: доля времени, что осталась до срока (1 — полный, 0 — догорел). Срок «до» и повторяющегося — конец дня,
+ * «на дату и время» — само время. Отсчёт — от создания (у повторяющегося — от прошлого раза), но не дальше двух недель:
+ * пока до срока больше двух недель, фитиль полный. У сделанного — null.
+ */
+export function reminderFuse(r: Reminder, now = new Date()): number | null {
+  if (r.done) return null;
+  const end = !r.repeat && r.kind === 'at' ? combine(r.date, r.time) : combine(addInterval(r.date, 'day', 1), '00:00');
+  const from = r.repeat
+    ? combine(addInterval(addInterval(r.date, r.repeat.unit, -Math.max(1, Math.floor(r.repeat.every))), 'day', 1), '00:00').getTime()
+    : r.createdAt > 0
+      ? r.createdAt
+      : end.getTime() - FUSE_DAYS * DAY_MS;
+  const start = Math.max(from, end.getTime() - FUSE_DAYS * DAY_MS);
+  const span = end.getTime() - start;
+  const left = end.getTime() - now.getTime();
+  if (left <= 0) return 0;
+  if (span <= 0) return 1;
+  return Math.min(1, left / span);
 }
 
 /** Начало серии повторяющегося напоминания: якорь, если он не позже ближайшего раза, иначе сам ближайший раз. */
@@ -175,7 +234,8 @@ export function planNotifications(data: AppData, now = new Date()): PlannedNotif
   }
 
   for (const r of data.reminders) {
-    if (r.done) continue;
+    // Сделанное повторяющееся — сделано только в этот раз: следующие уведомления остаются.
+    if (r.done && !r.repeat) continue;
     const friend = r.friendId ? friendById.get(r.friendId) : undefined;
     const title = r.title;
     const body = r.note || (friend ? friend.name : 'Напоминание');
@@ -184,6 +244,14 @@ export function planNotifications(data: AppData, now = new Date()): PlannedNotif
     if (!r.repeat) {
       const at = combine(r.date, r.time);
       const reminderId = r.id;
+      if (r.kind === 'at') {
+        // На дату и время: за день и в это время.
+        const extra = r.note || friend?.name;
+        const before = combine(addInterval(r.date, 'day', -1), r.time);
+        if (before > now) out.push({ at: before, title, body: `Завтра в ${r.time}${extra ? ` · ${extra}` : ''}`, url, reminderId });
+        if (at > now) out.push({ at, title, body, url, reminderId });
+        continue;
+      }
       if (r.daily) {
         // Каждый день до срока: с сегодняшнего дня (если время ещё не прошло) и до дня перед сроком — с обратным отсчётом.
         const extra = r.note || friend?.name;
@@ -208,7 +276,7 @@ export function planNotifications(data: AppData, now = new Date()): PlannedNotif
 
     let n = 0;
     for (const date of occurrences(seriesStart(r), r.repeat)) {
-      if (date < r.date) continue; // прошедшие разы серии до ближайшего
+      if (date < r.date || (r.done && date === r.date)) continue; // прошедшие разы серии до ближайшего; сделанный раз
       const at = combine(date, r.time);
       if (at > now) {
         out.push({ at, title, body, url });

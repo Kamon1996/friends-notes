@@ -13,7 +13,7 @@ import {
   relativeDay,
   sameDayInYear,
 } from '../dates';
-import { completeReminder, planNotifications, upcomingItems, MAX_SCHEDULED } from '../events';
+import { completeReminder, MAX_SCHEDULED, planNotifications, rollReminder, upcomingItems } from '../events';
 import { EMPTY_DATA, type AppData, type Friend, type Reminder } from '../types';
 
 test('addInterval: месяцы не «съезжают» с 31-го числа', () => {
@@ -82,13 +82,15 @@ const reminder = (patch: Partial<Reminder> = {}): Reminder => ({
   ...patch,
 });
 
-test('«Сделано» переносит повторяющееся напоминание вперёд', () => {
+test('«Сделано» у повторяющегося — до конца дня, назавтра оно снова активно на следующий раз', () => {
   const now = new Date(2026, 10, 5, 12, 0);
+  const tomorrow = new Date(2026, 10, 6, 9, 0);
   const r = reminder({ date: '2026-11-01', repeat: { every: 1, unit: 'week' } });
-  assert.equal(completeReminder(r, now).date, '2026-11-08');
-  assert.equal(completeReminder(r, now).done, false);
+  const done = completeReminder(r, now);
+  assert.deepEqual([done.done, done.date], [true, '2026-11-01']);
+  assert.deepEqual([rollReminder(done, tomorrow).done, rollReminder(done, tomorrow).date], [false, '2026-11-08']);
   const future = reminder({ date: '2026-11-10', repeat: { every: 2, unit: 'month' } });
-  assert.equal(completeReminder(future, now).date, '2027-01-10');
+  assert.equal(rollReminder(completeReminder(future, now), tomorrow).date, '2027-01-10');
   assert.equal(completeReminder(reminder(), now).done, true);
 });
 

@@ -78,18 +78,23 @@ function genderFields(v: Record<string, unknown>): Pick<Friend, 'gender' | 'gend
 function normalizeReminder(v: unknown): Reminder | null {
   if (!isObject(v) || typeof v.id !== 'string' || typeof v.date !== 'string') return null;
   const repeat = isObject(v.repeat) && typeof v.repeat.every === 'number' && typeof v.repeat.unit === 'string' ? (v.repeat as unknown as Reminder['repeat']) : null;
-  const { daily, ...rest } = v;
+  const { daily, kind, priority, minutes, doneAt, ...rest } = v;
+  const done = v.done === true;
   return {
     ...(rest as unknown as Reminder),
-    // «Каждый день до срока» — только у разовых и только явное true.
-    ...(daily === true && !repeat ? { daily: true } : {}),
+    // «Каждый день до срока» и «на дату и время» — только у разовых; всё необязательное — только понятных значений.
+    ...(daily === true && !repeat && kind !== 'at' ? { daily: true } : {}),
+    ...(kind === 'at' && !repeat ? { kind: 'at' as const } : {}),
+    ...(priority === 1 || priority === 2 || priority === 3 ? { priority } : {}),
+    ...(typeof minutes === 'number' && Number.isInteger(minutes) && minutes > 0 && minutes <= 24 * 60 ? { minutes } : {}),
+    ...(done && typeof doneAt === 'number' && doneAt > 0 ? { doneAt } : {}),
     title: str(v.title),
     note: str(v.note),
     friendId: typeof v.friendId === 'string' ? v.friendId : null,
     time: typeof v.time === 'string' && /^\d{2}:\d{2}$/.test(v.time) ? v.time : '10:00',
     repeat,
     advance: (typeof v.advance === 'number' ? v.advance : 0) as Reminder['advance'],
-    done: v.done === true,
+    done,
     createdAt: typeof v.createdAt === 'number' ? v.createdAt : 0,
   };
 }

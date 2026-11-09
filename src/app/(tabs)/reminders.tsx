@@ -5,28 +5,43 @@ import { FlatList, ScrollView, Text, View } from 'react-native';
 import { ReminderRow } from '@/components/ReminderRow';
 import { ReminderSwipe } from '@/components/ReminderSwipe';
 import { SelectionBar } from '@/components/SelectionBar';
+import type { IconName } from '@/components/Icon';
 import { Chip, Empty, Fab, GroupedRow, ScreenHeader, useTheme } from '@/components/ui';
 import { confirm } from '@/lib/confirm';
-import { combine, plural, todayISO } from '@/lib/dates';
+import { plural, todayISO } from '@/lib/dates';
+import { reminderOverdue } from '@/lib/events';
+import { reminderSections, type ReminderFilter } from '@/lib/reminderList';
 import { useStore } from '@/lib/store';
 import type { Reminder } from '@/lib/types';
 
-type Filter = 'active' | 'personal' | 'friends' | 'done' | 'all';
-
-const FILTERS: { key: Filter; label: string }[] = [
-  { key: 'active', label: 'Активные' },
-  { key: 'done', label: 'Сделанные' },
+const FILTERS: { key: ReminderFilter; label: string; icon?: IconName }[] = [
   { key: 'all', label: 'Все' },
+  { key: 'quick', label: 'Быстрые', icon: 'bolt' },
+  { key: 'important', label: 'Важные', icon: 'flag' },
   { key: 'personal', label: 'Для себя' },
   { key: 'friends', label: 'Друзья' },
+  { key: 'done', label: 'Сделанные', icon: 'check' },
 ];
+
+const EMPTY: Record<ReminderFilter, string> = {
+  all: 'Напоминаний нет',
+  quick: 'Быстрых дел нет',
+  important: 'Важных дел нет',
+  personal: 'Дел для себя нет',
+  friends: 'Дел для друзей нет',
+  done: 'Пока ничего не сделано',
+};
+const EMPTY_TEXT: Partial<Record<ReminderFilter, string>> = {
+  quick: 'Быстрые — те, что займут до 30 минут. Укажи «Сколько займёт» в деле.',
+  important: 'Отметь важность «Важно» в деле — и оно появится здесь.',
+};
 
 type Item = { type: 'label'; key: string; text: string } | { type: 'reminder'; key: string; reminder: Reminder; first: boolean; last: boolean };
 
 export default function RemindersScreen() {
   const { data, setRemindersDone, deleteReminders } = useStore();
   const { s, colors } = useTheme();
-  const [filter, setFilter] = useState<Filter>('active');
+  const [filter, setFilter] = useState<ReminderFilter>('all');
   // Режим выбора (долгое нажатие на строку): отмеченные напоминания, как у друзей.
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
   const selecting = selected.size > 0;
@@ -35,34 +50,9 @@ export default function RemindersScreen() {
   const friendById = useMemo(() => new Map(data.friends.map((f) => [f.id, f])), [data.friends]);
 
   const items = useMemo(() => {
-    const t = (r: Reminder) => combine(r.date, r.time).getTime();
-    const asc = (a: Reminder, b: Reminder) => t(a) - t(b);
-    const desc = (a: Reminder, b: Reminder) => t(b) - t(a);
-    const active = data.reminders.filter((r) => !r.done).sort(asc);
-    const done = data.reminders.filter((r) => r.done).sort(desc);
-    let groups: { text: string; rows: Reminder[] }[];
-    switch (filter) {
-      case 'done':
-        groups = [{ text: 'Сделанные', rows: done }];
-        break;
-      case 'all':
-        groups = [
-          { text: 'Активные', rows: active },
-          { text: 'Сделанные', rows: done },
-        ];
-        break;
-      default: {
-        const list = filter === 'personal' ? active.filter((r) => !r.friendId) : filter === 'friends' ? active.filter((r) => !!r.friendId) : active;
-        groups = [
-          { text: 'Повторяющиеся', rows: list.filter((r) => r.repeat) },
-          { text: 'Однократные', rows: list.filter((r) => !r.repeat) },
-        ];
-      }
-    }
     const out: Item[] = [];
-    for (const g of groups) {
-      if (!g.rows.length) continue;
-      out.push({ type: 'label', key: `l-${g.text}`, text: g.text });
+    for (const g of reminderSections(data.reminders, filter)) {
+      out.push({ type: 'label', key: `l-${g.key}`, text: g.title });
       g.rows.forEach((r, i) => out.push({ type: 'reminder', key: r.id, reminder: r, first: i === 0, last: i === g.rows.length - 1 }));
     }
     return out;
@@ -72,7 +62,13 @@ export default function RemindersScreen() {
 
   const active = data.reminders.filter((r) => !r.done);
   const today = todayISO();
-  const todayCount = active.filter((r) => r.date === today).length;
+  const todayCount = active.filter((r) => r.date <= today).length;
+  const overdueCount = active.filter((r) => reminderOverdue(r)).length;
+  const subtitle = active.length
+    ? [`${active.length} ${plural(active.length, 'дело', 'дела', 'дел')}`, todayCount && `${todayCount} на сегодня`, overdueCount && `${overdueCount} просрочено`]
+        .filter(Boolean)
+        .join(' · ')
+    : undefined;
 
   const toggle = (id: string) =>
     setSelected((prev) => {
@@ -113,13 +109,13 @@ export default function RemindersScreen() {
             <View style={{ opacity: selecting ? 0 : 1, pointerEvents: selecting ? 'none' : 'auto' }} importantForAccessibility={selecting ? 'no-hide-descendants' : 'auto'}>
               <ScreenHeader
                 title="Напоминания"
-                subtitle={active.length ? `${active.length} ${plural(active.length, 'активное', 'активных', 'активных')}${todayCount ? ` · ${todayCount} сегодня` : ''}` : undefined}
+                subtitle={subtitle}
               />
             </View>
             {/* Фильтры одной строкой с прокруткой: не занимают полэкрана над списком. */}
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 20, paddingTop: 14, paddingBottom: 8 }}>
               {FILTERS.map((f) => (
-                <Chip key={f.key} label={f.label} selected={filter === f.key} onPress={() => setFilter(f.key)} />
+                <Chip key={f.key} label={f.label} icon={f.icon} selected={filter === f.key} onPress={() => setFilter(f.key)} />
               ))}
             </ScrollView>
           </>
@@ -132,6 +128,7 @@ export default function RemindersScreen() {
               <GroupedRow first={item.first} last={item.last}>
                 <ReminderSwipe reminder={item.reminder} enabled={!selecting} hint={item.key === hintKey}>
                   <ReminderRow
+                    detailed
                     reminder={item.reminder}
                     friend={item.reminder.friendId ? friendById.get(item.reminder.friendId) : null}
                     selected={selected.has(item.reminder.id)}
@@ -147,8 +144,8 @@ export default function RemindersScreen() {
         ListEmptyComponent={
           <Empty
             icon="bell"
-            title={filter === 'done' ? 'Пока ничего не сделано' : 'Напоминаний нет'}
-            text="Создай напоминание: «купить цветы раз в 2 месяца», «написать маме раз в неделю» или свой дедлайн."
+            title={EMPTY[filter]}
+            text={EMPTY_TEXT[filter] ?? 'Создай напоминание: «купить билеты до пятницы», «стоматолог в среду в 15:00» или «написать маме раз в неделю».'}
           />
         }
       />

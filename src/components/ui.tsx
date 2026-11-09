@@ -187,6 +187,41 @@ export function Chip({
   );
 }
 
+/** Переключатель из нескольких вариантов в одну строку: «До срока / Дата и время / Повторять». */
+export function Segmented<T extends string | number>({ options, value, onChange }: { options: readonly { value: T; label: string }[]; value: T; onChange: (v: T) => void }) {
+  const { colors, fonts } = useTheme();
+  return (
+    <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', backgroundColor: colors.chip, borderRadius: 14, padding: 3, gap: 3 }}>
+      {options.map((o) => {
+        const on = o.value === value;
+        return (
+          <Pressable
+            key={String(o.value)}
+            onPress={() => onChange(o.value)}
+            accessibilityRole="radio"
+            accessibilityState={{ selected: on, checked: on }}
+            accessibilityLabel={o.label}
+            style={({ pressed }) => ({
+              flex: 1,
+              minHeight: 40,
+              borderRadius: 11,
+              alignItems: 'center',
+              justifyContent: 'center',
+              paddingHorizontal: 4,
+              backgroundColor: on ? colors.text : 'transparent',
+              opacity: pressed && !on ? 0.6 : 1,
+            })}
+          >
+            <Text numberOfLines={1} style={{ fontFamily: on ? fonts.semibold : fonts.medium, fontSize: 14, color: on ? colors.bg : colors.text2 }}>
+              {o.label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 export type Tone = 'accent' | 'solid' | 'neutral' | 'success' | 'danger' | 'warn' | 'info';
 
 /** Маленький ярлык: «через 3 дня», «сегодня», «уже добавлен». */

@@ -3,6 +3,9 @@ import Svg, { Circle, Path, Rect } from 'react-native-svg';
 
 export type IconName =
   | 'archive'
+  | 'hourglass'
+  | 'flag'
+  | 'bolt'
   | 'stars'
   | 'calendar'
   | 'people'
@@ -136,6 +139,9 @@ const PATHS: Record<IconName, ReactNode> = {
       <Path d="M12 7v5l3 2" />
     </>
   ),
+  hourglass: <Path d="M7 3h10M7 21h10M8 3c0 4 8 5 8 9s-8 5-8 9M16 3c0 4-8 5-8 9s8 5 8 9" />,
+  flag: <Path d="M5 21V4M5 4h11l-2 4 2 4H5" />,
+  bolt: <Path d="M13 3 5 13.5h6L10 21l8-10.5h-6z" />,
   search: (
     <>
       <Circle cx={11} cy={11} r={7} />

@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
 import { addInterval, toISODate } from '../dates';
-import { birthdayHint, completeReminder, countdown, notificationActions, planNotifications, upcomingItems } from '../events';
+import { birthdayHint, completeReminder, countdown, notificationActions, planNotifications, reminderFuse, reminderOverdue, reopenReminder, rollReminder, upcomingItems } from '../events';
 import { DEFAULT_SETTINGS, EMPTY_DATA, type AppData, type Friend, type Reminder, type Settings } from '../types';
 
 const friend = (patch: Partial<Friend> = {}): Friend => ({
@@ -43,6 +43,8 @@ const appData = (patch: Partial<Omit<AppData, 'settings'>> & { settings?: Partia
   ...patch,
   settings: { ...DEFAULT_SETTINGS, ...patch.settings },
 });
+
+const near = (a: number, b: number, eps = 1e-6) => assert.ok(Math.abs(a - b) < eps, `${a} ≈ ${b}`);
 
 /** «2027-03-09 10:00» — удобно сравнивать время уведомлений. */
 const stamp = (d: Date) => `${toISODate(d)} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
@@ -115,29 +117,50 @@ describe('лента «Скоро»', () => {
 });
 
 describe('«сделано» у повторяющегося напоминания', () => {
-  test('давно просроченное переносится в будущее, а не на следующий прошедший раз', () => {
-    const now = new Date(2027, 2, 10, 12, 0);
-    const done = completeReminder(reminder({ date: '2027-01-04', repeat: { every: 1, unit: 'week' } }), now);
-    assert.equal(done.date, '2027-03-15');
-    assert.equal(done.done, false);
+  // Отметили — сделано до конца дня (дата та же, можно вернуть); со следующего дня — снова активно на ближайший раз.
+  const doneThenRoll = (r: Reminder, at: Date, next: Date) => rollReminder(completeReminder(r, at), next);
+
+  test('отмеченное — сделано, дата та же; «вернуть» — как было', () => {
+    const r = reminder({ date: '2027-03-10', repeat: { every: 1, unit: 'day' } });
+    const done = completeReminder(r, new Date(2027, 2, 10, 12));
+    assert.deepEqual([done.done, done.date, done.doneAt], [true, '2027-03-10', new Date(2027, 2, 10, 12).getTime()]);
+    const back = reopenReminder(done);
+    assert.deepEqual([back.done, back.date, 'doneAt' in back], [false, '2027-03-10', false]);
   });
 
-  test('ежедневное, отмеченное заранее, уходит на завтра', () => {
-    const now = new Date(2027, 2, 10, 12, 0);
-    const done = completeReminder(reminder({ date: '2027-03-10', time: '18:00', repeat: { every: 1, unit: 'day' } }), now);
-    assert.equal(done.date, '2027-03-11');
+  test('в тот же день не возвращается, назавтра — снова активно', () => {
+    const done = completeReminder(reminder({ date: '2027-03-10', time: '18:00', repeat: { every: 1, unit: 'day' } }), new Date(2027, 2, 10, 12));
+    assert.equal(rollReminder(done, new Date(2027, 2, 10, 23, 59)), done);
+    const next = rollReminder(done, new Date(2027, 2, 11, 0, 1));
+    assert.deepEqual([next.done, next.date, 'doneAt' in next], [false, '2027-03-11', false]);
   });
 
-  test('однократное становится сделанным и сохраняет дату', () => {
+  test('давно просроченное после отметки уходит в будущее, а не на следующий прошедший раз', () => {
+    const r = doneThenRoll(reminder({ date: '2027-01-04', repeat: { every: 1, unit: 'week' } }), new Date(2027, 2, 10, 12), new Date(2027, 2, 11, 8));
+    assert.deepEqual([r.date, r.done], ['2027-03-15', false]);
+  });
+
+  test('открыли приложение через неделю — ежедневное встаёт на сегодня, даже если время уже прошло', () => {
+    const r = doneThenRoll(reminder({ date: '2027-03-10', time: '09:00', repeat: { every: 1, unit: 'day' } }), new Date(2027, 2, 10, 12), new Date(2027, 2, 17, 15));
+    assert.equal(r.date, '2027-03-17');
+  });
+
+  test('отмеченное заранее: следующий раз после отмеченного', () => {
+    const r = doneThenRoll(reminder({ date: '2027-03-15', repeat: { every: 1, unit: 'week' } }), new Date(2027, 2, 10, 12), new Date(2027, 2, 11, 8));
+    assert.equal(r.date, '2027-03-22');
+  });
+
+  test('однократное становится сделанным и сохраняет дату; назавтра так и остаётся', () => {
     const done = completeReminder(reminder({ date: '2027-03-20' }), new Date(2027, 2, 10));
     assert.deepEqual([done.done, done.date], [true, '2027-03-20']);
+    assert.equal(rollReminder(done, new Date(2027, 2, 12)), done);
   });
 
   test('ежемесячное на 31-е после февраля возвращается на 31-е', () => {
     let r = reminder({ date: '2027-01-31', repeat: { every: 1, unit: 'month' } });
-    r = completeReminder(r, new Date(2027, 1, 1, 12));
+    r = doneThenRoll(r, new Date(2027, 1, 1, 12), new Date(2027, 1, 2, 8));
     assert.equal(r.date, '2027-02-28');
-    r = completeReminder(r, new Date(2027, 2, 1, 12));
+    r = doneThenRoll(r, new Date(2027, 2, 1, 12), new Date(2027, 2, 2, 8));
     assert.equal(r.date, '2027-03-31');
   });
 
@@ -149,7 +172,48 @@ describe('«сделано» у повторяющегося напоминан�
 
   test('якорь позже ближайшего раза (дату передвинули) не мешает: считаем от ближайшего', () => {
     const r = reminder({ date: '2027-03-05', anchor: '2027-04-10', repeat: { every: 1, unit: 'month' } });
-    assert.equal(completeReminder(r, new Date(2027, 2, 1, 12)).date, '2027-04-05');
+    assert.equal(doneThenRoll(r, new Date(2027, 2, 1, 12), new Date(2027, 2, 2, 8)).date, '2027-04-05');
+  });
+
+  test('сделанное сегодня повторяющееся: этот раз без уведомления, следующие — как обычно', () => {
+    const r = completeReminder(reminder({ date: '2027-03-10', time: '18:00', repeat: { every: 1, unit: 'day' } }), new Date(2027, 2, 10, 12));
+    const plan = planNotifications(appData({ reminders: [r] }), new Date(2027, 2, 10, 12));
+    assert.deepEqual(plan.slice(0, 2).map((n) => stamp(n.at)), ['2027-03-11 18:00', '2027-03-12 18:00']);
+  });
+});
+
+describe('просрочено и фитиль', () => {
+  const now = new Date(2027, 2, 10, 12, 0);
+  test('«до срока» и повторяющееся просрочены, когда прошёл весь день; «на дату и время» — когда прошло время', () => {
+    assert.equal(reminderOverdue(reminder({ date: '2027-03-10', time: '09:00' }), now), false);
+    assert.equal(reminderOverdue(reminder({ date: '2027-03-09', time: '23:00' }), now), true);
+    assert.equal(reminderOverdue(reminder({ date: '2027-03-10', time: '09:00', repeat: { every: 1, unit: 'day' } }), now), false);
+    assert.equal(reminderOverdue(reminder({ date: '2027-03-10', time: '09:00', kind: 'at' }), now), true);
+    assert.equal(reminderOverdue(reminder({ date: '2027-03-10', time: '15:00', kind: 'at' }), now), false);
+    assert.equal(reminderOverdue(reminder({ date: '2027-03-01', done: true }), now), false);
+  });
+
+  test('фитиль: только создали — полный, середина пути — половина, срок вышел — 0, сделано — нет фитиля', () => {
+    const created = new Date(2027, 2, 8, 0, 0).getTime();
+    const r = reminder({ date: '2027-03-11', createdAt: created }); // срок — до конца 11-го: 4 дня
+    near(reminderFuse(r, new Date(created))!, 1);
+    near(reminderFuse(r, new Date(2027, 2, 10, 0, 0))!, 0.5);
+    assert.equal(reminderFuse(r, new Date(2027, 2, 12, 0, 1)), 0);
+    assert.equal(reminderFuse({ ...r, done: true }, now), null);
+  });
+
+  test('фитиль: до срока больше двух недель — полный, за две недели начинает гореть', () => {
+    const r = reminder({ date: '2027-06-01', createdAt: new Date(2027, 0, 1).getTime() });
+    near(reminderFuse(r, now)!, 1);
+    const close = reminder({ date: '2027-03-16', createdAt: new Date(2027, 0, 1).getTime() }); // до конца 16-го — 6,5 дня из 14
+    near(reminderFuse(close, now)!, 6.5 / 14, 1e-3);
+  });
+
+  test('фитиль: «на дату и время» — до самого времени, ежедневное — горит весь день', () => {
+    const at = reminder({ date: '2027-03-10', time: '18:00', kind: 'at', createdAt: new Date(2027, 2, 10, 6, 0).getTime() });
+    near(reminderFuse(at, now)!, 0.5);
+    const daily = reminder({ date: '2027-03-10', repeat: { every: 1, unit: 'day' } });
+    near(reminderFuse(daily, now)!, 0.5);
   });
 });
 
@@ -217,6 +281,17 @@ describe('расписание уведомлений', () => {
       ['once', 'once'],
     );
     assert.ok(plan.filter((n) => !n.url.includes('once')).every((n) => n.reminderId === undefined));
+  });
+
+  test('«на дату и время»: за день и в само время, с кнопкой «Сделано»; «заранее» и «каждый день» не действуют', () => {
+    const plan = planNotifications(appData({ reminders: [reminder({ id: 'v', title: 'Стоматолог', date: '2027-03-15', time: '15:00', kind: 'at', note: 'Клиника на Ленина', advance: 10080, daily: true })] }), now);
+    assert.deepEqual(
+      plan.map((n) => [stamp(n.at), n.body, n.reminderId]),
+      [
+        ['2027-03-14 15:00', 'Завтра в 15:00 · Клиника на Ленина', 'v'],
+        ['2027-03-15 15:00', 'Клиника на Ленина', 'v'],
+      ],
+    );
   });
 
   test('праздник ведёт в карточку друга, кнопки — позвонить и написать', () => {

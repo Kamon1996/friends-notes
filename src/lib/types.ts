@@ -96,9 +96,25 @@ export interface Reminder {
    * пока не отмечено «сделано». Вместо `advance`.
    */
   daily?: boolean;
+  /**
+   * Только у разовых: 'at' — на дату и время (визит, встреча): напомнить за день и в это время. Нет — «сделать до срока»:
+   * `date` — последний день, `time` — когда напоминать.
+   */
+  kind?: 'at';
+  /** Важность: 1 — низкая, 2 — средняя, 3 — важно. Нет — не задана. */
+  priority?: Priority;
+  /** Сколько займёт, в минутах. Нет — не задано. */
+  minutes?: number;
   done: boolean;
+  /**
+   * Когда отметили «сделано» (мс). Повторяющееся сделано до конца этого дня, потом снова активно — на ближайший раз
+   * (rollReminder).
+   */
+  doneAt?: number;
   createdAt: number;
 }
+
+export type Priority = 1 | 2 | 3;
 
 export type ThemeMode = 'system' | 'light' | 'dark';
 export type AccentId = 'terracotta' | 'honey' | 'eucalyptus' | 'plum' | 'indigo' | 'raspberry';

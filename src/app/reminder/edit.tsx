@@ -4,14 +4,32 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput,
 
 import { FriendPicker } from '@/components/FriendPicker';
 import { DateField } from '@/components/DateField';
-import { Button, Card, Chip, Empty, Field, Label, SectionTitle, SwitchRow, useTheme } from '@/components/ui';
+import { Button, Card, Chip, Empty, Field, Label, SectionTitle, Segmented, SwitchRow, useTheme } from '@/components/ui';
 import { confirm, notify } from '@/lib/confirm';
 import { addInterval, formatDateCompact, formatRepeat, todayISO } from '@/lib/dates';
+import { completeReminder, reopenReminder } from '@/lib/events';
+import { DURATIONS, PRIORITY_LABELS, formatMinutes } from '@/lib/reminderList';
 import { newId, useStore } from '@/lib/store';
-import type { Advance, Reminder, Repeat, RepeatUnit } from '@/lib/types';
+import type { Advance, Priority, Reminder, Repeat, RepeatUnit } from '@/lib/types';
 
-const REPEAT_PRESETS: { label: string; repeat: Repeat | null }[] = [
-  { label: 'Один раз', repeat: null },
+/** Какое это дело: сделать до срока, на дату и время или повторять. */
+type Kind = 'due' | 'at' | 'repeat';
+const KINDS: { value: Kind; label: string }[] = [
+  { value: 'due', label: 'До срока' },
+  { value: 'at', label: 'Дата и время' },
+  { value: 'repeat', label: 'Повторять' },
+];
+const KIND_HINT: Record<Kind, string> = {
+  due: 'Сделать в любой день до срока.',
+  at: 'Встреча, визит, запись: напомню за день и в назначенное время.',
+  repeat: 'Регулярное дело: «Сделано» — до следующего раза.',
+};
+const PRIORITIES: { value: Priority | 0; label: string }[] = [
+  { value: 0, label: '—' },
+  ...([1, 2, 3] as const).map((p) => ({ value: p, label: PRIORITY_LABELS[p] })),
+];
+
+const REPEAT_PRESETS: { label: string; repeat: Repeat }[] = [
   { label: 'Каждый день', repeat: { every: 1, unit: 'day' } },
   { label: 'Каждую неделю', repeat: { every: 1, unit: 'week' } },
   { label: 'Раз в 2 недели', repeat: { every: 2, unit: 'week' } },
@@ -38,8 +56,7 @@ const ADVANCES: { value: Advance; label: string }[] = [
 const FRIEND_TEMPLATES = ['Написать', 'Позвонить', 'Купить цветы', 'Встретиться', 'Выбрать подарок'];
 const PERSONAL_TEMPLATES = ['Оплатить счета', 'Записаться к врачу', 'Сдать проект'];
 
-const sameRepeat = (a: Repeat | null, b: Repeat | null) =>
-  a === b || (!!a && !!b && a.every === b.every && a.unit === b.unit);
+const sameRepeat = (a: Repeat | null, b: Repeat | null) => a === b || (!!a && !!b && a.every === b.every && a.unit === b.unit);
 
 export default function EditReminderScreen() {
   const { ready, data } = useStore();
@@ -88,9 +105,16 @@ function ReminderForm() {
       },
   );
   const set = <K extends keyof Reminder>(key: K, value: Reminder[K]) => setR((prev) => ({ ...prev, [key]: value }));
-  const [customRepeat, setCustomRepeat] = useState(
-    () => !!r.repeat && !REPEAT_PRESETS.some((p) => sameRepeat(p.repeat, r.repeat)),
-  );
+  const kind: Kind = r.repeat ? 'repeat' : r.kind === 'at' ? 'at' : 'due';
+  // Повтор, который был до переключения на разовое: вернётся, если передумать.
+  const lastRepeat = useRef<Repeat>(r.repeat ?? { every: 1, unit: 'week' });
+  const setKind = (k: Kind) =>
+    setR((prev) => {
+      if (prev.repeat) lastRepeat.current = prev.repeat;
+      if (k === 'repeat') return { ...prev, repeat: prev.repeat ?? lastRepeat.current, kind: undefined };
+      return { ...prev, repeat: null, kind: k === 'at' ? 'at' : undefined };
+    });
+  const [customRepeat, setCustomRepeat] = useState(() => !!r.repeat && !REPEAT_PRESETS.some((p) => sameRepeat(p.repeat, r.repeat)));
 
   // Поля даты и времени, где набранное не совпадает с тем, что сохранится: тогда не сохраняем.
   const [invalid, setInvalid] = useState<{ date?: boolean; time?: boolean }>({});
@@ -116,9 +140,17 @@ function ReminderForm() {
     }
     // Новая дата или другой повтор — новая серия: старый якорь больше не нужен.
     const sameSeries = !!existing && existing.date === r.date && sameRepeat(existing.repeat, r.repeat);
-    // «Каждый день до срока» — только у разовых: у повторяющегося своё расписание.
-    const { daily, ...rest } = r;
-    saveReminder({ ...rest, ...(daily && !r.repeat ? { daily: true, advance: 0 } : {}), title: r.title.trim(), anchor: sameSeries ? r.anchor : undefined });
+    // «Каждый день до срока» — только у дел «до срока», «на дату и время» напоминает само; необязательное — только заданное.
+    const { daily, kind: _kind, priority, minutes, ...rest } = r;
+    saveReminder({
+      ...rest,
+      ...(kind === 'at' ? { kind: 'at' as const, advance: 0 as const } : {}),
+      ...(kind === 'due' && daily ? { daily: true, advance: 0 as const } : {}),
+      ...(priority ? { priority } : {}),
+      ...(minutes ? { minutes } : {}),
+      title: r.title.trim(),
+      anchor: sameSeries ? r.anchor : undefined,
+    });
     router.back();
   };
 
@@ -164,11 +196,15 @@ function ReminderForm() {
           <FriendPicker friends={data.friends} value={r.friendId} onChange={(id) => set('friendId', id)} />
         </View>
 
+        <Label>Какое это дело</Label>
+        <Segmented options={KINDS} value={kind} onChange={setKind} />
+        <Text style={[s.caption, { marginTop: 6, marginBottom: 16, paddingHorizontal: 4 }]}>{KIND_HINT[kind]}</Text>
+
         <View onLayout={(e) => (whenY.current = e.nativeEvent.layout.y)} style={stackDateTime ? undefined : { flexDirection: 'row', gap: 10 }}>
           <View style={stackDateTime ? undefined : { flex: 4 }}>
             <DateField
               mode="date"
-              label={r.repeat ? 'Ближайший раз' : 'Дата или дедлайн'}
+              label={kind === 'repeat' ? 'Ближайший раз' : kind === 'at' ? 'Дата' : 'Срок'}
               value={r.date}
               onChange={(v) => set('date', v)}
               showIncomplete={attempted}
@@ -176,62 +212,73 @@ function ReminderForm() {
             />
           </View>
           <View style={stackDateTime ? undefined : { flex: 3 }}>
-            <DateField mode="time" label="Время" value={r.time} onChange={(v) => set('time', v)} showIncomplete={attempted} onInvalidChange={markInvalid('time')} />
+            <DateField
+              mode="time"
+              label={kind === 'due' ? 'Напомнить в' : 'Время'}
+              value={r.time}
+              onChange={(v) => set('time', v)}
+              showIncomplete={attempted}
+              onInvalidChange={markInvalid('time')}
+            />
           </View>
         </View>
-        <Text style={[s.caption, { marginTop: -8, marginBottom: 14, paddingHorizontal: 4 }]}>Вводи цифрами — точки подставятся сами.</Text>
+        <Text style={[s.caption, { marginTop: -8, marginBottom: 14, paddingHorizontal: 4 }]}>
+          {kind === 'at'
+            ? `Напомню ${formatDateCompact(addInterval(r.date, 'day', -1), false)} и ${formatDateCompact(r.date, false)} в ${r.time}.`
+            : 'Вводи цифрами — точки подставятся сами.'}
+        </Text>
 
-        <SectionTitle style={{ marginBottom: 8 }}>Повтор</SectionTitle>
-        <View style={s.chips}>
-          {REPEAT_PRESETS.map((p) => (
-            <Chip
-              key={p.label}
-              label={p.label}
-              selected={!customRepeat && sameRepeat(p.repeat, r.repeat)}
-              onPress={() => {
-                setCustomRepeat(false);
-                set('repeat', p.repeat);
-              }}
-            />
-          ))}
-          <Chip
-            label="Свой…"
-            selected={customRepeat}
-            onPress={() => {
-              setCustomRepeat(true);
-              if (!r.repeat) set('repeat', { every: 3, unit: 'day' });
-            }}
-          />
-        </View>
-        {customRepeat && r.repeat && (
-          <Card style={{ gap: 10, marginTop: 10 }}>
-            <View style={s.row}>
-              <Text style={s.body}>Каждые</Text>
-              <TextInput
-                value={String(r.repeat.every)}
-                onChangeText={(v) => {
-                  const n = Math.min(365, Math.max(1, parseInt(v.replace(/\D/g, ''), 10) || 1));
-                  set('repeat', { ...r.repeat!, every: n });
-                }}
-                keyboardType="number-pad"
-                style={[s.input, { width: 72, textAlign: 'center', paddingVertical: 8, minHeight: 44 }]}
-              />
-            </View>
+        {kind === 'repeat' && (
+          <>
+            <SectionTitle style={{ marginBottom: 8 }}>Как часто</SectionTitle>
             <View style={s.chips}>
-              {UNITS.map((u) => (
+              {REPEAT_PRESETS.map((p) => (
                 <Chip
-                  key={u.unit}
-                  label={u.label}
-                  selected={r.repeat?.unit === u.unit}
-                  onPress={() => set('repeat', { ...r.repeat!, unit: u.unit })}
+                  key={p.label}
+                  label={p.label}
+                  selected={!customRepeat && sameRepeat(p.repeat, r.repeat)}
+                  onPress={() => {
+                    setCustomRepeat(false);
+                    set('repeat', p.repeat);
+                  }}
                 />
               ))}
+              <Chip
+                label="Свой…"
+                selected={customRepeat}
+                onPress={() => {
+                  setCustomRepeat(true);
+                  // Свой интервал начинается с «каждые 3 дня», а не с уже выбранного готового варианта.
+                  if (!r.repeat || REPEAT_PRESETS.some((p) => sameRepeat(p.repeat, r.repeat))) set('repeat', { every: 3, unit: 'day' });
+                }}
+              />
             </View>
-            <Text style={s.muted}>Будет: {formatRepeat(r.repeat)}</Text>
-          </Card>
+            {customRepeat && r.repeat && (
+              <Card style={{ gap: 10, marginTop: 10 }}>
+                <View style={s.row}>
+                  <Text style={s.body}>Каждые</Text>
+                  <TextInput
+                    value={String(r.repeat.every)}
+                    onChangeText={(v) => {
+                      const n = Math.min(365, Math.max(1, parseInt(v.replace(/\D/g, ''), 10) || 1));
+                      set('repeat', { ...r.repeat!, every: n });
+                    }}
+                    keyboardType="number-pad"
+                    style={[s.input, { width: 72, textAlign: 'center', paddingVertical: 8, minHeight: 44 }]}
+                  />
+                </View>
+                <View style={s.chips}>
+                  {UNITS.map((u) => (
+                    <Chip key={u.unit} label={u.label} selected={r.repeat?.unit === u.unit} onPress={() => set('repeat', { ...r.repeat!, unit: u.unit })} />
+                  ))}
+                </View>
+                <Text style={s.muted}>Будет: {formatRepeat(r.repeat)}</Text>
+              </Card>
+            )}
+          </>
         )}
 
-        {!r.repeat && (
+        {kind === 'due' && (
           <>
             <SectionTitle style={{ marginTop: 18, marginBottom: 8 }}>Напомнить заранее</SectionTitle>
             <View style={s.chips}>
@@ -253,10 +300,23 @@ function ReminderForm() {
           </>
         )}
 
+        <SectionTitle style={{ marginTop: kind === 'at' ? 0 : 18, marginBottom: 8 }}>Важность</SectionTitle>
+        <Segmented options={PRIORITIES} value={r.priority ?? 0} onChange={(p) => set('priority', p || undefined)} />
+
+        <SectionTitle style={{ marginTop: 18, marginBottom: 8 }}>Сколько займёт</SectionTitle>
+        <View style={s.chips}>
+          <Chip label="—" selected={!r.minutes} onPress={() => set('minutes', undefined)} />
+          {DURATIONS.map((m) => (
+            <Chip key={m} label={formatMinutes(m)} selected={r.minutes === m} onPress={() => set('minutes', m)} />
+          ))}
+        </View>
+
         <View style={{ height: 18 }} />
         <Field label="Заметка" value={r.note} onChangeText={(v) => set('note', v)} placeholder="Детали, ссылка, адрес…" multiline />
 
-        {existing && !r.repeat && <SwitchRow label="Выполнено" value={r.done} onChange={(v) => set('done', v)} />}
+        {existing && !r.repeat && (
+          <SwitchRow label="Выполнено" value={r.done} onChange={(v) => setR((prev) => (v ? completeReminder(prev) : reopenReminder(prev)))} />
+        )}
 
         <Button title="Сохранить" onPress={save} style={{ marginTop: 8 }} />
         {existing && <Button title="Удалить" variant="danger" onPress={remove} style={{ marginTop: 8 }} />}

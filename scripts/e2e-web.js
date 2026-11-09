@@ -81,7 +81,7 @@ scenario('Лента: больше пяти просроченных — стр�
   await ui.go('/');
   await ui.see('Ещё 2 просроченных');
   await ui.tap(/^Ещё 2 просроченных/);
-  await ui.see('Однократные');
+  await ui.see('Сегодня');
   await ui.see('Отправить документы');
 }, { data: seed({ reminders: [1, 2, 3, 4, 5, 6, 7].map((n) => R({ id: `o${n}`, title: ['Оплатить интернет', 'Записаться к врачу', 'Вернуть книгу', 'Позвонить в банк', 'Купить корм', 'Забрать химчистку', 'Отправить документы'][n - 1], date: d(-n) })) }) });
 
@@ -118,14 +118,21 @@ scenario('Напоминания: свайп влево только откры�
   assert.match(ui.dialogs.join('\n'), /Удалить/);
 }, { data: seed({ reminders: [R({ id: 'daily', title: 'Подстаканник купить', date: d(1), repeat: { every: 1, unit: 'day' } })] }) });
 
-scenario('Напоминания: свайп вправо отмечает сделанным — разовое уходит в сделанные, повторяющееся переносится на следующий раз', async ({ ui }) => {
+scenario('Напоминания: свайп вправо — сделано (и повторяющееся тоже), внизу «Сделано сегодня»; ещё раз вправо — вернуть', async ({ ui }) => {
   await ui.go('/reminders');
   await ui.swipe('Билеты на самолёт', 160);
   let data = await ui.waitData((x) => x.reminders.find((r) => r.id === 'once').done, 'разовое не отмечено');
   assert.equal(data.reminders.find((r) => r.id === 'once').date, d(2));
   await ui.swipe('Подстаканник купить', 160);
-  data = await ui.waitData((x) => x.reminders.find((r) => r.id === 'daily').date !== d(1), 'повторяющееся не перенесено');
-  assert.deepEqual([data.reminders.find((r) => r.id === 'daily').date, data.reminders.find((r) => r.id === 'daily').done], [d(2), false]);
+  data = await ui.waitData((x) => x.reminders.find((r) => r.id === 'daily').done, 'повторяющееся не отмечено');
+  assert.equal(data.reminders.find((r) => r.id === 'daily').date, d(1), 'дата та же — вернуть можно как было');
+  await ui.see('Сделано сегодня');
+  await ui.see('Сделано · сегодня');
+  await ui.see('Сделано · снова', { exact: false });
+  // Передумал — ещё раз вправо.
+  await ui.swipe('Подстаканник купить', 160);
+  data = await ui.waitData((x) => !x.reminders.find((r) => r.id === 'daily').done, 'не вернулось');
+  assert.deepEqual([data.reminders.find((r) => r.id === 'daily').date, 'doneAt' in data.reminders.find((r) => r.id === 'daily')], [d(1), false]);
 }, {
   data: seed({
     reminders: [R({ id: 'daily', title: 'Подстаканник купить', date: d(1), repeat: { every: 1, unit: 'day' } }), R({ id: 'once', title: 'Билеты на самолёт', date: d(2) })],
@@ -134,10 +141,10 @@ scenario('Напоминания: свайп вправо отмечает сд�
 
 scenario('Напоминания: без кружков; первая строка один раз «подглядывает» вправо и влево, после своего свайпа — больше нет', async ({ ui, page }) => {
   await ui.go('/reminders');
-  await ui.see('Купить цветы — Аня');
+  await ui.see('Написать Диме');
   assert.equal(await page.locator('[role="checkbox"]').count(), 0, 'кружков в строках быть не должно');
-  // Следим за первой строкой: сначала вправо, потом влево, потом на место.
-  const h = await page.getByText('Купить цветы — Аня', { exact: true }).last().elementHandle();
+  // Следим за первой строкой (просроченное — наверху «Сегодня»): сначала вправо, потом влево, потом на место.
+  const h = await page.getByText('Написать Диме', { exact: true }).last().elementHandle();
   const x0 = (await h.boundingBox()).x;
   let max = 0;
   let min = 0;
@@ -160,8 +167,8 @@ scenario('Напоминания: без кружков; первая строк
 
 scenario('Напоминания: подсказка не больше трёх раз — на четвёртый строка стоит', async ({ ui, page }) => {
   await ui.go('/reminders');
-  await ui.see('Купить цветы — Аня');
-  const h = await page.getByText('Купить цветы — Аня', { exact: true }).last().elementHandle();
+  await ui.see('Написать Диме');
+  const h = await page.getByText('Написать Диме', { exact: true }).last().elementHandle();
   const x0 = (await h.boundingBox()).x;
   let moved = 0;
   for (let i = 0; i < 60; i++) {
@@ -176,17 +183,29 @@ scenario('Карточка друга: напоминание без кружк�
   await ui.see('Купить цветы — Аня');
   assert.equal(await page.locator('[role="checkbox"]').count(), 0, 'кружков в строках быть не должно');
   await ui.swipe('Купить цветы — Аня', 160);
-  const data = await ui.waitData((x) => x.reminders.find((r) => r.id === 'r1').date !== d(0), 'не отмечено');
-  assert.equal(data.reminders.find((r) => r.id === 'r1').done, false, 'повторяющееся переносится, а не уходит в сделанные');
+  const data = await ui.waitData((x) => x.reminders.find((r) => r.id === 'r1').done, 'не отмечено');
+  assert.equal(data.reminders.find((r) => r.id === 'r1').date, d(0));
+  await ui.see('Сделано · снова пн, 10 авг');
 });
 
-scenario('Лента: «сделано» у повторяющегося переносит его на следующий раз', async ({ ui }) => {
+scenario('Лента: «сделано» у повторяющегося — сделано сегодня, из ленты уходит, дата та же', async ({ ui }) => {
   await ui.go('/');
   await ui.check('Купить цветы — Аня');
-  const r = await ui.waitData((x) => x.reminders.find((r) => r.id === 'r1').date !== d(0), 'дата не перенесена');
-  assert.equal(r.reminders.find((r) => r.id === 'r1').date, '2026-08-10');
-  assert.equal(r.reminders.find((r) => r.id === 'r1').done, false);
-  await ui.notSee('Купить цветы — Аня'); // через два месяца — за горизонтом ленты
+  const r = await ui.waitData((x) => x.reminders.find((r) => r.id === 'r1').done, 'не отмечено');
+  assert.equal(r.reminders.find((r) => r.id === 'r1').date, d(0), 'дата не меняется до завтра — чтобы можно было вернуть');
+  await ui.notSee('Купить цветы — Аня');
+});
+
+scenario('Напоминания: повторяющееся, сделанное вчера, сегодня снова активно — на ближайший раз', async ({ ui }) => {
+  await ui.go('/reminders');
+  const data = await ui.waitData((x) => !x.reminders.find((r) => r.id === 'pills').done, 'не вернулось в активные');
+  assert.equal(data.reminders.find((r) => r.id === 'pills').date, d(0));
+  await ui.see('Таблетки');
+  await ui.notSee('Сделано сегодня');
+}, {
+  data: seed({
+    reminders: [R({ id: 'pills', title: 'Таблетки', date: d(-1), time: '09:00', repeat: { every: 1, unit: 'day' }, done: true, doneAt: new Date(`${d(-1)}T21:00:00+03:00`).getTime() })],
+  }),
 });
 
 scenario('Лента: однократное просроченное уходит в «Сделанные» и возвращается оттуда', async ({ ui }) => {
@@ -543,6 +562,7 @@ scenario('Напоминание: шаблон, друг, дата и время
   await ui.tap('Позвонить');
   await ui.typeInto('ДД.ММ.ГГГГ', '20062026', { clear: true });
   await ui.typeInto('ЧЧ:ММ', '0930', { clear: true });
+  await ui.tap('Повторять');
   await ui.tap('Каждую неделю');
   await ui.tap('Сохранить');
   const data = await ui.waitData((x) => x.reminders.some((r) => r.title === 'Позвонить — Игорь Ветров'), 'не сохранилось');
@@ -557,6 +577,7 @@ scenario('Напоминание: свой интервал и «за 3 дня»
   await ui.tap('Новое напоминание');
   await ui.fill('Например, сдать отчёт', 'Сдать проект');
   await ui.tap('За 3 дня');
+  await ui.tap('Повторять');
   await ui.tap('Свой…');
   await ui.tap('недели');
   await ui.tap('Сохранить');
@@ -580,7 +601,7 @@ scenario('Напоминание: «каждый день до срока» — 
   let r = data.reminders.find((x) => x.title === 'Билеты на самолёт');
   assert.deepEqual([r.date, r.time, r.repeat, r.advance, r.daily], ['2026-06-20', '12:00', null, 0, true]);
   await ui.see('до сб, 20 июн');
-  await ui.see('каждый день в 12:00');
+  await ui.see('каждый день', { label: true });
   // «За день» вместо ежедневных — флаг снимается.
   await ui.tap('Билеты на самолёт');
   await ui.tap('За день');
@@ -588,15 +609,71 @@ scenario('Напоминание: «каждый день до срока» — 
   await ui.tap('Сохранить');
   data = await ui.waitData((x) => x.reminders.find((y) => y.id === r.id).advance === 1440, '«за день» не сохранилось');
   assert.ok(!('daily' in data.reminders.find((y) => y.id === r.id)), 'флаг остался');
-  // Снова ежедневно, но потом «Каждый день» в повторе: у повторяющегося своего «до срока» нет.
+  // Снова ежедневно, но потом «Повторять» → «Каждый день»: у повторяющегося своего «до срока» нет.
   await ui.tap('Билеты на самолёт');
   await ui.tap('Каждый день до срока');
+  await ui.tap('Повторять');
   await ui.tap('Каждый день');
   await ui.notSee('Каждый день до срока');
   await ui.tap('Сохранить');
   data = await ui.waitData((x) => !!x.reminders.find((y) => y.id === r.id).repeat, 'повтор не сохранился');
   r = data.reminders.find((y) => y.id === r.id);
   assert.deepEqual([r.repeat, 'daily' in r], [{ every: 1, unit: 'day' }, false]);
+});
+
+scenario('Напоминания: разделы по сроку, при одинаковом сроке важное выше; чипы времени и важности (прочерк), фитиль; «Быстрые» и «Важные»', async ({ ui, page }) => {
+  await ui.go('/reminders');
+  await ui.see('Продлить страховку');
+  for (const t of ['Сегодня', 'На неделе', 'В течение месяца', 'Позже']) await ui.see(t);
+  const order = ['Оплатить интернет', 'Стоматолог', 'Билеты на самолёт', 'Купить косметику', 'Сдать проект', 'Подарок Ане', 'Продлить страховку'];
+  const ys = [];
+  for (const t of order) ys.push((await ui.box(t)).y);
+  assert.deepEqual([...ys].sort((a, b) => a - b), ys, `порядок: ${order.map((t, i) => `${t} ${Math.round(ys[i])}`).join(', ')}`);
+  await ui.see('просрочено');
+  await ui.see('в 15:00');
+  await ui.see('Сколько займёт: 30 мин', { label: true });
+  await ui.see('Важность: Важно', { label: true });
+  await ui.see('Сколько займёт: не задано', { label: true });
+  await ui.see('Важность: не задано', { label: true });
+  assert.equal(await page.locator('[data-testid="fuse"]').count(), 6, 'фитиль у всех, кроме догоревшего просроченного');
+  await ui.tap('Быстрые');
+  await ui.see('Оплатить интернет'); await ui.see('Билеты на самолёт');
+  await ui.notSee('Стоматолог'); await ui.notSee('Сдать проект');
+  await ui.tap('Важные');
+  await ui.see('Оплатить интернет'); await ui.see('Билеты на самолёт');
+  await ui.notSee('Купить косметику'); await ui.notSee('Подарок Ане');
+}, {
+  data: seed({
+    reminders: [
+      R({ id: 'g', title: 'Продлить страховку', date: d(60) }),
+      R({ id: 'f', title: 'Подарок Ане', date: d(20) }),
+      R({ id: 'e', title: 'Сдать проект', date: d(5), minutes: 120, priority: 2 }),
+      R({ id: 'd', title: 'Купить косметику', date: d(2), priority: 1 }),
+      R({ id: 'c', title: 'Билеты на самолёт', date: d(2), priority: 3, minutes: 30 }),
+      R({ id: 'b', title: 'Стоматолог', kind: 'at', date: d(0), time: '15:00', minutes: 60 }),
+      R({ id: 'a', title: 'Оплатить интернет', date: d(-1), priority: 3, minutes: 5 }),
+    ],
+  }),
+});
+
+scenario('Напоминание: «Дата и время», важность и «Сколько займёт» — сохраняются и видны в строке', async ({ ui }) => {
+  await ui.go('/reminders');
+  await ui.tap('Новое напоминание');
+  await ui.fill('Например, сдать отчёт', 'Стоматолог');
+  await ui.tap('Дата и время');
+  await ui.typeInto('ДД.ММ.ГГГГ', '20062026', { clear: true });
+  await ui.typeInto('ЧЧ:ММ', '1500', { clear: true });
+  await ui.see('Напомню 19 июн и 20 июн в 15:00.');
+  await ui.notSee('Напомнить заранее');
+  await ui.tap('Важно');
+  await ui.tap('1 ч');
+  await ui.tap('Сохранить');
+  const data = await ui.waitData((x) => x.reminders.some((r) => r.title === 'Стоматолог'), 'не сохранилось');
+  const r = data.reminders.find((x) => x.title === 'Стоматолог');
+  assert.deepEqual([r.kind, r.date, r.time, r.priority, r.minutes, r.advance, r.repeat], ['at', '2026-06-20', '15:00', 3, 60, 0, null]);
+  await ui.see('сб, 20 июн · 15:00');
+  await ui.see('Важность: Важно', { label: true });
+  await ui.see('Сколько займёт: 1 ч', { label: true });
 });
 
 scenario('Напоминание: без текста не сохраняется', async ({ ui }) => {
@@ -642,19 +719,22 @@ scenario('Напоминания: фильтры, выбор нескольки�
   await ui.tap('Сделанные'); await ui.see('Сдать отчёт'); await ui.notSee('Написать Диме');
   await ui.tap('Для себя'); await ui.see('Написать Диме'); await ui.notSee('Купить цветы — Аня');
   await ui.tap('Друзья', { nth: 'first' }); await ui.see('Купить цветы — Аня'); await ui.notSee('Написать Диме');
-  await ui.tap('Все'); await ui.see('Активные'); await ui.see('Сделанные'); await ui.see('Сдать отчёт');
+  await ui.tap('Все'); await ui.see('Сегодня'); await ui.notSee('Сдать отчёт'); // сделанное раньше — только в «Сделанных»
   const before = await ui.box('Написать Диме');
   await ui.longPress('Написать Диме');
   await ui.see('Выбрано: 1', { label: true });
   assert.ok(Math.abs((await ui.box('Написать Диме')).y - before.y) < 2, 'список прыгнул при входе в выбор');
   await ui.tap('Отметить сделанными');
   await ui.waitData((x) => x.reminders.find((r) => r.id === 'r3').done, 'не отмечено');
+  await ui.see('Сделано сегодня');
   await ui.longPress('Купить цветы — Аня');
   await ui.tap('Отметить сделанными');
-  await ui.waitData((x) => x.reminders.find((r) => r.id === 'r1').date === '2026-08-10', 'повторяющееся должно перенестись');
+  await ui.waitData((x) => x.reminders.find((r) => r.id === 'r1').done && x.reminders.find((r) => r.id === 'r1').date === d(0), 'повторяющееся должно отметиться, дата та же');
+  await ui.tap('Сделанные');
   await ui.longPress('Сдать отчёт');
   await ui.tap('Вернуть в активные');
   await ui.waitData((x) => !x.reminders.find((r) => r.id === 'r4').done, 'не вернулось');
+  await ui.tap('Все');
   await ui.longPress('Написать Диме');
   await ui.tap('Удалить выбранные');
   await ui.waitData((x) => !x.reminders.some((r) => r.id === 'r3'), 'не удалилось');

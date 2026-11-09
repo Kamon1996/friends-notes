@@ -75,3 +75,19 @@ test('«каждый день до срока»: остаётся только �
     ],
   );
 });
+
+test('дело: «на дату и время», важность, время на дело и момент «сделано» — только понятные значения', () => {
+  const data = normalizeData({
+    reminders: [
+      { id: 'a', title: 'Стоматолог', date: '2026-11-20', kind: 'at', priority: 3, minutes: 60, done: true, doneAt: 1700000000000 },
+      { id: 'b', title: 'Таблетки', date: '2026-11-20', kind: 'at', repeat: { every: 1, unit: 'day' }, priority: 7, minutes: -5, doneAt: 5 },
+      { id: 'c', title: 'Счета', date: '2026-11-20', kind: 'встреча', priority: '3', minutes: 2.5 },
+    ],
+  });
+  const pick = (r: (typeof data.reminders)[number]) => [r.kind ?? '—', r.priority ?? '—', r.minutes ?? '—', r.doneAt ?? '—'];
+  assert.deepEqual(data.reminders.map(pick), [
+    ['at', 3, 60, 1700000000000],
+    ['—', '—', '—', '—'],
+    ['—', '—', '—', '—'],
+  ]);
+});
