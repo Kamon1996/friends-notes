@@ -10,6 +10,12 @@ import { confirm } from '@/lib/confirm';
 import { useStore } from '@/lib/store';
 import type { Reminder } from '@/lib/types';
 
+/**
+ * «Вернуть» сделанное — спокойным синим, а не зелёным «Сделано»: другое действие — другой цвет. Белый текст на нём
+ * читается (контраст 4.9:1) в обеих темах.
+ */
+export const RESTORE_BLUE = '#3F78AE';
+
 /** Удаление напоминания с вопросом; false — передумали. */
 export async function removeReminder(r: Pick<Reminder, 'id' | 'title'>, remove: (id: string) => void): Promise<boolean> {
   if (!(await confirm(`Удалить «${r.title}»?`, 'Отменить это будет нельзя.'))) return false;
@@ -18,8 +24,9 @@ export async function removeReminder(r: Pick<Reminder, 'id' | 'title'>, remove: 
 }
 
 /**
- * Подсказка «по строке можно провести»: первая строка чуть отъезжает вправо (зелёный край с галочкой) и влево
- * (красный с корзиной). Раз за запуск, пока человек сам ни разу не провёл по строке, и не больше трёх раз всего.
+ * Подсказка «по строке можно провести»: первая строка чуть отъезжает вправо (зелёный край с галочкой, у сделанного —
+ * синий с «Вернуть») и влево (красный с корзиной). Раз за запуск, пока человек сам ни разу не провёл по строке, и не
+ * больше трёх раз всего.
  */
 export const SWIPE_HINT_KEY = 'friends-notes/swipe-hint';
 const HINT_TIMES = 3;
@@ -44,7 +51,8 @@ const learned = () => AsyncStorage.setItem(SWIPE_HINT_KEY, String(HINT_TIMES)).c
 
 /**
  * Строка напоминания со свайпами. Вправо — «Сделано» (у сделанного — «Вернуть»): срабатывает сам, как только
- * зелёная кнопка открылась. Влево — только открывает красную «Удалить»; удаление — по нажатию и с вопросом.
+ * кнопка открылась (зелёная «Сделано», синяя «Вернуть»). Влево — только открывает красную «Удалить»; удаление — по
+ * нажатию и с вопросом.
  */
 export function ReminderSwipe({ reminder, enabled = true, hint = false, children }: { reminder: Reminder; enabled?: boolean; hint?: boolean; children: ReactNode }) {
   const ref = useRef<SwipeableMethods>(null);
@@ -84,7 +92,7 @@ export function ReminderSwipe({ reminder, enabled = true, hint = false, children
         }
       }}
       renderLeftActions={() =>
-        action(colors.success, done ? 'repeat' : 'check', done ? 'Вернуть' : 'Сделано', () => {
+        action(done ? RESTORE_BLUE : colors.success, done ? 'repeat' : 'check', done ? 'Вернуть' : 'Сделано', () => {
           onDone();
           ref.current?.close();
         })
@@ -125,7 +133,7 @@ function Peek({ done, children }: { done: boolean; children: ReactNode }) {
   return (
     <View>
       <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { flexDirection: 'row' }, underStyle]}>
-        <View style={{ flex: 1, backgroundColor: colors.success, justifyContent: 'center', paddingLeft: 13 }}>
+        <View style={{ flex: 1, backgroundColor: done ? RESTORE_BLUE : colors.success, justifyContent: 'center', paddingLeft: 13 }}>
           <Icon name={done ? 'repeat' : 'check'} size={18} color="#FFFFFF" strokeWidth={2.5} />
         </View>
         <View style={{ flex: 1, backgroundColor: colors.danger, alignItems: 'flex-end', justifyContent: 'center', paddingRight: 13 }}>
