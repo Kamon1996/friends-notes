@@ -1316,6 +1316,38 @@ scenario('Календарь: в подробностях дня — «Позд�
   }),
 });
 
+scenario('Календарь: шторка дня не двигает страницу, пока сетка видна; много событий — подкатывает ровно до сетки', async ({ ui, page }) => {
+  await ui.go('/calendar');
+  await ui.see('Июнь 2026');
+  const scrollTop = () =>
+    page.evaluate(() => Math.max(0, ...[...document.querySelectorAll('div')]
+      .filter((d) => !d.closest('[aria-hidden="true"]') && d.scrollHeight > d.clientHeight + 50 && /(auto|scroll)/.test(getComputedStyle(d).overflowY))
+      .map((d) => d.scrollTop)));
+  // Одно событие — шторка невысокая, сетку не накрывает: страница стоит.
+  await ui.tap('Среда, 10 июня, сегодня, 1 событие');
+  await ui.see('Поздравить в Telegram', { label: true });
+  await ui.pause(500);
+  assert.equal(await scrollTop(), 0, 'страница не должна прокручиваться, если шторка не накрывает сетку');
+  // Двенадцать событий — шторка до половины экрана и накрыла бы низ сетки: страница подкатывается, последняя неделя
+  // сетки остаётся над шторкой, её можно нажать.
+  await ui.tap('Суббота, 20 июня, 12 событий');
+  await ui.see('Дни рождения · 12');
+  await ui.pause(600);
+  const free = await page.evaluate(() => {
+    const cell = [...document.querySelectorAll('[aria-label^="Воскресенье, 12 июля"]')].find((e) => !e.closest('[aria-hidden="true"]'));
+    const r = cell.getBoundingClientRect();
+    return !!document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)?.closest('[aria-label^="Воскресенье, 12 июля"]');
+  });
+  assert.ok(free, 'последняя неделя сетки должна выглядывать над шторкой');
+  assert.ok((await scrollTop()) > 0, 'страница должна была подкатиться — иначе шторка накрыла бы низ сетки');
+}, {
+  viewport: { width: 412, height: 915 },
+  data: seed({
+    friends: [ANYA, ...Array.from({ length: 12 }, (_, i) => F({ id: `x${i}`, name: `Друг ${i + 1}`, birthday: bday(10, 1990 + i) }))],
+    reminders: [],
+  }),
+});
+
 scenario('Календарь: «в календаре» много событий — первые пять и «Ещё N»', async ({ ui }) => {
   await ui.go('/calendar');
   await ui.tap('Суббота, 20 июня, 12 событий');

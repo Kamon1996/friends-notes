@@ -78,13 +78,26 @@ export default function CalendarScreen() {
   const counts = useMemo(() => monthCounts(events, monthFrom, monthTo), [events, monthFrom, monthTo]);
   const openEvents = useMemo(() => (lastOpened ? (byDay.get(lastOpened) ?? []) : []), [byDay, lastOpened]);
   const isOpen = opened !== null && openEvents.length > 0;
-  // Шторка открылась — подкатываем календарь к верху экрана: сетка остаётся видна над шторкой, можно жать другие дни.
+  // Шторка открылась — страница стоит на месте. Подкатываем, только если шторка накрыла бы сетку месяца (много
+  // событий — шторка до половины экрана), и ровно настолько, чтобы сетка выглядывала над ней: можно жать другие дни.
   const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
-  const [cardY, setCardY] = useState(0);
+  const scrollY = useRef(0);
+  const [viewH, setViewH] = useState(0);
+  const [card, setCard] = useState({ y: 0, h: 0 });
+  const [legendH, setLegendH] = useState(0);
+  const [sheetH, setSheetH] = useState(0);
   const sheetOpen = isOpen && !inline;
+  const gridBottom = card.y + card.h - legendH;
   useEffect(() => {
-    if (sheetOpen) scrollRef.current?.scrollTo({ y: Math.max(0, cardY - 8), animated: true });
-  }, [sheetOpen, cardY]);
+    if (!sheetOpen || !viewH || !sheetH) return;
+    const top = scrollY.current;
+    // Шторка стоит на 2 px ниже края экрана.
+    const covered = gridBottom + 12 - (top + viewH - (sheetH - 2));
+    if (covered <= 0) return;
+    // Не дальше, чем до верха карточки календаря.
+    const target = Math.min(top + covered, Math.max(top, card.y - 8));
+    if (target > top) scrollRef.current?.scrollTo({ y: target, animated: true });
+  }, [sheetOpen, sheetH, viewH, gridBottom, card.y]);
   // «Гармошка»: высота раскрытой панели — на неё растёт карусель месяцев; меняется плавно.
   const panelH = useSharedValue(0);
   const [panelContentH, setPanelContentH] = useState(0);
@@ -118,7 +131,16 @@ export default function CalendarScreen() {
   return (
     <TabSwipe tab="/calendar">
       <View style={s.screen}>
-        <ScrollView ref={scrollRef} style={s.screen} contentContainerStyle={{ paddingBottom: 120 }}>
+        <ScrollView
+          ref={scrollRef}
+          style={s.screen}
+          contentContainerStyle={{ paddingBottom: 120 }}
+          onLayout={(e) => setViewH(e.nativeEvent.layout.height)}
+          onScroll={(e) => {
+            scrollY.current = e.nativeEvent.contentOffset.y;
+          }}
+          scrollEventThrottle={32}
+        >
           <ScreenHeader
             title="Календарь"
             subtitle={
@@ -134,7 +156,7 @@ export default function CalendarScreen() {
           />
 
           <View
-            onLayout={(e) => setCardY(e.nativeEvent.layout.y)}
+            onLayout={(e) => setCard({ y: e.nativeEvent.layout.y, h: e.nativeEvent.layout.height })}
             style={[s.group, { marginHorizontal: 20, marginTop: 14, paddingTop: 10, paddingBottom: legend ? 0 : 6 }]}
           >
             <MonthCarousel
@@ -181,7 +203,11 @@ export default function CalendarScreen() {
             />
             {/* «↶ Сегодня» стоит на месте, пока месяц едет под ним. */}
             {awayFromToday && <TodayPill onPress={goToday} />}
-            {legend && <Legend month={view.month} counts={counts} holidays={withHolidays} onHide={() => updateSettings({ calendarLegend: false })} />}
+            {legend && (
+              <View onLayout={(e) => setLegendH(e.nativeEvent.layout.height)}>
+                <Legend month={view.month} counts={counts} holidays={withHolidays} onHide={() => updateSettings({ calendarLegend: false })} />
+              </View>
+            )}
           </View>
 
           {later.length > 0 && (
@@ -206,7 +232,15 @@ export default function CalendarScreen() {
           <Fab label="Новое событие" onPress={() => router.push({ pathname: '/reminder/edit', params: { date: selected, kind: 'at', calendar: '1' } })} />
         )}
         {!inline && lastOpened && (
-          <DaySheet open={isOpen} active={focused} date={lastOpened} events={openEvents} today={today} onClose={() => setOpened(null)} />
+          <DaySheet
+            open={isOpen}
+            active={focused}
+            date={lastOpened}
+            events={openEvents}
+            today={today}
+            onClose={() => setOpened(null)}
+            onMeasure={setSheetH}
+          />
         )}
         <MonthPicker visible={picking} k={cur} onPick={(k) => show(k)} onClose={() => setPicking(false)} />
       </View>
@@ -653,6 +687,7 @@ function DaySheet({
   events,
   today,
   onClose,
+  onMeasure,
 }: {
   open: boolean;
   /** Вкладка на экране — только тогда «Назад» закрывает шторку. */
@@ -661,6 +696,8 @@ function DaySheet({
   events: CalendarEvent[];
   today: string;
   onClose: () => void;
+  /** Высота шторки — экран решает, нужно ли подкатить календарь, чтобы сетка выглядывала над ней. */
+  onMeasure: (h: number) => void;
 }) {
   const { s, colors, fonts } = useTheme();
   const { height: screenH } = useWindowDimensions();
@@ -698,7 +735,10 @@ function DaySheet({
   return (
     <Animated.View
       pointerEvents={open ? 'auto' : 'none'}
-      onLayout={(e) => setH(e.nativeEvent.layout.height)}
+      onLayout={(e) => {
+        setH(e.nativeEvent.layout.height);
+        onMeasure(e.nativeEvent.layout.height);
+      }}
       accessibilityViewIsModal={false}
       aria-hidden={!open}
       style={[
