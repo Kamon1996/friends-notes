@@ -1196,6 +1196,30 @@ scenario('Свайп по экрану листает вкладки; свайп
   assert.equal(path(), '/', 'свайп по фильтрам не должен менять вкладку');
 });
 
+scenario('Календарь: сетка листается каруселью — месяцы, а не вкладки; выбранный день — кружок', async ({ ui, page }) => {
+  const path = () => new URL(page.url()).pathname;
+  await ui.go('/calendar');
+  await ui.see('Июнь 2026');
+  const grid = await ui.box('Среда, 17 июня', { label: true }).catch(() => null);
+  const y = grid ? grid.y + grid.height / 2 : 330;
+  await ui.swipeAt(300, y, -200);
+  await ui.see('Июль 2026');
+  assert.equal(path(), '/calendar', 'свайп по сетке — месяц, а не вкладка');
+  await ui.swipeAt(80, y, 200);
+  await ui.see('Июнь 2026');
+  // Выбранный день — кружок (скругление), а не квадрат.
+  await ui.tap('Четверг, 18 июня');
+  const radius = await page.evaluate(() => {
+    const el = [...document.querySelectorAll('[aria-label^="Четверг, 18 июня"]')].find((e) => !e.closest('[aria-hidden="true"]'));
+    const circle = el && [...el.querySelectorAll('div')].find((d) => getComputedStyle(d).borderRadius !== '0px' && getComputedStyle(d).backgroundColor !== 'rgba(0, 0, 0, 0)');
+    return circle ? getComputedStyle(circle).borderRadius : null;
+  });
+  assert.equal(radius, '17px');
+  // Свайп по шапке — уже вкладки.
+  await ui.swipeAt(80, 30, 220);
+  await page.waitForURL(/\/friends$/, { timeout: 3000 });
+});
+
 scenario('Умный календарь: «до срока» не бывает, событие с повтором — каждую неделю, «В календаре» правится в деле; выключается в настройках', async ({ ui, page }) => {
   await ui.go('/calendar');
   await ui.see('Стоматолог');

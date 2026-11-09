@@ -1,6 +1,9 @@
 import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
 
 import { Avatar } from '@/components/Avatar';
@@ -63,8 +66,9 @@ export default function CalendarScreen() {
   const [view, setView] = useState<CalView>(() => atDay(today));
   const { selected } = view;
 
-  const grid = useMemo(() => monthGrid(view.year, view.month), [view]);
-  const events = useMemo(() => calendarEvents(data, grid[0], grid[41]), [data, grid]);
+  // События сразу для соседних месяцев: их сетки видны, пока листаешь.
+  const span = useMemo(() => [monthGrid(view.year, view.month - 1)[0], monthGrid(view.year, view.month + 1)[41]] as const, [view]);
+  const events = useMemo(() => calendarEvents(data, span[0], span[1]), [data, span]);
   const byDay = useMemo(() => {
     const m = new Map<string, CalendarEvent[]>();
     for (const e of events) m.set(e.date, [...(m.get(e.date) ?? []), e]);
@@ -123,55 +127,12 @@ export default function CalendarScreen() {
               </Text>
             ))}
           </View>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-            {grid.map((date) => {
-              const d = parseISODate(date);
-              const own = d.getMonth() === view.month;
-              const isToday = date === today;
-              const isSel = date === selected;
-              const list = byDay.get(date) ?? [];
-              const kinds = [...new Set(list.map((e) => e.kind))];
-              return (
-                <Pressable
-                  key={date}
-                  onPress={() => pick(date)}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: isSel }}
-                  accessibilityLabel={`${formatDateLong(date)}${isToday ? ', сегодня' : ''}${list.length ? `, ${list.length} ${plural(list.length, 'событие', 'события', 'событий')}` : ''}`}
-                  style={{ width: cellW, height: 56, alignItems: 'center', paddingTop: 4 }}
-                >
-                  <View
-                    style={{
-                      width: 34,
-                      height: 34,
-                      borderRadius: 17,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      backgroundColor: isSel ? colors.accent : isToday ? colors.soft : 'transparent',
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontFamily: isSel || isToday ? fonts.semibold : fonts.body,
-                        fontSize: 16,
-                        fontVariant: ['tabular-nums'],
-                        color: isSel ? colors.onAccent : isToday ? colors.accentText : own ? colors.text : colors.text3,
-                        opacity: own ? 1 : 0.6,
-                      }}
-                    >
-                      {d.getDate()}
-                    </Text>
-                  </View>
-                  {/* Значки — сразу под кружком дня, с зазором: кружок 4…38, значки 42…55. */}
-                  <View style={{ position: 'absolute', top: 42, flexDirection: 'row', gap: 3, height: 13, opacity: own ? 1 : 0.5 }}>
-                    {kinds.map((k) => (
-                      <KindIcon key={k} kind={k} size={13} />
-                    ))}
-                  </View>
-                </Pressable>
-              );
-            })}
-          </View>
+          <MonthCarousel
+            year={view.year}
+            month={view.month}
+            onStep={go}
+            render={(y, m) => <MonthGrid year={y} month={m} selected={selected} today={today} byDay={byDay} onPick={pick} />}
+          />
           <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 14, paddingTop: 6 }}>
             {(
               [
@@ -222,6 +183,143 @@ export default function CalendarScreen() {
         )}
       </ScrollView>
     </TabSwipe>
+  );
+}
+
+/** Высота сетки месяца: шесть недель по 56 px. */
+const GRID_H = 6 * 56;
+
+/**
+ * Месяцы каруселью: соседние месяцы стоят слева и справа, сетка едет за пальцем; отпустил дальше четверти ширины
+ * (или быстро) — перелистнулось. Стрелки и «Сегодня» листают так же; прыжок дальше соседнего месяца — сразу, без
+ * пролистывания. Жест сетки срабатывает раньше листания вкладок, поэтому внутри сетки листаются месяцы.
+ */
+function MonthCarousel({
+  year,
+  month,
+  onStep,
+  render,
+}: {
+  year: number;
+  month: number;
+  onStep: (delta: number) => void;
+  render: (y: number, m: number) => ReactNode;
+}) {
+  const cur = year * 12 + month;
+  const [base] = useState(cur);
+  const [w, setW] = useState(0);
+  const x = useSharedValue(0);
+  const shown = useSharedValue(cur);
+  useEffect(() => {
+    if (!w) return;
+    const target = -(cur - base) * w;
+    const far = Math.abs(cur - shown.get()) > 1;
+    shown.set(cur);
+    x.set(far ? target : withTiming(target, { duration: 260, easing: Easing.out(Easing.cubic) }));
+  }, [cur, base, w, x, shown]);
+  const pan = Gesture.Pan()
+    .activeOffsetX([-10, 10])
+    .failOffsetY([-12, 12])
+    .onUpdate((e) => {
+      'worklet';
+      x.set(-(shown.get() - base) * w + e.translationX);
+    })
+    .onEnd((e) => {
+      'worklet';
+      const d = e.translationX < -w / 4 || e.velocityX < -500 ? 1 : e.translationX > w / 4 || e.velocityX > 500 ? -1 : 0;
+      if (d) scheduleOnRN(onStep, d);
+      else x.set(withTiming(-(shown.get() - base) * w, { duration: 200, easing: Easing.out(Easing.cubic) }));
+    });
+  const style = useAnimatedStyle(() => ({ transform: [{ translateX: x.get() }] }));
+  return (
+    <GestureDetector gesture={pan}>
+      <View style={{ height: GRID_H, overflow: 'hidden' }} onLayout={(e) => setW(e.nativeEvent.layout.width)}>
+        <Animated.View style={[StyleSheet.absoluteFill, style]}>
+          {w > 0 &&
+            [cur - 1, cur, cur + 1].map((k) => (
+              <View
+                key={k}
+                style={{ position: 'absolute', top: 0, height: GRID_H, left: (k - base) * w, width: w }}
+                aria-hidden={k !== cur}
+                importantForAccessibility={k === cur ? 'auto' : 'no-hide-descendants'}
+                accessibilityElementsHidden={k !== cur}
+              >
+                {render(Math.floor(k / 12), ((k % 12) + 12) % 12)}
+              </View>
+            ))}
+        </Animated.View>
+      </View>
+    </GestureDetector>
+  );
+}
+
+/** Сетка одного месяца: дни кружками, сегодня и выбранный — с заливкой, под днём — значки событий. */
+function MonthGrid({
+  year,
+  month,
+  selected,
+  today,
+  byDay,
+  onPick,
+}: {
+  year: number;
+  month: number;
+  selected: string;
+  today: string;
+  byDay: Map<string, CalendarEvent[]>;
+  onPick: (date: string) => void;
+}) {
+  const { colors, fonts } = useTheme();
+  const cellW = `${100 / 7}%` as const;
+  return (
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+      {monthGrid(year, month).map((date) => {
+        const d = parseISODate(date);
+        const own = d.getMonth() === month;
+        const isToday = date === today;
+        const isSel = date === selected && own;
+        const list = byDay.get(date) ?? [];
+        const kinds = [...new Set(list.map((e) => e.kind))];
+        return (
+          <Pressable
+            key={date}
+            onPress={() => onPick(date)}
+            accessibilityRole="button"
+            accessibilityState={{ selected: isSel }}
+            accessibilityLabel={`${formatDateLong(date)}${isToday ? ', сегодня' : ''}${list.length ? `, ${list.length} ${plural(list.length, 'событие', 'события', 'событий')}` : ''}`}
+            style={{ width: cellW, height: 56, alignItems: 'center', paddingTop: 4 }}
+          >
+            <View style={{ width: 34, height: 34, alignItems: 'center', justifyContent: 'center' }}>
+              {/* Кружок — отдельным видом и заново при смене вида: на Android смена фона у вида со скруглением
+                  теряла скругление, и выбранный день становился квадратом. */}
+              {(isSel || isToday) && (
+                <View
+                  key={isSel ? 'sel' : 'today'}
+                  style={{ position: 'absolute', width: 34, height: 34, borderRadius: 17, backgroundColor: isSel ? colors.accent : colors.soft }}
+                />
+              )}
+              <Text
+                style={{
+                  fontFamily: isSel || isToday ? fonts.semibold : fonts.body,
+                  fontSize: 16,
+                  fontVariant: ['tabular-nums'],
+                  color: isSel ? colors.onAccent : isToday ? colors.accentText : own ? colors.text : colors.text3,
+                  opacity: own ? 1 : 0.6,
+                }}
+              >
+                {d.getDate()}
+              </Text>
+            </View>
+            {/* Значки — сразу под кружком дня, с зазором: кружок 4…38, значки 42…55. */}
+            <View style={{ position: 'absolute', top: 42, flexDirection: 'row', gap: 3, height: 13, opacity: own ? 1 : 0.5 }}>
+              {kinds.map((k) => (
+                <KindIcon key={k} kind={k} size={13} />
+              ))}
+            </View>
+          </Pressable>
+        );
+      })}
+    </View>
   );
 }
 
