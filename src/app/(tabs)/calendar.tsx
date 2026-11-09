@@ -846,37 +846,40 @@ function OneLine({ text, style }: { text: string; style?: TextStyle }) {
 }
 
 /**
- * Подпись из частей («День рождения», «36 лет»): влезают в строку — через точку, не влезают — каждая своей строкой
- * и без точек (перенос посреди «· 36 лет» выглядит неряшливо). Пустые части пропускаем.
+ * Подпись из частей («16 ноября», «Познакомились», «8 лет»): влезают в строку — через точку; не влезают — первая
+ * часть (обычно дата) отдельной строкой, остальные через точку второй; и так не влезло — каждая своей строкой.
+ * Перенос посреди «· 36 лет» выглядит неряшливо, поэтому строки рвём только между частями. Пустые части пропускаем.
  */
 function Subline({ parts }: { parts: string[] }) {
   const { s } = useTheme();
   const list = parts.filter(Boolean);
   const text = list.join(' · ');
-  const [stacked, setStacked] = useState<{ text: string; on: boolean } | null>(null);
-  const isStacked = stacked?.text === text && stacked.on && list.length > 1;
-  if (isStacked) {
-    return (
-      <View>
-        {list.map((p) => (
-          <Text key={p} style={s.muted} numberOfLines={1}>
-            {p}
-          </Text>
-        ))}
-      </View>
-    );
-  }
+  // 0 — всё в одну строку, 1 — первая часть отдельно, 2 — каждая часть своей строкой.
+  const [fit, setFit] = useState<{ text: string; level: number } | null>(null);
+  const level = list.length < 2 ? 0 : fit?.text === text ? fit.level : 0;
+  const lines = level === 0 ? [text] : level === 1 ? [list[0], list.slice(1).join(' · ')] : list;
+  const next = level === 0 && list.length > 2 ? 1 : 2;
+  const lineHeight = s.muted.lineHeight ?? 18;
   return (
-    <Text
-      style={s.muted}
-      // Вторая строка — значит, не влезло: показываем столбиком.
-      onLayout={(e) => {
-        const wrapped = e.nativeEvent.layout.height > (s.muted.lineHeight ?? 18) * 1.5;
-        if (stacked?.text !== text || stacked.on !== wrapped) setStacked({ text, on: wrapped });
-      }}
-    >
-      {text}
-    </Text>
+    <View>
+      {lines.map((line, i) => (
+        <Text
+          key={i}
+          style={s.muted}
+          numberOfLines={level === 2 ? 1 : undefined}
+          // Вторая строка внутри строки — значит, не влезло: рвём по частям.
+          onLayout={
+            level < 2 && list.length > 1
+              ? (e) => {
+                  if (e.nativeEvent.layout.height > lineHeight * 1.5 && level < next) setFit({ text, level: next });
+                }
+              : undefined
+          }
+        >
+          {line}
+        </Text>
+      ))}
+    </View>
   );
 }
 
@@ -897,6 +900,8 @@ function EventRow({
   const diff = daysBetween(today, e.date);
   const when = relativeDay(e.date, today);
   const tag = <Tag text={when} tone={diff === 0 ? 'solid' : diff > 0 && diff <= 7 ? 'accent' : 'neutral'} />;
+  // Само число («16 ноября») — в «Ближайших» рядом с «через 7 дней»; в подробностях дня оно и так понятно.
+  const day = formatDate(e.date, false);
   if (e.kind === 'holiday') {
     const where = e.holidays.map((h) => holidayCountry(h.country)).filter((c) => c !== undefined);
     const estimated = e.holidays.some((h) => h.estimated);
@@ -949,15 +954,18 @@ function EventRow({
           )
         }
         title={<OneLine text={r.title} style={done ? { textDecorationLine: 'line-through', color: colors.text3 } : undefined} />}
-        subtitle={<Subline parts={[r.time, e.friend?.name ?? '', done ? 'сделано' : '']} />}
+        subtitle={<Subline parts={[showWhen ? [day, r.time].filter(Boolean).join(', ') : r.time, e.friend?.name ?? '', done ? 'сделано' : '']} />}
         trailing={showWhen ? tag : contact && e.friend ? <ContactPill friend={e.friend} label="Написать" iconOnly={contact === 'icon'} /> : undefined}
       />
     );
   }
   const f = e.friend;
-  // Что за событие и сколько лет исполняется — двумя частями: влезают в строку — через точку, нет — столбиком.
+  // Что за событие и сколько лет исполняется. В «Ближайших» — ещё и число, как у праздников: у дня рождения оно
+  // встаёт вместо «День рождения» (торт на аватаре говорит то же), у важной даты — перед названием.
   const n = e.kind === 'birthday' ? e.age : e.years;
-  const what = [e.kind === 'birthday' ? 'День рождения' : e.title, n ? `${n} ${plural(n, 'год', 'года', 'лет')}` : ''];
+  const age = n ? `${n} ${plural(n, 'год', 'года', 'лет')}` : '';
+  const label = e.kind === 'birthday' ? 'День рождения' : e.title;
+  const what = !showWhen ? [label, age] : e.kind === 'birthday' ? [day, age || label] : [day, label, age];
   return (
     <ListRow
       onPress={() => router.push({ pathname: '/friend/[id]', params: { id: f.id } })}
