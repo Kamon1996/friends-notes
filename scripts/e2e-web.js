@@ -1312,7 +1312,7 @@ scenario('Праздники: страна телефона сразу, выбо
   assert.notEqual(red.hol, red.plain, `праздник должен быть красным числом: ${JSON.stringify(red)}`);
   await ui.tap('Пятница, 12 июня, 1 событие');
   await ui.see('День России');
-  await ui.see('🇷🇺 Россия');
+  await ui.see('12 июня · 🇷🇺 Россия');
   await ui.tap('День России');
   await ui.see('Пятница, 12 июня');
   await ui.see('Читать в Википедии');

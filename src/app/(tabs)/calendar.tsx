@@ -14,8 +14,8 @@ import { Sheet, SheetHandle } from '@/components/Sheet';
 import { TabSwipe } from '@/components/TabSwipe';
 import { Fab, Group, IconButton, ListRow, ScreenHeader, Tag, useTheme } from '@/components/ui';
 import { MONTHS, MONTHS_IN, WEEKDAYS_MON, calendarEvents, monthCounts, monthGrid, monthRange, nextEvents, type CalendarEvent } from '@/lib/calendar';
-import { daysBetween, formatDateLong, parseISODate, plural, relativeDay, todayISO } from '@/lib/dates';
-import { holidayCountries, holidayCountry } from '@/lib/holidays';
+import { daysBetween, formatDate, formatDateLong, parseISODate, plural, relativeDay, todayISO } from '@/lib/dates';
+import { formatHolidayDays, holidayCountries, holidayCountry, holidayDatesInYear } from '@/lib/holidays';
 import { useStore } from '@/lib/store';
 
 interface CalView {
@@ -492,6 +492,9 @@ function EventRow({ event: e, today }: { event: CalendarEvent; today: string }) 
   if (e.kind === 'holiday') {
     const where = e.holidays.map((h) => holidayCountry(h.country)).filter((c) => c !== undefined);
     const estimated = e.holidays.some((h) => h.estimated);
+    // Когда: многодневный — все его дни («1–6 и 8 января»), иначе — само число («25 декабря»).
+    const days = holidayDatesInYear(e.holidays[0].id, parseISODate(e.date).getFullYear());
+    const when = days.length > 1 ? formatHolidayDays(days) : formatDate(e.date, false);
     return (
       <ListRow
         onPress={() =>
@@ -513,7 +516,7 @@ function EventRow({ event: e, today }: { event: CalendarEvent; today: string }) 
           </View>
         }
         title={e.name}
-        subtitle={`${where.map((c) => `${c.flag} ${c.name}`).join(' · ')}${estimated ? ' · дата примерная' : ''}`}
+        subtitle={`${when} · ${where.map((c) => `${c.flag} ${c.name}`).join(' · ')}${estimated ? ' · дата примерная' : ''}`}
         trailing={tag}
       />
     );
