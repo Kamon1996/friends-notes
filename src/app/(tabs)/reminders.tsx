@@ -1,10 +1,9 @@
 import { router } from 'expo-router';
-import { useMemo, useRef, useState, type ReactNode } from 'react';
-import { FlatList, Pressable, ScrollView, Text, View } from 'react-native';
-import ReanimatedSwipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
+import { useMemo, useState } from 'react';
+import { FlatList, ScrollView, Text, View } from 'react-native';
 
-import { Icon } from '@/components/Icon';
 import { ReminderRow } from '@/components/ReminderRow';
+import { ReminderSwipe } from '@/components/ReminderSwipe';
 import { SelectionBar } from '@/components/SelectionBar';
 import { Chip, Empty, Fab, GroupedRow, ScreenHeader, useTheme } from '@/components/ui';
 import { confirm } from '@/lib/confirm';
@@ -68,6 +67,8 @@ export default function RemindersScreen() {
     }
     return out;
   }, [data.reminders, filter]);
+  // Подсказку «можно провести» показывает первая строка.
+  const hintKey = items.find((i) => i.type === 'reminder')?.key;
 
   const active = data.reminders.filter((r) => !r.done);
   const today = todayISO();
@@ -128,13 +129,8 @@ export default function RemindersScreen() {
             <Text style={[s.sectionLabel, { paddingHorizontal: 24, paddingTop: 12, paddingBottom: 8 }]}>{item.text}</Text>
           ) : (
             <View style={{ paddingHorizontal: 20 }}>
-              <GroupedRow first={item.first} last={item.last} inset={item.reminder.friendId ? 96 : 56}>
-                <SwipeActions
-                  enabled={!selecting}
-                  done={item.reminder.done}
-                  onDone={() => setRemindersDone([item.reminder.id], !item.reminder.done)}
-                  onDelete={() => remove([item.reminder.id])}
-                >
+              <GroupedRow first={item.first} last={item.last}>
+                <ReminderSwipe reminder={item.reminder} enabled={!selecting} hint={item.key === hintKey}>
                   <ReminderRow
                     reminder={item.reminder}
                     friend={item.reminder.friendId ? friendById.get(item.reminder.friendId) : null}
@@ -143,7 +139,7 @@ export default function RemindersScreen() {
                     onPress={selecting ? () => toggle(item.reminder.id) : undefined}
                     onLongPress={() => toggle(item.reminder.id)}
                   />
-                </SwipeActions>
+                </ReminderSwipe>
               </GroupedRow>
             </View>
           )
@@ -169,69 +165,5 @@ export default function RemindersScreen() {
       )}
       {!selecting && <Fab onPress={() => router.push('/reminder/edit')} label="Новое напоминание" />}
     </View>
-  );
-}
-
-/**
- * Свайп вправо — «Сделано» (у сделанного — «Вернуть»): срабатывает сам, как только зелёная кнопка открылась.
- * Свайп влево — только открывает красную «Удалить»; удаление — по нажатию и с подтверждением.
- */
-function SwipeActions({
-  enabled,
-  done,
-  onDone,
-  onDelete,
-  children,
-}: {
-  enabled: boolean;
-  done: boolean;
-  onDone: () => void;
-  onDelete: () => Promise<boolean>;
-  children: ReactNode;
-}) {
-  const ref = useRef<SwipeableMethods>(null);
-  const { colors, fonts } = useTheme();
-  const action = (bg: string, icon: 'check' | 'repeat' | 'trash', label: string, onPress: () => void) => (
-    <Pressable
-      accessibilityLabel={label}
-      onPress={onPress}
-      style={({ pressed }) => ({ width: 92, backgroundColor: bg, alignItems: 'center', justifyContent: 'center', gap: 4, opacity: pressed ? 0.85 : 1 })}
-    >
-      <Icon name={icon} size={22} color="#FFFFFF" strokeWidth={2} />
-      <Text style={{ fontFamily: fonts.semibold, fontSize: 12, color: '#FFFFFF' }}>{label}</Text>
-    </Pressable>
-  );
-  return (
-    <ReanimatedSwipeable
-      ref={ref}
-      enabled={enabled}
-      friction={2}
-      leftThreshold={48}
-      rightThreshold={48}
-      overshootLeft={false}
-      overshootRight={false}
-      childrenContainerStyle={{ backgroundColor: colors.card }}
-      // Направление — куда сдвинули строку (react-native-gesture-handler 3): 'right' — свайп вправо, открылась левая,
-      // зелёная кнопка. Было 'left' — и свайп влево к «Удалить» отмечал сделанным: повторяющееся уезжало на следующий раз.
-      onSwipeableOpen={(direction) => {
-        if (direction === 'right') {
-          onDone();
-          ref.current?.close();
-        }
-      }}
-      renderLeftActions={() =>
-        action(colors.success, done ? 'repeat' : 'check', done ? 'Вернуть' : 'Сделано', () => {
-          onDone();
-          ref.current?.close();
-        })
-      }
-      renderRightActions={() =>
-        action(colors.danger, 'trash', 'Удалить', async () => {
-          if (!(await onDelete())) ref.current?.close();
-        })
-      }
-    >
-      {children}
-    </ReanimatedSwipeable>
   );
 }

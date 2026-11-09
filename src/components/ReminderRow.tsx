@@ -5,11 +5,13 @@ import { combine, daysBetween, formatDayShort, formatRepeat, relativeDay, todayI
 import { useStore } from '@/lib/store';
 import type { Friend, Reminder } from '@/lib/types';
 import { Avatar } from './Avatar';
-import { Checkbox, IconCircle, ListRow, Tag, useTheme } from './ui';
+import { removeReminder } from './ReminderSwipe';
+import { IconCircle, ListRow, SelectedBadge, Tag, useTheme } from './ui';
 
 /**
- * Строка напоминания: кружок-чекбокс, аватар друга (или значок «для себя»), текст, дата.
- * Справа — ярлык срока, как у событий. Сделанное зачёркивается, просроченное краснеет подписью.
+ * Строка напоминания: аватар друга (или значок «для себя»), текст, дата; справа — ярлык срока, как у событий.
+ * Сделанное зачёркивается, просроченное краснеет подписью. «Сделано» и «Удалить» — свайпом (ReminderSwipe),
+ * для экранного диктора — действиями строки.
  */
 export function ReminderRow({
   reminder,
@@ -32,7 +34,7 @@ export function ReminderRow({
   onPress?: () => void;
   onLongPress?: () => void;
 }) {
-  const { toggleReminderDone } = useStore();
+  const { toggleReminderDone, deleteReminder } = useStore();
   const { s, colors } = useTheme();
   const today = todayISO();
   const overdue = !reminder.done && combine(reminder.date, reminder.time) < new Date();
@@ -58,15 +60,18 @@ export function ReminderRow({
       onLongPress={onLongPress}
       style={selected ? { backgroundColor: colors.soft } : undefined}
       leading={
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingLeft: 6 }}>
-          {selecting ? (
-            <Checkbox checked={selected} onPress={onPress ?? (() => {})} />
-          ) : (
-            <Checkbox checked={reminder.done} done onPress={() => toggleReminderDone(reminder.id)} />
-          )}
-          {showFriend && (friend ? <Avatar friend={friend} size={30} /> : <IconCircle icon="person" size={30} />)}
-        </View>
+        showFriend ? (
+          <View>
+            {friend ? <Avatar friend={friend} size={40} /> : <IconCircle icon="person" size={40} />}
+            {selecting && selected && <SelectedBadge />}
+          </View>
+        ) : undefined
       }
+      accessibilityActions={selecting ? undefined : [{ name: 'done', label: reminder.done ? 'Вернуть в активные' : 'Сделано' }, { name: 'delete', label: 'Удалить' }]}
+      onAccessibilityAction={(e) => {
+        if (e.nativeEvent.actionName === 'done') toggleReminderDone(reminder.id);
+        else if (e.nativeEvent.actionName === 'delete') removeReminder(reminder, deleteReminder);
+      }}
       title={
         <Text style={[s.title, reminder.done && { textDecorationLine: 'line-through', color: colors.text3 }]} numberOfLines={2}>
           {reminder.title}

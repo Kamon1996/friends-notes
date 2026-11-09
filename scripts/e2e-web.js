@@ -132,6 +132,54 @@ scenario('Напоминания: свайп вправо отмечает сд�
   }),
 });
 
+scenario('Напоминания: без кружков; первая строка один раз «подглядывает» вправо и влево, после своего свайпа — больше нет', async ({ ui, page }) => {
+  await ui.go('/reminders');
+  await ui.see('Купить цветы — Аня');
+  assert.equal(await page.locator('[role="checkbox"]').count(), 0, 'кружков в строках быть не должно');
+  // Следим за первой строкой: сначала вправо, потом влево, потом на место.
+  const h = await page.getByText('Купить цветы — Аня', { exact: true }).last().elementHandle();
+  const x0 = (await h.boundingBox()).x;
+  let max = 0;
+  let min = 0;
+  for (let i = 0; i < 110; i++) {
+    const dx = (await h.boundingBox()).x - x0;
+    max = Math.max(max, dx);
+    min = Math.min(min, dx);
+    await page.waitForTimeout(40);
+  }
+  assert.ok(max > 30 && min < -30, `строка не подглядывала: ${min}…${max}`);
+  assert.ok(Math.abs((await h.boundingBox()).x - x0) < 1, 'строка не вернулась на место');
+  assert.equal(await page.evaluate(() => localStorage.getItem('friends-notes/swipe-hint')), '1', 'показ подсказки не засчитан');
+  assert.ok((await ui.data()).reminders.every((r) => !r.done || r.id === 'r4'), 'подсказка ничего не отметила');
+  // Провёл сам — подсказка больше не нужна.
+  await ui.swipe('Написать Диме', -160);
+  await ui.see('Удалить', { label: true });
+  await page.waitForFunction(() => localStorage.getItem('friends-notes/swipe-hint') === '3', null, { timeout: 3000 }).catch(() => {});
+  assert.equal(await page.evaluate(() => localStorage.getItem('friends-notes/swipe-hint')), '3', 'после своего свайпа подсказка осталась');
+}, { storage: { 'friends-notes/swipe-hint': '0' } });
+
+scenario('Напоминания: подсказка не больше трёх раз — на четвёртый строка стоит', async ({ ui, page }) => {
+  await ui.go('/reminders');
+  await ui.see('Купить цветы — Аня');
+  const h = await page.getByText('Купить цветы — Аня', { exact: true }).last().elementHandle();
+  const x0 = (await h.boundingBox()).x;
+  let moved = 0;
+  for (let i = 0; i < 60; i++) {
+    moved = Math.max(moved, Math.abs((await h.boundingBox()).x - x0));
+    await page.waitForTimeout(40);
+  }
+  assert.equal(moved, 0, 'подсказка показалась в четвёртый раз');
+}, { storage: { 'friends-notes/swipe-hint': '3' } });
+
+scenario('Карточка друга: напоминание без кружка, свайп вправо — «сделано»', async ({ ui, page }) => {
+  await ui.go('/friend/a');
+  await ui.see('Купить цветы — Аня');
+  assert.equal(await page.locator('[role="checkbox"]').count(), 0, 'кружков в строках быть не должно');
+  await ui.swipe('Купить цветы — Аня', 160);
+  const data = await ui.waitData((x) => x.reminders.find((r) => r.id === 'r1').date !== d(0), 'не отмечено');
+  assert.equal(data.reminders.find((r) => r.id === 'r1').done, false, 'повторяющееся переносится, а не уходит в сделанные');
+});
+
 scenario('Лента: «сделано» у повторяющегося переносит его на следующий раз', async ({ ui }) => {
   await ui.go('/');
   await ui.check('Купить цветы — Аня');
@@ -1212,6 +1260,8 @@ function helpers(page, dialogs) {
     /** Провести пальцем по строке с этим текстом: dx < 0 — влево, dx > 0 — вправо. */
     async swipe(target, dx) {
       const h = await find(target);
+      await h.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(150);
       const b = await h.boundingBox();
       const x = b.x + b.width / 2;
       const y = b.y + b.height / 2;
@@ -1226,16 +1276,8 @@ function helpers(page, dialogs) {
       await cdp.detach();
       await page.waitForTimeout(600);
     },
-    /** Отметить кружок «сделано» в строке с этим текстом. */
-    async check(title) {
-      const h = await find(title);
-      const box = await h.evaluateHandle((el) => {
-        for (let p = el.parentElement; p; p = p.parentElement) { const c = p.querySelector('[role="checkbox"]'); if (c) return c; }
-        return null;
-      });
-      if (!box.asElement()) throw new Error(`В строке «${title}» нет кружка`);
-      await box.asElement().click(); await page.waitForTimeout(300);
-    },
+    /** «Сделано» у напоминания с этим текстом — свайпом вправо (кружков в строках нет). */
+    async check(title) { await ui.swipe(title, 160); },
     async field(placeholder, orPlaceholder) {
       let h = null;
       await until(async () => {
@@ -1287,7 +1329,7 @@ async function run(browser, s, index) {
   await ctx.addInitScript(([key, value, extra]) => {
     if (value !== null && localStorage.getItem(key) === null) localStorage.setItem(key, value);
     for (const [k, v] of Object.entries(extra || {})) localStorage.setItem(k, v);
-  }, [KEY, raw, s.storage || null]);
+  }, [KEY, raw, { 'friends-notes/swipe-hint': '3', ...(s.storage || {}) }]);  // подсказку свайпа — только там, где её проверяем
   const page = await ctx.newPage();
   const errors = [];
   const dialogs = [];

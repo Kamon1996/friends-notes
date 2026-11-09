@@ -5,6 +5,7 @@ import { FlatList, Pressable, Text, View } from 'react-native';
 import { Avatar } from '@/components/Avatar';
 import { Icon } from '@/components/Icon';
 import { ReminderRow } from '@/components/ReminderRow';
+import { ReminderSwipe } from '@/components/ReminderSwipe';
 import { TelegramImportCard } from '@/components/TelegramImportCard';
 import { TodayCard, type TodayEvent } from '@/components/TodayCard';
 import { Button, Empty, GroupedRow, IconButton, IconCircle, ListRow, ScreenHeader, Tag, useTheme } from '@/components/ui';
@@ -97,6 +98,8 @@ export default function UpcomingScreen() {
     if (!out.length) out.push({ type: 'empty', key: 'empty', noFriends: data.friends.length === 0, withoutBirthday: data.friends.filter((f) => !f.birthday).length });
     return out;
   }, [data, today]);
+  // Подсказку «можно провести» показывает первое дело в ленте.
+  const hintKey = rows.find((r) => r.type === 'reminder')?.key;
 
   if (!ready) return <View style={s.screen} />;
 
@@ -152,8 +155,10 @@ export default function UpcomingScreen() {
             case 'reminder':
               return (
                 <View style={{ paddingHorizontal: 20, paddingTop: row.first ? 2 : 0 }}>
-                  <GroupedRow first={row.first} last={row.last} inset={row.item.friend ? 96 : 56}>
-                    <ReminderRow reminder={row.item.reminder} friend={row.item.friend} showDate={row.showDate} />
+                  <GroupedRow first={row.first} last={row.last}>
+                    <ReminderSwipe reminder={row.item.reminder} hint={row.key === hintKey}>
+                      <ReminderRow reminder={row.item.reminder} friend={row.item.friend} showDate={row.showDate} />
+                    </ReminderSwipe>
                   </GroupedRow>
                 </View>
               );

@@ -8,6 +8,7 @@ import { SocialChips } from '@/components/SocialChips';
 import { ZodiacChip } from '@/components/ZodiacGlyph';
 import { SocialLinkSheet } from '@/components/SocialLinkSheet';
 import { ReminderRow } from '@/components/ReminderRow';
+import { ReminderSwipe } from '@/components/ReminderSwipe';
 import { Icon } from '@/components/Icon';
 import { PREF_FIELDS, PrefSheet, type PrefField } from '@/components/PrefSheet';
 import { Button, Empty, Group, IconButton, IconCircle, ListRow, SectionTitle, Tag, useTheme } from '@/components/ui';
@@ -204,9 +205,11 @@ export default function FriendScreen() {
           Напоминания
         </SectionTitle>
         {reminders.length > 0 ? (
-          <Group inset={56}>
-            {reminders.map((r) => (
-              <ReminderRow key={r.id} reminder={r} friend={friend} showFriend={false} />
+          <Group inset={14}>
+            {reminders.map((r, i) => (
+              <ReminderSwipe key={r.id} reminder={r} hint={i === 0}>
+                <ReminderRow reminder={r} friend={friend} showFriend={false} />
+              </ReminderSwipe>
             ))}
           </Group>
         ) : (

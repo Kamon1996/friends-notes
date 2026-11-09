@@ -5,7 +5,7 @@ import Animated from 'react-native-reanimated';
 import { Avatar } from '@/components/Avatar';
 import { Icon } from '@/components/Icon';
 import { ZodiacMark } from '@/components/ZodiacGlyph';
-import { ListRow, Tag, useTheme } from '@/components/ui';
+import { ListRow, SelectedBadge, Tag, useTheme } from '@/components/ui';
 import { ageOn, daysBetween, formatDate, hasYear, nextAnniversary, plural, relativeDay } from '@/lib/dates';
 import type { Friend } from '@/lib/types';
 
@@ -66,25 +66,7 @@ export function FriendRow({
       leading={
         <View>
           <Avatar friend={friend} size={44} />
-          {selected && (
-            <View
-              style={{
-                position: 'absolute',
-                right: -3,
-                bottom: -3,
-                width: 20,
-                height: 20,
-                borderRadius: 10,
-                backgroundColor: colors.success,
-                borderWidth: 2,
-                borderColor: colors.card,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Icon name="check" size={11} color="#FFFFFF" strokeWidth={3} />
-            </View>
-          )}
+          {selected && <SelectedBadge />}
         </View>
       }
       title={<Text style={s.name} numberOfLines={1}>{friend.name}</Text>}

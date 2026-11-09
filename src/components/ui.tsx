@@ -1,4 +1,4 @@
-import { Children, type ReactNode } from 'react';
+import { Children, type ComponentProps, type ReactNode } from 'react';
 import {
   Pressable,
   Switch,
@@ -332,6 +332,8 @@ export function ListRow({
   subtitleStyle,
   style,
   accessibilityLabel,
+  accessibilityActions,
+  onAccessibilityAction,
 }: {
   leading?: ReactNode;
   title: ReactNode;
@@ -344,6 +346,9 @@ export function ListRow({
   subtitleStyle?: StyleProp<TextStyle>;
   style?: StyleProp<ViewStyle>;
   accessibilityLabel?: string;
+  /** Действия для экранного диктора — например, то, что зрячий делает свайпом. */
+  accessibilityActions?: ComponentProps<typeof Pressable>['accessibilityActions'];
+  onAccessibilityAction?: ComponentProps<typeof Pressable>['onAccessibilityAction'];
 }) {
   const { s, colors } = useTheme();
   const body = (
@@ -359,9 +364,41 @@ export function ListRow({
   );
   if (!onPress && !onLongPress) return <View style={[s.row, s.rowPad, style]}>{body}</View>;
   return (
-    <Pressable onPress={onPress} onLongPress={onLongPress} delayLongPress={350} accessibilityRole="button" accessibilityLabel={accessibilityLabel} style={({ pressed }) => [s.row, s.rowPad, pressed && { opacity: 0.6 }, style]}>
+    <Pressable
+      onPress={onPress}
+      onLongPress={onLongPress}
+      delayLongPress={350}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityActions={accessibilityActions}
+      onAccessibilityAction={onAccessibilityAction}
+      style={({ pressed }) => [s.row, s.rowPad, pressed && { opacity: 0.6 }, style]}>
       {body}
     </Pressable>
+  );
+}
+
+/** Галочка в углу аватара: строка выбрана (режим выбора в списках друзей и напоминаний). */
+export function SelectedBadge() {
+  const { colors } = useTheme();
+  return (
+    <View
+      style={{
+        position: 'absolute',
+        right: -3,
+        bottom: -3,
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        backgroundColor: colors.success,
+        borderWidth: 2,
+        borderColor: colors.card,
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <Icon name="check" size={11} color="#FFFFFF" strokeWidth={3} />
+    </View>
   );
 }
 
