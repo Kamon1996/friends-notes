@@ -1,15 +1,23 @@
 name: Tests
 
-# Типы, линтер, юнит-тесты и сквозные сценарии на веб-сборке. Отдельно от сборки APK:
-# быстрый ответ «ничего не сломалось» на каждый пуш, без подписи и секретов.
+# Типы, линтер, юнит-тесты и сквозные сценарии на веб-сборке — без подписи и секретов.
+# Запуск:
+#  - вместе со сборкой: коммитом со словом «[apk]», «[aab]» или «[apk-cloud]» в сообщении;
+#  - отдельно: коммитом со словом «[tests]»;
+#  - на пул-реквест и вручную (Actions → «Tests» → Run workflow).
+# На каждый пуш не запускаем: у приватного репозитория минуты GitHub Actions ограничены, и когда они кончаются,
+# не стартует и сборка. Те же проверки идут локально перед каждым коммитом.
 on:
   push:
     branches: [main, claude/mobile-project-creation-pgqs46]
   pull_request:
   workflow_dispatch:
 
+# Новый запуск отменяет прежний той же ветки. Коммит, на котором тесты не идут, получает свою группу —
+# иначе он отменил бы идущие тесты сборочного коммита.
 concurrency:
-  group: tests-${{ github.ref }}
+  group: >-
+    tests-${{ github.ref }}-${{ (github.event_name != 'push' || contains(github.event.head_commit.message, '[apk]') || contains(github.event.head_commit.message, '[aab]') || contains(github.event.head_commit.message, '[apk-cloud]') || contains(github.event.head_commit.message, '[tests]')) && 'run' || github.sha }}
   cancel-in-progress: true
 
 permissions:
@@ -18,6 +26,10 @@ permissions:
 jobs:
   test:
     name: Проверки и сквозные тесты
+    if: >-
+      github.event_name != 'push' ||
+      contains(github.event.head_commit.message, '[apk]') || contains(github.event.head_commit.message, '[aab]') ||
+      contains(github.event.head_commit.message, '[apk-cloud]') || contains(github.event.head_commit.message, '[tests]')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
