@@ -1,4 +1,5 @@
-import { addInterval, combine, daysBetween, formatDayShort, formatRepeat, toISODate, toTime } from './dates';
+import { advancesOf, advancesText } from './advances';
+import { combine, daysBetween, formatDayShort, formatRepeat, toISODate, toTime } from './dates';
 import { byName, favoritesFirst } from './friendList';
 import { kindOf } from './habits';
 import type { Friend, ISODate, Reminder, TimeOfDay } from './types';
@@ -14,21 +15,32 @@ export function dayWord(date: ISODate, today: ISODate): string {
   return diff === 0 ? 'сегодня' : diff === 1 ? 'завтра' : diff === -1 ? 'вчера' : formatDayShort(date, today);
 }
 
+const joinAnd = (list: string[], and = ' и ') => (list.length > 1 ? `${list.slice(0, -1).join(', ')}${and}${list[list.length - 1]}` : (list[0] ?? ''));
+
 /** Когда придут уведомления — одной фразой под карточкой «Когда». */
-export function whenSummary(r: Pick<Reminder, 'date' | 'time' | 'advance' | 'daily' | 'repeat' | 'kind'>, today: ISODate): string {
+export function whenSummary(r: Pick<Reminder, 'date' | 'time' | 'advance' | 'advances' | 'daily' | 'repeat' | 'kind'>, today: ISODate): string {
   const kind = kindOf(r);
   const time = shortTime(r.time);
   const day = (d: ISODate) => dayWord(d, today);
+  const early = advancesOf(r);
   if (kind === 'repeat') {
     const every = formatRepeat(r.repeat);
-    return `${every[0].toUpperCase()}${every.slice(1)} в ${time}. Ближайший раз — ${day(r.date)}.`;
+    return `${every[0].toUpperCase()}${every.slice(1)} в ${time}${early.length ? `, заранее — ${advancesText(early)}` : ''}. Ближайший раз — ${day(r.date)}.`;
   }
-  if (kind === 'at') return `Напомню ${day(addInterval(r.date, 'day', -1))} и ${day(r.date)} в ${time}.`;
-  if (r.daily) return `Напомню каждый день в ${time} до ${formatDayShort(r.date, today)} — пока не отметишь «Сделано».`;
-  if (!r.advance) return `Напомню ${day(r.date)} в ${time}.`;
-  const early = new Date(combine(r.date, r.time).getTime() - r.advance * 60_000);
-  const earlyDay = toISODate(early);
-  return earlyDay === r.date ? `Напомню ${day(r.date)} в ${shortTime(toTime(early))} и в ${time}.` : `Напомню ${day(earlyDay)} и ${day(r.date)} в ${time}.`;
+  if (kind === 'due' && r.daily) {
+    return `Напомню каждый день в ${time} до ${formatDayShort(r.date, today)} — пока не отметишь «Сделано».${early.length ? ` В день срока — ещё ${advancesText(early)}.` : ''}`;
+  }
+  // Все уведомления по дням: «чт, 12 ноя в 10:00, пт, 13 ноя в 9:00 и в 10:00».
+  const at = combine(r.date, r.time);
+  const byDay = new Map<ISODate, string[]>();
+  for (const moment of [...early.map((m) => new Date(at.getTime() - m * 60_000)), at].sort((a, b) => a.getTime() - b.getTime())) {
+    const d = toISODate(moment);
+    byDay.set(d, [...(byDay.get(d) ?? []), shortTime(toTime(moment))]);
+  }
+  const groups = [...byDay];
+  // Время везде одно — короче: «сегодня и завтра в 10:00».
+  if (groups.every(([, times]) => times.length === 1 && times[0] === time)) return `Напомню ${joinAnd(groups.map(([d]) => day(d)))} в ${time}.`;
+  return `Напомню ${groups.map(([d, times]) => `${day(d)} в ${joinAnd(times, ' и в ')}`).join(', ')}.`;
 }
 
 /**

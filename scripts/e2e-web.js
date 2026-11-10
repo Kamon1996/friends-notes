@@ -41,7 +41,7 @@ const bday = (n, y) => `${y}-${d(n).slice(5)}`;
 // ---------- Данные ----------
 const F = (o) => ({ emoji: '', phone: '', food: '', flowers: '', gifts: '', notes: '', dates: [], createdAt: 1, birthday: null, ...o });
 const R = (o) => ({ note: '', friendId: null, time: '12:00', repeat: null, advance: 0, done: false, createdAt: 1, ...o });
-const SETTINGS = { eventTime: '10:00', eventDayBefore: true, theme: 'light', accentLight: 'terracotta', accentDark: 'terracotta', crashReports: true, lastSeenVersion: VERSION };
+const SETTINGS = { eventTime: '10:00', eventDayBefore: true, theme: 'light', accentLight: 'terracotta', accentDark: 'terracotta', crashReports: true, lastSeenVersion: VERSION, newReminderForm: 'quick' };
 const ANYA = F({
   id: 'a', name: 'Аня Смирнова', birthday: bday(0, 1995), phone: '+7 999 123-45-67', telegramId: 123456789, whatsapp: '79991234567',
   food: 'Суши, тирамису', flowers: 'Пионы', gifts: 'Керамика', notes: 'Любит настолки',
@@ -547,7 +547,8 @@ scenario('Напоминание: свой интервал и «за 3 дня»
   await ui.tap('Сохранить');
   const data = await ui.waitData((x) => x.reminders.some((r) => r.title === 'Сдать проект'), 'не сохранилось');
   const r = data.reminders.find((x) => x.title === 'Сдать проект');
-  assert.equal(r.advance, 4320);
+  // «Заранее» теперь есть и у повторяющихся — оно записано списком.
+  assert.deepEqual([r.advance, r.advances], [0, [4320]]);
   assert.deepEqual(r.repeat, { every: 3, unit: 'week' });
   await ui.see('каждые 3 недели');
 });
@@ -661,8 +662,9 @@ scenario('Напоминание: «Дата и время», важность �
   await ui.tap('Дата и время');
   await ui.pickDate('2026-06-20');
   await ui.pickTime('15:00');
+  // У встречи «заранее» по умолчанию — за день; его можно поменять, как и у остальных дел.
   await ui.see('Напомню пт, 19 июн и сб, 20 июн в 15:00.');
-  await ui.notSee('Заранее');
+  await ui.see('Заранее');
   // Детали раскрываются на месте: выбрал — строка закрылась и показывает значение.
   await ui.tap('Важность');
   await ui.tap('Важно');
@@ -718,7 +720,7 @@ scenario('Напоминание: без названия — подсказка
   assert.deepEqual([r.date, r.time, r.advance, 'priority' in r, 'minutes' in r], ['2026-07-15', '07:45', 0, false, false], JSON.stringify(r));
 });
 
-scenario('Форма «строками»: готовое дело правится в шторках; в настройках её можно выбрать и для новых дел', async ({ ui }) => {
+scenario('Форма «строками»: готовое дело правится в шторках; новое дело по умолчанию — тоже строками, в настройках можно выбрать быструю', async ({ ui }) => {
   await ui.go('/');
   // Готовое дело — строки со значениями; лент и календаря в строке нет.
   await ui.tap('Написать Диме');
@@ -745,32 +747,75 @@ scenario('Форма «строками»: готовое дело правит�
   let data = await ui.waitData((x) => x.reminders.find((r) => r.id === 'r3').priority === 3, 'правка не сохранилась');
   const r3 = data.reminders.find((r) => r.id === 'r3');
   assert.deepEqual([r3.date, r3.note, r3.time, r3.advance], [d(1), 'Про отпуск', '20:00', 1440]);
-  // Новое дело по умолчанию — быстрой формой.
+  // Новое дело по умолчанию — тоже строками.
   await ui.tap('Новое напоминание');
-  assert.equal(await ui.quickForm(), true, 'новое дело по умолчанию — быстрая форма');
-  // В настройках выбираем «Строками» — и новое дело открывается так же, как правка.
-  await ui.go('/settings');
-  await ui.see('Форма нового дела');
-  await ui.tap('Строками');
-  await ui.waitData((x) => x.settings.newReminderForm === 'rows', 'выбор формы не сохранился');
-  await ui.go('/');
-  await ui.tap('Новое напоминание');
-  assert.equal(await ui.quickForm(), false, 'после выбора в настройках новое дело — строками');
+  assert.equal(await ui.quickForm(), false, 'новое дело по умолчанию — строками');
   await ui.fill('Например, сдать отчёт', 'Купить билеты');
   await ui.see('Срок: завтра', { label: true });
   await ui.pickTime('19:00');
+  // «Заранее» — несколько сразу: за час и за день.
   await ui.tap('Напомнить');
   await ui.tap('За час');
   await ui.see('Напомню завтра в 18:00 и в 19:00.');
+  await ui.tap('За день');
+  await ui.see('Напомню сегодня в 19:00, завтра в 18:00 и в 19:00.');
   await ui.tap('Готово');
+  await ui.see('Напомнить: в 19:00 · за день и за час', { label: true });
   await ui.tap('Сохранить');
   data = await ui.waitData((x) => x.reminders.some((r) => r.title === 'Купить билеты'), 'новое дело не сохранилось');
   const r = data.reminders.find((x) => x.title === 'Купить билеты');
-  assert.deepEqual([r.date, r.time, r.advance, 'priority' in r], [d(1), '19:00', 60, false]);
+  assert.deepEqual([r.date, r.time, r.advance, r.advances, 'priority' in r], [d(1), '19:00', 0, [60, 1440], false]);
+  // В настройках выбираем «Быстрая» — новое дело открывается лентами; готовое — по-прежнему строками.
+  await ui.go('/settings');
+  await ui.see('Форма нового дела');
+  await ui.tap('Быстрая');
+  await ui.waitData((x) => x.settings.newReminderForm === 'quick', 'выбор формы не сохранился');
+  await ui.go('/');
+  await ui.tap('Новое напоминание');
+  assert.equal(await ui.quickForm(), true, 'после выбора в настройках новое дело — быстрой формой');
+  await ui.go('/');
+  await ui.tap('Купить билеты');
+  assert.equal(await ui.quickForm(), false, 'готовое дело — всегда строками');
   // И обратно.
   await ui.go('/settings');
-  await ui.tap('Быстрая');
-  await ui.waitData((x) => x.settings.newReminderForm === 'quick', 'обратный выбор не сохранился');
+  await ui.tap('Строками');
+  await ui.waitData((x) => x.settings.newReminderForm === 'rows', 'обратный выбор не сохранился');
+}, { data: seed({ settings: { newReminderForm: undefined } }) });
+
+scenario('Повтор по дням недели и несколько «заранее»: тренировка по пн, ср и пт, напомнить за день и за 2 часа', async ({ ui }) => {
+  await ui.go('/');
+  await ui.tap('Новое напоминание');
+  await ui.fill('Например, сдать отчёт', 'Тренировка');
+  await ui.tap('Повторять');
+  // «По дням» начинает с дня недели уже выбранной даты (завтра — четверг).
+  await ui.tap('По дням');
+  await ui.see('По чт в 10:00. Ближайший раз — завтра.');
+  await ui.tap('Понедельник');
+  await ui.tap('Среда');
+  await ui.tap('Пятница');
+  await ui.tap('Четверг');
+  // Четверг сняли — ближайший раз переехал на пятницу.
+  await ui.see('По пн, ср и пт в 10:00. Ближайший раз — пт, 12 июн.');
+  await ui.pickTime('19:00');
+  await ui.tap('За день');
+  await ui.tap('За 2 часа');
+  await ui.see('По пн, ср и пт в 19:00, заранее — за день и за 2 часа. Ближайший раз — пт, 12 июн.');
+  await ui.tap('Сохранить');
+  const data = await ui.waitData((x) => x.reminders.some((r) => r.title === 'Тренировка'), 'не сохранилось');
+  const r = data.reminders.find((x) => x.title === 'Тренировка');
+  assert.deepEqual([r.repeat, r.date, r.time, r.advances], [{ every: 1, unit: 'week', days: [1, 3, 5] }, '2026-06-12', '19:00', [120, 1440]]);
+  // В списке — «по пн, ср и пт»; в форме строками — то же самое.
+  await ui.see('по пн, ср и пт в 19:00');
+  await ui.tap('Тренировка');
+  await ui.see('Повтор: по пн, ср и пт', { label: true });
+  await ui.see('Время: 19:00 · за день и за 2 часа', { label: true });
+  // Дни правятся в шторке «Повтор»: добавили воскресенье.
+  await ui.tap('Повтор');
+  await ui.tap('Воскресенье');
+  await ui.tap('Готово');
+  await ui.see('Повтор: по пн, ср, пт и вс', { label: true });
+  await ui.tap('Сохранить');
+  await ui.waitData((x) => x.reminders.find((y) => y.id === r.id).repeat.days.join() === '1,3,5,7', 'дни не сохранились');
 });
 
 scenario('Умные подсказки: частое время — в ленте и выбрано сразу; свой шаблон подставляет время, «заранее» и друга', async ({ ui }) => {
@@ -1886,7 +1931,10 @@ function helpers(page, dialogs) {
       await page.waitForTimeout(700);
     },
     /** Какая форма дела открыта: «быстрая» (ленты, календарь в строке) или «строками» (выбор в шторке). */
-    async quickForm() { return !!(await visible(page.getByLabel(/календарь$/))); },
+    async quickForm() {
+      await ui.see('Сохранить'); // форма уже на экране
+      return !!(await visible(page.getByLabel(/календарь$/)));
+    },
     /** Срок в форме дела. Быстрая: ближняя неделя — в строке, дальше — календарь на месте. Строками: в шторке. */
     async pickDate(iso) {
       const [y, m, dd] = iso.split('-').map(Number);

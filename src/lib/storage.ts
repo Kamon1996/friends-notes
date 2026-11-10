@@ -1,3 +1,4 @@
+import { cleanAdvances } from './advances';
 import { DEFAULT_SETTINGS, EMPTY_DATA, type AppData, type Friend, type ImportantDate, type Reminder } from './types';
 
 /**
@@ -37,13 +38,16 @@ export function isStoredDate(v: unknown): v is string {
 }
 
 const REPEAT_UNITS = ['day', 'week', 'month', 'year'];
-const ADVANCES = [0, 60, 1440, 4320, 10080];
+const ADVANCES = [0, 60, 120, 1440, 4320, 10080];
 /** Повтор — только понятный: счёт по известной единице и разумный шаг. Иначе пересчёт дат не закончится никогда. */
 function normalizeRepeat(v: unknown): Reminder['repeat'] {
   if (!isObject(v) || typeof v.unit !== 'string' || !REPEAT_UNITS.includes(v.unit)) return null;
   const every = v.every;
   if (typeof every !== 'number' || !Number.isInteger(every) || every < 1 || every > 999) return null;
-  return { every, unit: v.unit as NonNullable<Reminder['repeat']>['unit'] };
+  const unit = v.unit as NonNullable<Reminder['repeat']>['unit'];
+  // Дни недели — только у недельного повтора и только настоящие: 1 — понедельник … 7 — воскресенье.
+  const days = unit === 'week' && Array.isArray(v.days) ? [...new Set(v.days.filter((d): d is number => Number.isInteger(d) && d >= 1 && d <= 7))].sort((a, b) => a - b) : [];
+  return days.length ? { every, unit, days } : { every, unit };
 }
 
 function normalizeFriend(v: unknown): Friend | null {
@@ -97,7 +101,7 @@ function normalizeReminder(v: unknown): Reminder | null {
   // Без настоящей даты дело не посчитать: ни срок, ни повтор, ни уведомления.
   if (!isObject(v) || typeof v.id !== 'string' || !isStoredDate(v.date)) return null;
   const repeat = normalizeRepeat(v.repeat);
-  const { daily, kind, priority, minutes, doneAt, calendar, calendarAi, calendarSeen, ...rest } = v;
+  const { daily, kind, priority, minutes, doneAt, calendar, calendarAi, calendarSeen, advances, ...rest } = v;
   const done = v.done === true;
   return {
     ...(rest as unknown as Reminder),
@@ -108,6 +112,8 @@ function normalizeReminder(v: unknown): Reminder | null {
     ...(typeof minutes === 'number' && Number.isInteger(minutes) && minutes > 0 && minutes <= 24 * 60 ? { minutes } : {}),
     ...(done && typeof doneAt === 'number' && doneAt > 0 ? { doneAt } : {}),
     ...(typeof calendar === 'boolean' ? { calendar } : {}),
+    // Несколько «заранее»: только известные значения; пустой список — тоже выбор («не напоминать заранее»).
+    ...(Array.isArray(advances) ? { advances: cleanAdvances(advances) } : {}),
     ...(typeof calendarAi === 'boolean' && typeof calendarSeen === 'string' ? { calendarAi, calendarSeen } : {}),
     title: str(v.title),
     note: str(v.note),

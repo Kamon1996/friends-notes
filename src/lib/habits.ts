@@ -1,5 +1,6 @@
+import { advancesOf } from './advances';
 import { withoutName } from './calendarAi';
-import type { Advance, Friend, Reminder, Repeat, TimeOfDay } from './types';
+import type { Friend, Reminder, Repeat, TimeOfDay } from './types';
 
 /**
  * «Умные» подсказки в форме дела: время, «заранее» и шаблоны названий — по тому, как человек уже заводил дела.
@@ -114,27 +115,28 @@ export function timeSuggestions(reminders: readonly Reminder[], friends: readonl
 }
 
 export interface AdvanceChoice {
-  advance: Advance;
+  /** За сколько минут напоминать заранее: может быть несколько («за день и за час»). */
+  advances: number[];
+  /** «Каждый день до срока» — только у дел «до срока». */
   daily: boolean;
 }
 
+const advanceChoice = (r: Reminder): AdvanceChoice => ({ advances: advancesOf(r), daily: kindOf(r) === 'due' && !!r.daily });
+const advanceKey = (c: AdvanceChoice) => `${c.daily ? 'daily' : ''}|${c.advances.join(',')}`;
+
 /**
- * Привычное «заранее» для дел «до срока»: что человек выбирает чаще всего — если это правда привычка
- * (не меньше двух дел и больше половины веса). Иначе null: оставляем «Нет».
+ * Привычное «заранее» для дел этого вида: что человек выбирает чаще всего — если это правда привычка
+ * (не меньше двух дел и больше половины веса). Иначе null: остаётся как принято по умолчанию.
  */
 export function usualAdvance(reminders: readonly Reminder[], friends: readonly Friend[], ctx: HabitContext, now = Date.now()): AdvanceChoice | null {
-  if (ctx.kind !== 'due') return null;
-  const due = (list: readonly Reminder[]) => list.filter((r) => kindOf(r) === 'due');
+  const same = (list: readonly Reminder[]) => list.filter((r) => kindOf(r) === ctx.kind);
   const top = (list: readonly Reminder[]) => {
-    const ranked = tally(
-      list.map((r) => ({ value: { advance: r.daily ? 0 : r.advance, daily: !!r.daily } as AdvanceChoice, weight: weight(r, now) })),
-      (c) => (c.daily ? 'daily' : String(c.advance)),
-    );
+    const ranked = tally(list.map((r) => ({ value: advanceChoice(r), weight: weight(r, now) })), advanceKey);
     const total = ranked.reduce((sum, t) => sum + t.score, 0);
     return ranked[0] && habit(ranked[0]) && ranked[0].score > total / 2 ? ranked[0].value : null;
   };
-  // Сначала — дела с таким же названием, потом — все дела «до срока».
-  return top(due(sameTitle(reminders, friends, ctx))) ?? top(due(reminders));
+  // Сначала — дела с таким же названием, потом — все дела того же вида.
+  return top(same(sameTitle(reminders, friends, ctx))) ?? top(same(reminders));
 }
 
 export interface TitleTemplate {
@@ -149,7 +151,8 @@ export interface TitleTemplate {
   time?: TimeOfDay;
   kind?: TaskKind;
   repeat?: Repeat | null;
-  advance?: Advance;
+  /** Привычное «заранее»: может быть несколько. */
+  advances?: number[];
   daily?: boolean;
   /** Для кого: если дело всегда было для одного и того же человека. */
   friendId?: string | null;
@@ -206,8 +209,8 @@ export function titleTemplates(reminders: readonly Reminder[], friends: readonly
     const w = (r: Reminder) => weight(r, now);
     const kind = tally(list.map((r) => ({ value: kindOf(r), weight: w(r) })), (k) => k)[0].value;
     const time = tally(list.map((r) => ({ value: r.time, weight: w(r) })), (t) => t)[0].value;
-    const due = list.filter((r) => kindOf(r) === 'due');
-    const adv = due.length ? tally(due.map((r) => ({ value: { advance: r.daily ? 0 : r.advance, daily: !!r.daily }, weight: w(r) })), (c) => (c.daily ? 'daily' : String(c.advance)))[0].value : null;
+    const sameKind = list.filter((r) => kindOf(r) === kind);
+    const adv = tally(sameKind.map((r) => ({ value: advanceChoice(r), weight: w(r) })), advanceKey)[0].value;
     const repeats = list.filter((r) => r.repeat).sort((a, b) => b.createdAt - a.createdAt);
     own.push({
       key,
@@ -217,8 +220,8 @@ export function titleTemplates(reminders: readonly Reminder[], friends: readonly
       time,
       kind,
       repeat: kind === 'repeat' ? (repeats[0]?.repeat ?? null) : null,
-      advance: kind === 'due' && adv ? (adv.advance as Advance) : 0,
-      daily: kind === 'due' && !!adv?.daily,
+      advances: adv.advances,
+      daily: adv.daily,
       friendId,
       score,
     });

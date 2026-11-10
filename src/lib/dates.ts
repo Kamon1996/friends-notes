@@ -79,12 +79,60 @@ export function addInterval(date: ISODate, unit: RepeatUnit, n: number): ISODate
   }
 }
 
-/** Последовательность срабатываний повторяющегося напоминания, начиная с `start`. */
+/** Дни недели повтора «по дням»: 1 — понедельник … 7 — воскресенье, по порядку. Обычный повтор — null. */
+export function repeatDays(repeat: Repeat | null): number[] | null {
+  if (!repeat || repeat.unit !== 'week' || !Array.isArray(repeat.days)) return null;
+  const days = [...new Set(repeat.days.filter((d) => Number.isInteger(d) && d >= 1 && d <= 7))].sort((a, b) => a - b);
+  return days.length ? days : null;
+}
+
+/** День недели даты: 1 — понедельник … 7 — воскресенье. */
+export function weekdayOf(date: ISODate): number {
+  return ((parseISODate(date).getDay() + 6) % 7) + 1;
+}
+
+/**
+ * Последовательность срабатываний повторяющегося напоминания, начиная с `start`. У повтора «по дням» — выбранные
+ * дни недели в каждой `every`-й неделе, считая от недели, в которой лежит `start`.
+ */
 export function* occurrences(start: ISODate, repeat: Repeat): Generator<ISODate> {
   const every = Math.max(1, Math.floor(repeat.every));
-  for (let i = 0; ; i++) {
-    yield addInterval(start, repeat.unit, every * i);
+  const days = repeatDays(repeat);
+  if (!days) {
+    for (let i = 0; ; i++) {
+      yield addInterval(start, repeat.unit, every * i);
+    }
+  } else {
+    const monday = addInterval(start, 'day', 1 - weekdayOf(start));
+    for (let week = 0; ; week += every) {
+      for (const d of days) {
+        const date = addInterval(monday, 'day', week * 7 + d - 1);
+        if (date >= start) yield date;
+      }
+    }
   }
+}
+
+/** Ближайший день повтора не раньше `date`. У обычного повтора — сама дата. */
+export function snapToRepeat(date: ISODate, repeat: Repeat | null): ISODate {
+  const days = repeatDays(repeat);
+  if (!days) return date;
+  for (let i = 0; i < 7; i++) {
+    const day = addInterval(date, 'day', i);
+    if (days.includes(weekdayOf(day))) return day;
+  }
+  return date;
+}
+
+/** Прошлый раз повторяющегося дела перед `date` — от него горит фитиль. */
+export function previousOccurrence(date: ISODate, repeat: Repeat): ISODate {
+  const days = repeatDays(repeat);
+  if (!days) return addInterval(date, repeat.unit, -Math.max(1, Math.floor(repeat.every)));
+  for (let i = 1; i <= 7; i++) {
+    const day = addInterval(date, 'day', -i);
+    if (days.includes(weekdayOf(day))) return day;
+  }
+  return addInterval(date, 'week', -1);
 }
 
 /** Первое срабатывание строго позже `after` (дата+время). */
@@ -180,6 +228,19 @@ const UNIT_FORMS: Record<RepeatUnit, [string, string, string]> = {
 export function formatRepeat(repeat: Repeat | null): string {
   if (!repeat) return 'однократно';
   const { every, unit } = repeat;
+  const days = repeatDays(repeat);
+  if (days) {
+    const names = days.map((d) => WEEKDAYS_SHORT[d % 7]);
+    const which =
+      days.length === 7
+        ? 'каждый день'
+        : days.join('') === '12345'
+          ? 'по будням'
+          : days.join('') === '67'
+            ? 'по выходным'
+            : `по ${names.length > 1 ? `${names.slice(0, -1).join(', ')} и ${names[names.length - 1]}` : names[0]}`;
+    return every > 1 ? `раз в ${every} ${plural(every, 'неделю', 'недели', 'недель')} ${which === 'каждый день' ? 'всю неделю' : which}` : which;
+  }
   const forms = UNIT_FORMS[unit];
   if (every === 1) {
     const word = unit === 'week' ? 'каждую' : unit === 'day' || unit === 'month' || unit === 'year' ? 'каждый' : 'каждые';

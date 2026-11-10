@@ -1,6 +1,6 @@
 import { Stack } from 'expo-router';
 import { useRef, type ComponentRef, type ReactNode } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, Switch, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { FriendPickerModal } from '@/components/FriendPicker';
@@ -9,7 +9,7 @@ import { ChipStrip, FormCard, SmallChip } from '@/components/form/parts';
 import { Button, GrowingInput, useTheme } from '@/components/ui';
 import { formatRepeat } from '@/lib/dates';
 import { DURATIONS, formatMinutes } from '@/lib/reminderList';
-import { PRIORITIES, UNITS, type ReminderFormModel } from './useReminderForm';
+import { PRIORITIES, UNITS, WEEK_DAYS, type ReminderFormModel } from './useReminderForm';
 
 /** Общее у обоих видов формы: шапка, название с шаблонами, «Удалить», «Сохранить» внизу и окно поиска друга. */
 export function FormScaffold({ form, children, onPickFriend }: { form: ReminderFormModel; children: ReactNode; onPickFriend?: (id: string | null) => void }) {
@@ -109,6 +109,44 @@ export function MinutesChips({ form, onPick }: { form: ReminderFormModel; onPick
           }}
         />
       ))}
+    </View>
+  );
+}
+
+/** Повтор по дням недели: семь кружков, нажал — добавил или убрал. Последний выбранный день снять нельзя. */
+export function RepeatDays({ form }: { form: ReminderFormModel }) {
+  const { colors, fonts } = useTheme();
+  const days = form.days ?? [];
+  return (
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+      {WEEK_DAYS.map(({ day, short, name }) => {
+        const on = days.includes(day);
+        return (
+          <Pressable
+            key={day}
+            onPress={() => form.toggleDay(day)}
+            accessibilityRole="checkbox"
+            accessibilityLabel={name}
+            accessibilityState={{ checked: on }}
+            hitSlop={4}
+            style={({ pressed }) => ({
+              width: 38,
+              height: 38,
+              borderRadius: 19,
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderWidth: 1,
+              borderColor: on ? colors.text : colors.hairline,
+              backgroundColor: on ? colors.text : 'transparent',
+              opacity: pressed ? 0.6 : 1,
+            })}
+          >
+            <Text maxFontSizeMultiplier={1.1} style={{ fontFamily: on ? fonts.semibold : fonts.medium, fontSize: 13, lineHeight: 17, color: on ? colors.bg : colors.text }}>
+              {short}
+            </Text>
+          </Pressable>
+        );
+      })}
     </View>
   );
 }

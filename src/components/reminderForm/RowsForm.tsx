@@ -15,8 +15,8 @@ import { completeReminder, reopenReminder } from '@/lib/events';
 import { dayWord, shortTime } from '@/lib/reminderForm';
 import { PRIORITY_LABELS, formatMinutes } from '@/lib/reminderList';
 import type { ISODate } from '@/lib/types';
-import { CustomRepeat, FormScaffold, FormSwitch, MinutesChips, PriorityChips } from './shared';
-import { ADVANCES, KINDS, type ReminderFormModel } from './useReminderForm';
+import { CustomRepeat, FormScaffold, FormSwitch, MinutesChips, PriorityChips, RepeatDays } from './shared';
+import { KINDS, type ReminderFormModel } from './useReminderForm';
 
 /** Что выбирают в шторке. */
 type SheetKey = 'date' | 'time' | 'repeat' | 'who' | 'priority' | 'minutes' | 'note';
@@ -38,9 +38,8 @@ export function RowsForm({ form }: { form: ReminderFormModel }) {
   const muted = colors.text3;
   const priorityColor = r.priority === 3 ? colors.danger : r.priority === 2 ? colors.warn : undefined;
   const chevron = <Icon name="chevronRight" size={16} color={colors.text3} strokeWidth={2.2} />;
-  const advance = ADVANCES.find((a) => a.value === r.advance);
-  // «Напомнить: в 10:00 · за день» у дел «до срока»; у встреч и повторов — просто время.
-  const remind = kind !== 'due' ? shortTime(r.time) : `в ${shortTime(r.time)}${r.daily ? ' · каждый день' : r.advance && advance ? ` · ${advance.label.toLowerCase()}` : ''}`;
+  // «в 10:00 · за день и за час» у дел «до срока»; у встреч и повторов — «15:00 · за день».
+  const remind = `${kind === 'due' ? 'в ' : ''}${shortTime(r.time)}${form.advanceText ? ` · ${form.advanceText}` : ''}`;
   const dateLabel = kind === 'due' ? 'Срок' : kind === 'repeat' ? 'Ближайший раз' : 'Дата';
   const timeLabel = kind === 'due' ? 'Напомнить' : 'Время';
 
@@ -100,19 +99,16 @@ export function RowsForm({ form }: { form: ReminderFormModel }) {
     ),
     time: () => (
       <>
-        {kind === 'due' && label('Во сколько')}
+        {label('Во сколько')}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
           <View style={{ flex: 1 }}>{wrap(form.timeChips)}</View>
           <PickerTrigger mode="time" value={r.time} onChange={form.pickTime} label="Выбрать время" style={{ borderRadius: 16 }}>
             <PinIcon icon="clock" />
           </PickerTrigger>
         </View>
-        {kind === 'due' && (
-          <>
-            {label('Напомнить заранее')}
-            {wrap(form.advanceChips)}
-          </>
-        )}
+        {/* Несколько сразу: «за день» и «за час» — два уведомления. */}
+        {label('Напомнить заранее')}
+        {wrap(form.advanceChips)}
         <View style={{ flexDirection: 'row', gap: 8, backgroundColor: colors.soft, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 }}>
           <Icon name="bellRing" size={16} color={colors.accentText} strokeWidth={2} />
           <Text style={{ flex: 1, fontFamily: fonts.body, fontSize: 13, lineHeight: 18, color: colors.accentText }}>{form.summary}</Text>
@@ -123,6 +119,7 @@ export function RowsForm({ form }: { form: ReminderFormModel }) {
     repeat: () => (
       <>
         {wrap(form.repeatChips)}
+        {form.days && <RepeatDays form={form} />}
         {customRepeat && <CustomRepeat form={form} />}
         {done}
       </>

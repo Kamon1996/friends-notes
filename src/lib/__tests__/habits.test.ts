@@ -90,18 +90,28 @@ describe('заранее', () => {
   test('привычка — когда больше половины дел и не меньше двух', () => {
     assert.equal(adv([]), null);
     assert.equal(adv([R({ advance: 1440 })]), null);
-    assert.deepEqual(adv([R({ advance: 1440 }), R({ advance: 1440, ago: 2 }), R({ advance: 0, ago: 3 })]), { advance: 1440, daily: false });
+    assert.deepEqual(adv([R({ advance: 1440 }), R({ advance: 1440, ago: 2 }), R({ advance: 0, ago: 3 })]), { advances: [1440], daily: false });
     // Пополам — привычки нет.
     assert.equal(adv([R({ advance: 1440 }), R({ advance: 1440 }), R({ advance: 60 }), R({ advance: 60 })]), null);
   });
 
   test('«каждый день до срока» — тоже вариант; у встреч и повторов «заранее» нет', () => {
-    assert.deepEqual(adv([R({ daily: true }), R({ daily: true, ago: 2 })]), { advance: 0, daily: true });
+    assert.deepEqual(adv([R({ daily: true }), R({ daily: true, ago: 2 })]), { advances: [], daily: true });
     assert.equal(usualAdvance([R({ advance: 1440 }), R({ advance: 1440 })], friends, { kind: 'at' }, NOW), null);
   });
 
   test('чаще всего «нет» — так и оставляем', () => {
-    assert.deepEqual(adv([R(), R({ ago: 2 }), R({ advance: 60, ago: 3 })]), { advance: 0, daily: false });
+    assert.deepEqual(adv([R(), R({ ago: 2 }), R({ advance: 60, ago: 3 })]), { advances: [], daily: false });
+  });
+
+  test('несколько «заранее» сразу — тоже привычка; у встреч и повторов она своя', () => {
+    const both = [R({ advances: [60, 1440] }), R({ advances: [1440, 60], ago: 2 }), R({ advance: 60, ago: 3 })];
+    assert.deepEqual(adv(both), { advances: [60, 1440], daily: false });
+    // Встречи по умолчанию напоминают за день; человек привык ещё и за час.
+    const visits = [R({ kind: 'at', advances: [60, 1440] }), R({ kind: 'at', advances: [60, 1440], ago: 2 }), R({ kind: 'at', ago: 9 })];
+    assert.deepEqual(usualAdvance(visits, friends, { kind: 'at' }, NOW), { advances: [60, 1440], daily: false });
+    const gym = [R({ repeat: { every: 1, unit: 'week' }, advances: [120] }), R({ repeat: { every: 1, unit: 'week', days: [1, 3, 5] }, advances: [120], ago: 2 })];
+    assert.deepEqual(usualAdvance(gym, friends, { kind: 'repeat' }, NOW), { advances: [120], daily: false });
   });
 });
 
@@ -122,14 +132,14 @@ describe('свои шаблоны', () => {
       R({ title: 'Разовое', time: '08:00' }),
     ];
     const [first, ...rest] = tpl(list);
-    assert.deepEqual(first, { key: 'оплатить интернет', label: 'Оплатить интернет', title: 'Оплатить интернет', own: true, time: '10:00', kind: 'due', repeat: null, advance: 1440, daily: false, friendId: null });
+    assert.deepEqual(first, { key: 'оплатить интернет', label: 'Оплатить интернет', title: 'Оплатить интернет', own: true, time: '10:00', kind: 'due', repeat: null, advances: [1440], daily: false, friendId: null });
     assert.ok(rest.every((t) => !t.own), 'разовое название шаблоном не становится');
   });
 
   test('дело всегда для одного человека — шаблон подставит и его', () => {
     const list = [R({ title: 'Позвонить маме', friendId: 'm', time: '19:00', advance: 60, ago: 3 }), R({ title: 'Позвонить маме', friendId: 'm', time: '19:00', advance: 60, ago: 10 })];
     const [t] = tpl(list);
-    assert.deepEqual([t.label, t.title, t.friendId, t.time, t.advance], ['Позвонить маме', 'Позвонить маме', 'm', '19:00', 60]);
+    assert.deepEqual([t.label, t.title, t.friendId, t.time, t.advances], ['Позвонить маме', 'Позвонить маме', 'm', '19:00', [60]]);
     // Для другого друга — то же действие с его именем.
     const [forIgor] = tpl(list, igor);
     assert.deepEqual([forIgor.label, forIgor.title, forIgor.friendId, forIgor.own], ['Позвонить', 'Позвонить — Игорь Ветров', 'i', true]);

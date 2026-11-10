@@ -10,10 +10,12 @@ import {
   occurrences,
   parseISODate,
   plural,
+  previousOccurrence,
   sameDayInYear,
   toISODate,
   todayISO,
 } from './dates';
+import { advancesOf } from './advances';
 import { phoneUrl, telegramUrl, viberUrl, whatsappUrl } from './messengers';
 import type { AppData, Friend, ISODate, Reminder } from './types';
 
@@ -137,7 +139,7 @@ export function reminderFuse(r: Reminder, now = new Date()): number | null {
   if (r.done) return null;
   const end = !r.repeat && r.kind === 'at' ? combine(r.date, r.time) : combine(addInterval(r.date, 'day', 1), '00:00');
   const from = r.repeat
-    ? combine(addInterval(addInterval(r.date, r.repeat.unit, -Math.max(1, Math.floor(r.repeat.every))), 'day', 1), '00:00').getTime()
+    ? combine(addInterval(previousOccurrence(r.date, r.repeat), 'day', 1), '00:00').getTime()
     : r.createdAt > 0
       ? r.createdAt
       : end.getTime() - FUSE_DAYS * DAY_MS;
@@ -261,11 +263,17 @@ export function planNotifications(data: AppData, now = new Date()): PlannedNotif
     if (!r.repeat) {
       const at = combine(r.date, r.time);
       const reminderId = r.id;
-      if (r.kind === 'at') {
-        // На дату и время: за день и в это время.
+      // Заранее: «за день» у встречи — «Завтра в 15:00», остальное — «Скоро: через час».
+      const early = (minutes: number) => {
+        const when = new Date(at.getTime() - minutes * 60_000);
+        if (when <= now) return;
         const extra = r.note || friend?.name;
-        const before = combine(addInterval(r.date, 'day', -1), r.time);
-        if (before > now) out.push({ at: before, title, body: `Завтра в ${r.time}${extra ? ` · ${extra}` : ''}`, url, reminderId });
+        const text = r.kind === 'at' && minutes === 1440 ? `Завтра в ${r.time}${extra ? ` · ${extra}` : ''}` : `Скоро: ${formatAdvance(minutes)} — ${body}`;
+        out.push({ at: when, title, body: text, url, reminderId });
+      };
+      if (r.kind === 'at') {
+        // На дату и время: в это время и заранее (по умолчанию — за день).
+        advancesOf(r).forEach(early);
         if (at > now) out.push({ at, title, body, url, reminderId });
         continue;
       }
@@ -281,13 +289,12 @@ export function planNotifications(data: AppData, now = new Date()): PlannedNotif
           n++;
         }
         if (at > now) out.push({ at, title, body: withExtra('Сегодня срок'), url, reminderId });
+        // В последний день — ещё и «за час», если выбрано.
+        advancesOf(r).forEach(early);
         continue;
       }
       if (at > now) out.push({ at, title, body, url, reminderId });
-      if (r.advance > 0) {
-        const early = new Date(at.getTime() - r.advance * 60_000);
-        if (early > now) out.push({ at: early, title, body: `Скоро: ${formatAdvance(r.advance)} — ${body}`, url, reminderId });
-      }
+      advancesOf(r).forEach(early);
       continue;
     }
 
@@ -296,6 +303,10 @@ export function planNotifications(data: AppData, now = new Date()): PlannedNotif
     for (const date of occurrences(seriesStart(r), r.repeat)) {
       if (date < r.date || (closed && date <= closed)) continue; // прошедшие разы серии до ближайшего; сделанные разы
       const at = combine(date, r.time);
+      for (const minutes of advancesOf(r)) {
+        const when = new Date(at.getTime() - minutes * 60_000);
+        if (when > now) out.push({ at: when, title, body: `Скоро: ${formatAdvance(minutes)} — ${body}`, url });
+      }
       if (at > now) {
         out.push({ at, title, body, url });
         if (++n >= MAX_PER_SERIES) break;
@@ -319,6 +330,8 @@ export function formatAdvance(minutes: number): string {
   switch (minutes) {
     case 60:
       return 'через час';
+    case 120:
+      return 'через 2 часа';
     case 1440:
       return 'через день';
     case 4320:

@@ -3,14 +3,15 @@ import { useMemo, useRef, useState } from 'react';
 
 import type { StripChip } from '@/components/form/parts';
 import { confirm } from '@/lib/confirm';
-import { addInterval } from '@/lib/dates';
+import { ADVANCE_LABELS, ADVANCE_OPTIONS, advancesOf, advancesText, storeAdvances } from '@/lib/advances';
+import { addInterval, repeatDays, snapToRepeat, weekdayOf } from '@/lib/dates';
 import { calendarCandidate, inCalendar, smartCalendarOn } from '@/lib/calendarAi';
 import { reopenReminder } from '@/lib/events';
 import { DEFAULT_TIME, timeSuggestions, titleTemplates, usualAdvance, type TaskKind, type TitleTemplate } from '@/lib/habits';
 import { friendChoices, shortTime, whenSummary } from '@/lib/reminderForm';
 import { PRIORITY_LABELS } from '@/lib/reminderList';
 import { newId, useStore } from '@/lib/store';
-import type { Advance, ISODate, Priority, Reminder, Repeat, RepeatUnit, TimeOfDay } from '@/lib/types';
+import type { ISODate, Priority, Reminder, Repeat, RepeatUnit, TimeOfDay } from '@/lib/types';
 
 /**
  * Состояние и правила формы дела — общие для обоих её видов: «быстрой» (ленты, выбор в одно нажатие) и «строками»
@@ -43,15 +44,19 @@ export const UNITS: { unit: RepeatUnit; label: string }[] = [
   { unit: 'year', label: 'годы' },
 ];
 
-export const ADVANCES: { value: Advance; label: string }[] = [
-  { value: 0, label: 'Нет' },
-  { value: 60, label: 'За час' },
-  { value: 1440, label: 'За день' },
-  { value: 4320, label: 'За 3 дня' },
-  { value: 10080, label: 'За неделю' },
-];
+export const sameRepeat = (a: Repeat | null, b: Repeat | null) =>
+  a === b || (!!a && !!b && a.every === b.every && a.unit === b.unit && (repeatDays(a) ?? []).join() === (repeatDays(b) ?? []).join());
 
-export const sameRepeat = (a: Repeat | null, b: Repeat | null) => a === b || (!!a && !!b && a.every === b.every && a.unit === b.unit);
+/** Дни недели для повтора «по дням»: подпись в кружке и полное название для экранного диктора. */
+export const WEEK_DAYS: { day: number; short: string; name: string }[] = [
+  { day: 1, short: 'пн', name: 'Понедельник' },
+  { day: 2, short: 'вт', name: 'Вторник' },
+  { day: 3, short: 'ср', name: 'Среда' },
+  { day: 4, short: 'чт', name: 'Четверг' },
+  { day: 5, short: 'пт', name: 'Пятница' },
+  { day: 6, short: 'сб', name: 'Суббота' },
+  { day: 7, short: 'вс', name: 'Воскресенье' },
+];
 
 /** Ближайший ровный час — время по умолчанию для события на сегодня. */
 function nextHour(now = new Date()): TimeOfDay {
@@ -67,8 +72,9 @@ export function useReminderForm() {
   // Привычки считаем по остальным делам: само дело в форме себе не подсказывает.
   const others = useMemo(() => data.reminders.filter((x) => x.id !== params.id), [data.reminders, params.id]);
 
+  // В форме «заранее» всегда списком (`advances`), каким бы оно ни было записано; при сохранении — обратно в формат дела.
   const [r, setR] = useState<Reminder>(() => {
-    if (existing) return existing;
+    if (existing) return { ...existing, advances: advancesOf(existing) };
     const kind0: TaskKind = params.kind === 'at' ? 'at' : 'due';
     const date: ISODate = params.date && /^\d{4}-\d{2}-\d{2}$/.test(params.date) ? params.date : addInterval(today, 'day', 1);
     const adv = usualAdvance(data.reminders, data.friends, { kind: kind0 });
@@ -82,7 +88,9 @@ export function useReminderForm() {
       // Иначе — привычное время, если оно есть.
       time: kind0 === 'at' && date === today ? nextHour() : (timeSuggestions(data.reminders, data.friends, { kind: kind0 }).usual ?? DEFAULT_TIME),
       repeat: null,
-      advance: adv && !adv.daily ? adv.advance : 0,
+      advance: 0,
+      // Привычное «заранее»; привычки нет — у встречи «за день», у остальных — ничего.
+      advances: adv ? adv.advances : kind0 === 'at' ? [1440] : [],
       ...(adv?.daily ? { daily: true } : {}),
       done: false,
       createdAt: Date.now(),
@@ -115,23 +123,53 @@ export function useReminderForm() {
   const setKind = (k: TaskKind) => {
     if (r.repeat) setLastRepeat(r.repeat);
     // Новое дело и время ещё не трогали — ставим привычное для этого вида: у встреч оно своё, у дел «до срока» — своё.
-    const usual = !existing && !touched.time ? timeSuggestions(others, data.friends, { kind: k, title: r.title, friendName: friend?.name }).usual : null;
-    setR((prev) => ({
-      ...prev,
-      repeat: k === 'repeat' ? (prev.repeat ?? lastRepeat) : null,
-      kind: k === 'at' ? 'at' : undefined,
-      ...(usual ? { time: usual } : {}),
-    }));
+    const ctx = { kind: k, title: r.title, friendName: friend?.name };
+    const usual = !existing && !touched.time ? timeSuggestions(others, data.friends, ctx).usual : null;
+    // То же с «заранее»: привычное для этого вида, а без привычки — «за день» у встречи и ничего у остальных.
+    const adv = !existing && !touched.advance ? (usualAdvance(others, data.friends, ctx) ?? { advances: k === 'at' ? [1440] : [], daily: false }) : null;
+    setR((prev) => {
+      const repeat = k === 'repeat' ? (prev.repeat ?? lastRepeat) : null;
+      return {
+        ...prev,
+        repeat,
+        kind: k === 'at' ? 'at' : undefined,
+        date: snapToRepeat(prev.date, repeat),
+        ...(usual ? { time: usual } : {}),
+        ...(adv ? { advances: adv.advances, daily: adv.daily } : {}),
+      };
+    });
   };
 
-  const pickDate = (date: ISODate) => set('date', date);
+  // У повтора «по дням» дата — всегда один из выбранных дней: выбрали другой — берём ближайший подходящий.
+  const pickDate = (date: ISODate) => setR((prev) => ({ ...prev, date: snapToRepeat(date, prev.repeat) }));
   const pickTime = (time: TimeOfDay) => {
     set('time', time);
     setTouched((t) => ({ ...t, time: true }));
   };
-  const pickAdvance = (advance: Advance, daily: boolean) => {
-    setR((prev) => ({ ...prev, advance, daily }));
+  /**
+   * «Заранее» — несколько сразу: нажал — добавил, нажал ещё раз — убрал. «Нет» снимает всё. «Каждый день до срока»
+   * заменяет «за день» и дальше (они в него входят), а «за час» и «за 2 часа» с ним уживаются.
+   */
+  const toggleAdvance = (pick: number | 'none' | 'daily') => {
     setTouched((t) => ({ ...t, advance: true }));
+    setR((prev) => {
+      const cur = prev.advances ?? [];
+      if (pick === 'none') return { ...prev, advances: [], daily: false };
+      if (pick === 'daily') return prev.daily ? { ...prev, daily: false } : { ...prev, daily: true, advances: cur.filter((m) => m < 1440) };
+      const advances = cur.includes(pick) ? cur.filter((m) => m !== pick) : [...cur, pick].sort((a, b) => a - b);
+      return { ...prev, advances, daily: pick >= 1440 ? false : prev.daily };
+    });
+  };
+  /** Повтор по дням недели: нажал на день — добавил или убрал; последний выбранный день снять нельзя. */
+  const toggleDay = (day: number) => {
+    setR((prev) => {
+      const cur = repeatDays(prev.repeat) ?? [];
+      const days = cur.includes(day) ? cur.filter((d) => d !== day) : [...cur, day].sort((a, b) => a - b);
+      if (!days.length) return prev;
+      const repeat: Repeat = { every: 1, unit: 'week', days };
+      // Ближайший раз — ближайший из выбранных дней, не раньше сегодня.
+      return { ...prev, repeat, date: snapToRepeat(prev.date < today ? today : prev.date, repeat) };
+    });
   };
   const pickFriend = (id: string | null) => {
     set('friendId', id);
@@ -157,8 +195,8 @@ export function useReminderForm() {
       repeat: t.kind === 'repeat' ? (t.repeat ?? prev.repeat ?? lastRepeat) : null,
       kind: t.kind === 'at' ? 'at' : undefined,
       time: t.time ?? prev.time,
-      advance: t.kind === 'due' ? (t.advance ?? 0) : prev.advance,
-      daily: t.kind === 'due' ? !!t.daily : prev.daily,
+      advances: t.advances ?? prev.advances,
+      daily: t.kind === 'due' ? !!t.daily : false,
       friendId: t.friendId ?? prev.friendId,
     }));
   };
@@ -170,28 +208,42 @@ export function useReminderForm() {
     own: times.own.includes(t),
     onPress: () => pickTime(t),
   }));
+  const picked = r.advances ?? [];
+  const daily = kind === 'due' && !!r.daily;
   const advanceChips: StripChip[] = [
-    ...ADVANCES.map((a) => ({ key: String(a.value), label: a.label, selected: !r.daily && r.advance === a.value, onPress: () => pickAdvance(a.value, false) })),
-    { key: 'daily', label: 'Каждый день до срока', selected: !!r.daily, onPress: () => pickAdvance(0, true) },
+    { key: 'none', label: 'Нет', selected: !daily && picked.length === 0, onPress: () => toggleAdvance('none') },
+    ...ADVANCE_OPTIONS.map((m) => ({ key: String(m), label: ADVANCE_LABELS[m], selected: picked.includes(m), onPress: () => toggleAdvance(m) })),
+    ...(kind === 'due' ? [{ key: 'daily', label: 'Каждый день до срока', selected: daily, onPress: () => toggleAdvance('daily') }] : []),
   ];
+  const days = repeatDays(r.repeat);
   const repeatChips: StripChip[] = [
     ...REPEAT_PRESETS.map((p) => ({
       key: p.label,
       label: p.label,
-      selected: !customRepeat && sameRepeat(p.repeat, r.repeat),
+      selected: !customRepeat && !days && sameRepeat(p.repeat, r.repeat),
       onPress: () => {
         setCustomRepeat(false);
         set('repeat', p.repeat);
       },
     })),
     {
+      key: 'days',
+      label: 'По дням',
+      selected: !!days,
+      onPress: () => {
+        setCustomRepeat(false);
+        // Начинаем с дня недели уже выбранной даты: она остаётся ближайшим разом.
+        if (!days) set('repeat', { every: 1, unit: 'week', days: [weekdayOf(r.date)] });
+      },
+    },
+    {
       key: 'custom',
       label: 'Свой…',
-      selected: customRepeat,
+      selected: customRepeat && !days,
       onPress: () => {
         setCustomRepeat(true);
         // Свой интервал начинается с «каждые 3 дня», а не с уже выбранного готового варианта.
-        if (!r.repeat || REPEAT_PRESETS.some((p) => sameRepeat(p.repeat, r.repeat))) set('repeat', { every: 3, unit: 'day' });
+        if (!r.repeat || days || REPEAT_PRESETS.some((p) => sameRepeat(p.repeat, r.repeat))) set('repeat', { every: 3, unit: 'day' });
       },
     },
   ];
@@ -217,12 +269,12 @@ export function useReminderForm() {
     // У сделанного повторяющегося поменяли ближайший раз или сам повтор — это уже новый раз, он не сделан.
     // Иначе отметка «сделано» съела бы его: дело перенеслось бы ещё на раз вперёд, и напоминание не пришло бы.
     const reopened = !!existing && !!r.repeat && r.done && (!sameSeries || existing.time !== r.time);
-    // «Каждый день до срока» — только у дел «до срока», «на дату и время» напоминает само; необязательное — только заданное.
-    const { daily, kind: _kind, priority, minutes, ...rest } = r;
+    // «Заранее» записываем в формат дела (простое — по-старому, сложное — списком); необязательное — только заданное.
+    const { daily: _daily, kind: _kind, priority, minutes, advances: _advances, advance: _advance, ...rest } = r;
+    const base = { ...rest, ...storeAdvances(kind, picked, daily) };
     saveReminder({
-      ...(reopened ? reopenReminder(rest) : rest),
-      ...(kind === 'at' ? { kind: 'at' as const, advance: 0 as const } : {}),
-      ...(kind === 'due' && daily ? { daily: true, advance: 0 as const } : {}),
+      ...(reopened ? reopenReminder(base) : base),
+      ...(kind === 'at' ? { kind: 'at' as const } : {}),
       ...(priority ? { priority } : {}),
       ...(minutes ? { minutes } : {}),
       title: r.title.trim(),
@@ -264,18 +316,22 @@ export function useReminderForm() {
     choices: friendChoices(data.friends, others, r.friendId),
     /** В календаре ли дело: решает «умный календарь», человек может поправить. Нет переключателя — null. */
     calendar: calendarCandidate(r) ? inCalendar(r, smart) : null,
-    summary: whenSummary({ ...r, repeat: kind === 'repeat' ? r.repeat : null, kind: kind === 'at' ? 'at' : undefined }, today),
+    summary: whenSummary({ ...r, repeat: kind === 'repeat' ? r.repeat : null, kind: kind === 'at' ? 'at' : undefined, daily }, today),
+    /** «за день и за час» / «каждый день» — для строки «Напомнить». Ничего не выбрано — пусто. */
+    advanceText: [daily ? 'каждый день' : '', advancesText(picked.filter((m) => !daily || m < 1440))].filter(Boolean).join(', '),
+    /** Выбранные дни недели у повтора «по дням»; обычный повтор — null. */
+    days,
+    toggleDay,
     setKind,
     pickDate,
     pickTime,
-    pickAdvance,
     pickFriend,
     timeChips,
     advanceChips,
     repeatChips,
     templateChips,
     showTemplates,
-    customRepeat,
+    customRepeat: customRepeat && !days,
     everyText: everyText ?? (r.repeat ? String(r.repeat.every) : ''),
     changeEvery,
     resetEvery: () => setEveryText(null),

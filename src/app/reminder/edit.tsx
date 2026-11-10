@@ -34,11 +34,11 @@ function ReminderNotFound() {
 
 /**
  * Форма дела в одном из двух видов. Готовое дело всегда открывается «строками»: его читают и правят по одному
- * полю. Новое — «быстрой» формой, если в настройках не выбрано иначе.
+ * полю. Новое — тоже «строками», если в настройках не выбрана «быстрая» форма.
  */
 function ReminderForm() {
   const { data } = useStore();
   const form = useReminderForm();
-  const rows = !!form.existing || data.settings.newReminderForm === 'rows';
+  const rows = !!form.existing || data.settings.newReminderForm !== 'quick';
   return rows ? <RowsForm form={form} /> : <QuickForm form={form} />;
 }

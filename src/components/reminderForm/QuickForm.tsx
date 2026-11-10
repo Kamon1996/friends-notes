@@ -11,7 +11,7 @@ import { completeReminder, reopenReminder } from '@/lib/events';
 import { dayWord } from '@/lib/reminderForm';
 import { PRIORITY_LABELS, formatMinutes } from '@/lib/reminderList';
 import type { ISODate } from '@/lib/types';
-import { CustomRepeat, FormScaffold, FormSwitch, MinutesChips, PriorityChips } from './shared';
+import { CustomRepeat, FormScaffold, FormSwitch, MinutesChips, PriorityChips, RepeatDays } from './shared';
 import { KINDS, type ReminderFormModel } from './useReminderForm';
 
 /** Какая строка «Деталей» раскрыта. Открыта всегда одна. */
@@ -79,21 +79,25 @@ export function QuickForm({ form }: { form: ReminderFormModel }) {
           >
             <ChipStrip label="Время" chips={timeChips} />
           </StripRow>
-          {kind === 'due' && (
-            <StripRow label="Заранее">
-              <ChipStrip label="Напомнить заранее" chips={advanceChips} />
-            </StripRow>
-          )}
           {kind === 'repeat' && (
             <StripRow label="Повтор">
               <ChipStrip label="Как часто" chips={repeatChips} />
             </StripRow>
+          )}
+          {kind === 'repeat' && form.days && (
+            <Panel>
+              <RepeatDays form={form} />
+            </Panel>
           )}
           {kind === 'repeat' && customRepeat && r.repeat && (
             <Panel>
               <CustomRepeat form={form} />
             </Panel>
           )}
+          {/* Несколько сразу: «за день» и «за час» — два уведомления. */}
+          <StripRow label="Заранее">
+            <ChipStrip label="Напомнить заранее" chips={advanceChips} />
+          </StripRow>
         </FormCard>
         <Text style={[s.caption, { marginTop: 8, paddingHorizontal: 16 }]}>{form.summary}</Text>
 
