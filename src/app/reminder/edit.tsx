@@ -200,7 +200,8 @@ function ReminderForm() {
           maxLines={3}
           value={r.title}
           onChangeText={(v) => set('title', v)}
-          placeholder={friend ? `Например, написать ${friend.name}` : 'Например, сдать отчёт'}
+          // Имя в подсказку не подставляем: «написать Александра» — не тот падеж, а склонять имена мы не умеем.
+          placeholder={friend ? 'Например, написать или поздравить' : 'Например, сдать отчёт'}
           autoFocus={!existing}
         />
         <View style={[s.chips, { marginTop: -4, marginBottom: 18 }]}>

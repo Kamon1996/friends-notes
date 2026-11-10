@@ -125,7 +125,7 @@ export function AiIcon({ size = 40, busy = false }: { size?: number; busy?: bool
 }
 
 /** Кнопка со значком ИИ для шапки экрана. */
-export function AiButton({ onPress, busy, label = 'ИИ для друзей' }: { onPress: () => void; busy?: boolean; label?: string }) {
+export function AiButton({ onPress, busy, label = 'Магия для друзей' }: { onPress: () => void; busy?: boolean; label?: string }) {
   return (
     <Pressable
       onPress={onPress}
