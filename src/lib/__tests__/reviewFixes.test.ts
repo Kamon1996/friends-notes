@@ -60,7 +60,9 @@ describe('сохранённые данные с мусором не подве�
 });
 
 test('копия: настройки календаря и праздников переживают восстановление', () => {
-  const s = sanitizeSettings({ smartCalendar: false, holidayCountries: ['RU', 'KZ', 'XX', 7], calendarLegend: false, calendarDayView: 'inline' });
+  const s = sanitizeSettings({ smartCalendar: false, holidayCountries: ['RU', 'KZ', 'XX', 7], calendarLegend: false, calendarDayView: 'inline', newReminderForm: 'rows' });
+  assert.equal(s.newReminderForm, 'rows');
+  assert.equal(sanitizeSettings({ newReminderForm: 'tiles' }).newReminderForm, undefined);
   assert.equal(s.smartCalendar, false);
   assert.deepEqual(s.holidayCountries, ['RU', 'KZ']);
   assert.equal(s.calendarLegend, false);

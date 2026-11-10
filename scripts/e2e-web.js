@@ -586,18 +586,28 @@ scenario('Напоминание: «каждый день до срока» — 
   await ui.see('сб, 20 июн');
   await ui.see('Напоминаю каждый день', { label: true });
   // «За день» вместо ежедневных — флаг снимается.
+  // Готовое дело открывается строками: «Напомнить» правится в шторке.
   await ui.tap('Билеты на самолёт');
+  await ui.see('Напомнить: в 12:00 · каждый день', { label: true });
+  await ui.tap('Напомнить');
   await ui.tap('За день');
+  await ui.tap('Готово');
   await ui.notSee('пока не отметишь «Сделано»');
+  await ui.see('Напомнить: в 12:00 · за день', { label: true });
   await ui.tap('Сохранить');
   data = await ui.waitData((x) => x.reminders.find((y) => y.id === r.id).advance === 1440, '«за день» не сохранилось');
   assert.ok(!('daily' in data.reminders.find((y) => y.id === r.id)), 'флаг остался');
   // Снова ежедневно, но потом «Повторять» → «Каждый день»: у повторяющегося своего «до срока» нет.
   await ui.tap('Билеты на самолёт');
+  await ui.tap('Напомнить');
   await ui.tap('Каждый день до срока');
+  await ui.tap('Готово');
   await ui.tap('Повторять');
+  await ui.tap('Повтор');
   await ui.tap('Каждый день');
-  await ui.notSee('Каждый день до срока');
+  await ui.tap('Готово');
+  await ui.notSee('пока не отметишь «Сделано»');
+  await ui.see('Повтор: каждый день', { label: true });
   await ui.tap('Сохранить');
   data = await ui.waitData((x) => !!x.reminders.find((y) => y.id === r.id).repeat, 'повтор не сохранился');
   r = data.reminders.find((y) => y.id === r.id);
@@ -706,6 +716,61 @@ scenario('Напоминание: без названия — подсказка
   const data = await ui.waitData((x) => x.reminders.some((r) => r.title === 'Продлить страховку'), 'не сохранилось');
   const r = data.reminders.find((x) => x.title === 'Продлить страховку');
   assert.deepEqual([r.date, r.time, r.advance, 'priority' in r, 'minutes' in r], ['2026-07-15', '07:45', 0, false, false], JSON.stringify(r));
+});
+
+scenario('Форма «строками»: готовое дело правится в шторках; в настройках её можно выбрать и для новых дел', async ({ ui }) => {
+  await ui.go('/');
+  // Готовое дело — строки со значениями; лент и календаря в строке нет.
+  await ui.tap('Написать Диме');
+  await ui.see('Срок: вчера', { label: true });
+  await ui.see('Напомнить: в 20:00 · за день', { label: true });
+  assert.equal(await ui.quickForm(), false, 'готовое дело должно открываться строками');
+  // Нажал на строку — шторка; выбрал — закрылась, значение в строке.
+  await ui.tap('Срок');
+  await ui.tap('Завтра');
+  await ui.see('Срок: завтра', { label: true });
+  await ui.tap('Важность');
+  await ui.tap('Важно');
+  await ui.see('Важность: Важно', { label: true });
+  await ui.tap('Заметка');
+  await ui.fill('Детали, ссылка, адрес…', 'Про отпуск');
+  await ui.tap('Готово');
+  await ui.see('Заметка: Про отпуск', { label: true });
+  // Шторка закрывается и свайпом вниз.
+  await ui.tap('Сколько займёт');
+  await ui.see('Не задано');
+  await ui.swipeDown('Сколько займёт', 220);
+  await ui.notSee('15 мин');
+  await ui.tap('Сохранить');
+  let data = await ui.waitData((x) => x.reminders.find((r) => r.id === 'r3').priority === 3, 'правка не сохранилась');
+  const r3 = data.reminders.find((r) => r.id === 'r3');
+  assert.deepEqual([r3.date, r3.note, r3.time, r3.advance], [d(1), 'Про отпуск', '20:00', 1440]);
+  // Новое дело по умолчанию — быстрой формой.
+  await ui.tap('Новое напоминание');
+  assert.equal(await ui.quickForm(), true, 'новое дело по умолчанию — быстрая форма');
+  // В настройках выбираем «Строками» — и новое дело открывается так же, как правка.
+  await ui.go('/settings');
+  await ui.see('Форма нового дела');
+  await ui.tap('Строками');
+  await ui.waitData((x) => x.settings.newReminderForm === 'rows', 'выбор формы не сохранился');
+  await ui.go('/');
+  await ui.tap('Новое напоминание');
+  assert.equal(await ui.quickForm(), false, 'после выбора в настройках новое дело — строками');
+  await ui.fill('Например, сдать отчёт', 'Купить билеты');
+  await ui.see('Срок: завтра', { label: true });
+  await ui.pickTime('19:00');
+  await ui.tap('Напомнить');
+  await ui.tap('За час');
+  await ui.see('Напомню завтра в 18:00 и в 19:00.');
+  await ui.tap('Готово');
+  await ui.tap('Сохранить');
+  data = await ui.waitData((x) => x.reminders.some((r) => r.title === 'Купить билеты'), 'новое дело не сохранилось');
+  const r = data.reminders.find((x) => x.title === 'Купить билеты');
+  assert.deepEqual([r.date, r.time, r.advance, 'priority' in r], [d(1), '19:00', 60, false]);
+  // И обратно.
+  await ui.go('/settings');
+  await ui.tap('Быстрая');
+  await ui.waitData((x) => x.settings.newReminderForm === 'quick', 'обратный выбор не сохранился');
 });
 
 scenario('Умные подсказки: частое время — в ленте и выбрано сразу; свой шаблон подставляет время, «заранее» и друга', async ({ ui }) => {
@@ -1376,10 +1441,12 @@ scenario('Режим выбора на одной вкладке не мешае
   assert.equal(new URL(page.url()).pathname, '/', 'в режиме выбора вкладка не должна листаться');
   // Переходим на «Календарь» кнопкой — там листать можно.
   await page.getByRole('tab').nth(2).click();
-  await page.waitForURL(/\/calendar$/, { timeout: 3000 });
+  await page.waitForURL(/\/calendar$/, { timeout: 5000 });
   await ui.see('Июнь 2026');
+  // Вкладка ещё доезжает на место: свайп посреди перехода не считается, а под нагрузкой переход дольше.
+  await ui.pause(700);
   await ui.swipeAt(80, 30, 220);
-  await page.waitForURL(/\/friends$/, { timeout: 3000 });
+  await page.waitForURL(/\/friends$/, { timeout: 5000 });
 });
 
 scenario('Календарь: подробности дня «в календаре» — гармошка под неделей, недели ниже отъезжают; переключается в настройках', async ({ ui, page }) => {
@@ -1818,12 +1885,17 @@ function helpers(page, dialogs) {
       await cdp.detach();
       await page.waitForTimeout(700);
     },
-    /** Срок в форме дела: ближняя неделя — в строке, дальше — календарь, который раскрывается на месте. */
+    /** Какая форма дела открыта: «быстрая» (ленты, календарь в строке) или «строками» (выбор в шторке). */
+    async quickForm() { return !!(await visible(page.getByLabel(/календарь$/))); },
+    /** Срок в форме дела. Быстрая: ближняя неделя — в строке, дальше — календарь на месте. Строками: в шторке. */
     async pickDate(iso) {
       const [y, m, dd] = iso.split('-').map(Number);
       const diff = Math.round((Date.UTC(y, m - 1, dd) - Date.UTC(2026, 5, 10)) / 86400000);
-      if (diff < 0 || diff > 6) {
-        await ui.tap('Открыть календарь');
+      const quick = await ui.quickForm();
+      if (!quick) {
+        for (const name of ['Срок', 'Дата', 'Ближайший раз']) if (await visible(page.getByText(name, { exact: true }))) { await ui.tap(name); break; }
+      } else if (diff < 0 || diff > 6) await ui.tap('Открыть календарь');
+      if (!quick || diff < 0 || diff > 6) {
         const months = (y - 2026) * 12 + (m - 1) - 5;
         for (let k = 0; k < Math.abs(months); k++) await ui.tap(months > 0 ? 'Следующий месяц' : 'Предыдущий месяц');
       }
@@ -1831,8 +1903,12 @@ function helpers(page, dialogs) {
       const MG = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
       await ui.tap(`${WD[new Date(Date.UTC(y, m - 1, dd)).getUTCDay()]}, ${dd} ${MG[m - 1]}`);
     },
-    /** Время в форме дела: таблетка в ленте, а если такой нет — системные часы (в браузере — поле времени). */
+    /** Время в форме дела: таблетка, а если такой нет — системные часы (в браузере — поле времени). Строками — в шторке. */
     async pickTime(time) {
+      const quick = await ui.quickForm();
+      if (!quick) {
+        for (const name of ['Напомнить', 'Время']) if (await visible(page.getByText(name, { exact: true }))) { await ui.tap(name); break; }
+      }
       const short = time.replace(/^0/, '');
       const chip = await visible(page.getByText(short, { exact: true }));
       if (chip) await ui.tap(short);
@@ -1840,6 +1916,7 @@ function helpers(page, dialogs) {
         await page.getByLabel('Выбрать время').fill(time);
         await page.waitForTimeout(250);
       }
+      if (!quick) await ui.tap('Готово');
     },
     /** Провести пальцем вниз от этого текста на dy — так закрывают шторки. */
     async swipeDown(target, dy) {

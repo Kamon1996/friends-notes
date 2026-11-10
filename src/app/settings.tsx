@@ -231,6 +231,29 @@ export default function SettingsScreen() {
       </View>
 
       <View style={{ gap: 8 }}>
+        <SectionTitle style={{ marginBottom: 0 }}>Напоминания</SectionTitle>
+        <Card style={{ gap: 10 }}>
+          <View style={{ gap: 2 }}>
+            <Text style={s.title}>Форма нового дела</Text>
+            <Text style={s.muted}>
+              {settings.newReminderForm === 'rows'
+                ? 'Значения в строках: нажал на строку — выбрал в шторке.'
+                : 'Срок, время и «заранее» — лентами: выбор в одно нажатие.'}{' '}
+              Готовое дело всегда открывается строками.
+            </Text>
+          </View>
+          <Segmented
+            options={[
+              { value: 'quick', label: 'Быстрая' },
+              { value: 'rows', label: 'Строками' },
+            ]}
+            value={settings.newReminderForm === 'rows' ? 'rows' : 'quick'}
+            onChange={(v) => updateSettings({ newReminderForm: v })}
+          />
+        </Card>
+      </View>
+
+      <View style={{ gap: 8 }}>
         <SectionTitle style={{ marginBottom: 0 }}>Оформление</SectionTitle>
         <Group inset={62}>
           <ListRow
