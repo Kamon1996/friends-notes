@@ -1,12 +1,47 @@
 import { advancesOf, advancesText } from './advances';
-import { combine, daysBetween, formatDayShort, formatRepeat, toISODate, toTime } from './dates';
+import { combine, daysBetween, firstOccurrenceFrom, formatDayShort, formatRepeat, repeatDays, snapToRepeat, toISODate, toTime } from './dates';
 import { byName, favoritesFirst } from './friendList';
 import { kindOf } from './habits';
-import type { Friend, ISODate, Reminder, TimeOfDay } from './types';
+import type { Friend, ISODate, Reminder, Repeat, TimeOfDay } from './types';
 
 /** «9:00» вместо «09:00» — в лентах и подписях формы. */
 export function shortTime(t: TimeOfDay): string {
   return t.replace(/^0/, '');
+}
+
+const sameRepeat = (a: Repeat | null, b: Repeat | null) =>
+  a === b || (!!a && !!b && a.every === b.every && a.unit === b.unit && (repeatDays(a) ?? []).join() === (repeatDays(b) ?? []).join());
+
+/** Дата и повтор дела в форме; `from` — день, выбранный началом серии, если он уже прошёл. */
+export interface SeriesDraft {
+  date: ISODate;
+  repeat: Repeat | null;
+  from: ISODate | null;
+}
+
+/**
+ * Куда встаёт дело после правки даты или повтора в форме.
+ *
+ * Повторяющееся дело не начинается в прошлом. Человек выбирает день, с которого идёт серия («годовщина — 18 октября»);
+ * если этот день уже прошёл, ближайший раз — первый раз серии не раньше сегодня, а выбранный день остаётся её началом
+ * (`from`): от него считаются следующие разы, чтобы 31-е и 29 февраля не съезжали, и к нему возвращаемся, если
+ * поменять повтор или сделать дело разовым. Раньше такой день сохранялся как есть, и новое дело сразу было
+ * «просрочено».
+ *
+ * Исключение — готовое дело, у которого поменяли только повтор: его прошедший срок правда пропущен, дату не трогаем
+ * (`keepOverdue`).
+ */
+export function settleSeries(prev: SeriesDraft, next: { date: ISODate; repeat: Repeat | null }, today: ISODate, keepOverdue = false): SeriesDraft {
+  const picked = next.date !== prev.date;
+  if (!picked && sameRepeat(next.repeat, prev.repeat)) return { ...next, from: prev.from };
+  // Выбрали день — он и есть начало серии; поменяли только повтор — начало прежнее.
+  const start = picked ? next.date : (prev.from ?? next.date);
+  // Разовое дело стоит там, где его поставили, хоть в прошлом; начало серии помним — вдруг повтор вернут.
+  if (!next.repeat) return { date: start, repeat: null, from: picked ? null : prev.from };
+  const first = snapToRepeat(start, next.repeat);
+  if (first >= today) return { date: first, repeat: next.repeat, from: start < today ? start : null };
+  if (keepOverdue && !picked && prev.from === null) return { date: next.date, repeat: next.repeat, from: null };
+  return { date: firstOccurrenceFrom(first, next.repeat, today), repeat: next.repeat, from: start };
 }
 
 /** День словами для подписи: «сегодня», «завтра», иначе «ср, 11 июн». */

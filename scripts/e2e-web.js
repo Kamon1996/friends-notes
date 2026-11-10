@@ -784,6 +784,54 @@ scenario('Форма «строками»: готовое дело правит�
   await ui.waitData((x) => x.settings.newReminderForm === 'rows', 'обратный выбор не сохранился');
 }, { data: seed({ settings: { newReminderForm: undefined } }) });
 
+scenario('Повтор с прошедшего дня (быстрая форма): сначала день, потом «Каждый год» — годовщина встаёт на следующий год, а не «просрочено»', async ({ ui }) => {
+  await ui.go('/');
+  await ui.tap('Новое напоминание');
+  await ui.fill('Например, сдать отчёт', 'Годовщина знакомства');
+  await ui.pickDate('2026-05-18');
+  await ui.tap('Повторять');
+  // Серия идёт от выбранного дня, какой бы повтор ни стоял: у «каждую неделю» ближайший раз — понедельник.
+  await ui.see('Каждую неделю в 10:00. Ближайший раз — пн, 15 июн.');
+  await ui.tap('Каждый год');
+  await ui.see('Каждый год в 10:00. Ближайший раз — вт, 18 мая 2027.');
+  await ui.tap('Сохранить');
+  const data = await ui.waitData((x) => x.reminders.some((r) => r.title === 'Годовщина знакомства'), 'не сохранилось');
+  const r = data.reminders.find((x) => x.title === 'Годовщина знакомства');
+  assert.deepEqual([r.date, r.anchor, r.repeat, r.done], ['2027-05-18', '2026-05-18', { every: 1, unit: 'year' }, false]);
+  await ui.see('Годовщина знакомства');
+  await ui.notSee('просрочено');
+}, { data: seed({ reminders: [] }) });
+
+scenario('Повтор с прошедшего дня (форма строками): «Каждый год», потом прошедший день — в строке сразу следующий год', async ({ ui }) => {
+  await ui.go('/');
+  await ui.tap('Новое напоминание');
+  await ui.fill('Например, сдать отчёт', 'Годовщина знакомства');
+  await ui.tap('Повторять');
+  await ui.tap('Повтор');
+  await ui.tap('Каждый год');
+  await ui.tap('Готово');
+  await ui.pickDate('2026-05-18');
+  await ui.see('Ближайший раз: вт, 18 мая 2027', { label: true });
+  await ui.tap('Сохранить');
+  const data = await ui.waitData((x) => x.reminders.some((r) => r.title === 'Годовщина знакомства'), 'не сохранилось');
+  const r = data.reminders.find((x) => x.title === 'Годовщина знакомства');
+  assert.deepEqual([r.date, r.anchor], ['2027-05-18', '2026-05-18']);
+  await ui.notSee('просрочено');
+}, { data: seed({ settings: { newReminderForm: undefined }, reminders: [] }) });
+
+scenario('Повтор, уже сохранённый с прошедшим днём (старая форма), сам встаёт на ближайший раз; пропущенное по-настоящему — остаётся', async ({ ui }) => {
+  await ui.go('/');
+  await ui.see('Годовщина знакомства');
+  const data = await ui.waitData((x) => x.reminders.find((r) => r.id === 'y').date === '2027-05-18', 'дело не переехало на ближайший раз');
+  assert.equal(data.reminders.find((r) => r.id === 'y').anchor, '2026-05-18');
+  assert.equal(data.reminders.find((r) => r.id === 'm').date, d(-3), 'пропущенный срок никуда не делся');
+  await ui.see('Полить цветы');
+  await ui.see('просрочено');
+}, { data: seed({ reminders: [
+  R({ id: 'y', title: 'Годовщина знакомства', date: '2026-05-18', repeat: { every: 1, unit: 'year' }, createdAt: Date.UTC(2026, 5, 10, 9) }),
+  R({ id: 'm', title: 'Полить цветы', date: d(-3), repeat: { every: 1, unit: 'week' }, createdAt: Date.UTC(2026, 5, 1, 9) }),
+] }) });
+
 scenario('Повтор по дням недели и несколько «заранее»: тренировка по пн, ср и пт, напомнить за день и за 2 часа', async ({ ui }) => {
   await ui.go('/');
   await ui.tap('Новое напоминание');

@@ -8,7 +8,7 @@ import { addInterval, repeatDays, snapToRepeat, weekdayOf } from '@/lib/dates';
 import { calendarCandidate, inCalendar, smartCalendarOn } from '@/lib/calendarAi';
 import { reopenReminder } from '@/lib/events';
 import { DEFAULT_TIME, timeSuggestions, titleTemplates, usualAdvance, type TaskKind, type TitleTemplate } from '@/lib/habits';
-import { friendChoices, shortTime, whenSummary } from '@/lib/reminderForm';
+import { friendChoices, settleSeries, shortTime, whenSummary } from '@/lib/reminderForm';
 import { PRIORITY_LABELS } from '@/lib/reminderList';
 import { newId, useStore } from '@/lib/store';
 import type { ISODate, Priority, Reminder, Repeat, RepeatUnit, TimeOfDay } from '@/lib/types';
@@ -73,7 +73,7 @@ export function useReminderForm() {
   const others = useMemo(() => data.reminders.filter((x) => x.id !== params.id), [data.reminders, params.id]);
 
   // В форме «заранее» всегда списком (`advances`), каким бы оно ни было записано; при сохранении — обратно в формат дела.
-  const [r, setR] = useState<Reminder>(() => {
+  const initial = (): Reminder => {
     if (existing) return { ...existing, advances: advancesOf(existing) };
     const kind0: TaskKind = params.kind === 'at' ? 'at' : 'due';
     const date: ISODate = params.date && /^\d{4}-\d{2}-\d{2}$/.test(params.date) ? params.date : addInterval(today, 'day', 1);
@@ -97,7 +97,20 @@ export function useReminderForm() {
       ...(kind0 === 'at' ? { kind: 'at' as const } : {}),
       ...(params.calendar === '1' ? { calendar: true } : {}),
     };
-  });
+  };
+  // Рядом с делом — `from`: день, выбранный началом серии, если он уже прошёл (см. `settleSeries`).
+  const [draft, setDraft] = useState<{ r: Reminder; from: ISODate | null }>(() => ({ r: initial(), from: null }));
+  const r = draft.r;
+  /**
+   * Любая правка дела проходит здесь: поменялись дата или повтор — ставим дело на место. Повторяющееся не начинается
+   * в прошлом: выбранный прошедший день становится началом серии, а ближайший раз — первым не раньше сегодня.
+   */
+  const setR = (update: (prev: Reminder) => Reminder) =>
+    setDraft((d) => {
+      const next = update(d.r);
+      const placed = settleSeries({ date: d.r.date, repeat: d.r.repeat, from: d.from }, { date: next.date, repeat: next.repeat }, today, !!existing);
+      return { r: placed.date === next.date ? next : { ...next, date: placed.date }, from: placed.from };
+    });
   const set = <K extends keyof Reminder>(key: K, value: Reminder[K]) => setR((prev) => ({ ...prev, [key]: value }));
   const kind: TaskKind = r.repeat ? 'repeat' : r.kind === 'at' ? 'at' : 'due';
   const friend = data.friends.find((f) => f.id === r.friendId);
@@ -264,7 +277,8 @@ export function useReminderForm() {
     }
     if (leaving.current) return true;
     leaving.current = true;
-    // Новая дата или другой повтор — новая серия: старый якорь больше не нужен.
+    // Новая дата или другой повтор — новая серия: старый якорь больше не нужен. Серию начали с прошедшего дня —
+    // он и становится якорем: следующие разы считаются от него.
     const sameSeries = !!existing && existing.date === r.date && sameRepeat(existing.repeat, r.repeat);
     // У сделанного повторяющегося поменяли ближайший раз или сам повтор — это уже новый раз, он не сделан.
     // Иначе отметка «сделано» съела бы его: дело перенеслось бы ещё на раз вперёд, и напоминание не пришло бы.
@@ -278,7 +292,7 @@ export function useReminderForm() {
       ...(priority ? { priority } : {}),
       ...(minutes ? { minutes } : {}),
       title: r.title.trim(),
-      anchor: sameSeries ? r.anchor : undefined,
+      anchor: sameSeries ? r.anchor : r.repeat && draft.from ? draft.from : undefined,
     });
     router.back();
     return true;

@@ -135,6 +135,14 @@ export function previousOccurrence(date: ISODate, repeat: Repeat): ISODate {
   return addInterval(date, 'week', -1);
 }
 
+/** Первый раз серии, начатой в день `start`, не раньше дня `from`. */
+export function firstOccurrenceFrom(start: ISODate, repeat: Repeat, from: ISODate): ISODate {
+  for (const d of occurrences(start, repeat)) {
+    if (d >= from) return d;
+  }
+  return start; // недостижимо
+}
+
 /** Первое срабатывание строго позже `after` (дата+время). */
 export function nextOccurrenceAfter(
   start: ISODate,

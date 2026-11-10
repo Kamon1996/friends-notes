@@ -3,6 +3,7 @@ import {
   ageOn,
   combine,
   daysBetween,
+  firstOccurrenceFrom,
   formatDateCompact,
   hasYear,
   nextAnniversary,
@@ -82,12 +83,28 @@ export function reopenReminder(r: Reminder): Reminder {
 }
 
 /**
+ * Серию завели с уже прошедшего дня: «годовщина — 18 октября», а на дворе ноябрь. Такой раз не пропущен — дела тогда
+ * ещё не было. Запас в два дня — чтобы смена часового пояса не выдала вчерашнее несделанное дело за такое.
+ */
+function startedInPast(r: Reminder): boolean {
+  return r.createdAt > 0 && daysBetween(r.date, toISODate(new Date(r.createdAt))) >= 2;
+}
+
+/**
  * Повторяющееся, отмеченное «сделано» в прошлые дни, снова активно — на ближайший раз после отмеченного, но не раньше
  * сегодняшнего дня. Сегодняшнее «сделано» не трогаем. Считаем от начала серии, чтобы 31-е не съехало на 28-е.
+ *
+ * Сюда же — дела, которые старая форма сохранила с прошедшим днём и которые сразу стали «просрочены»: они встают
+ * на ближайший раз не раньше сегодня (новая форма делает это сама, см. `settleSeries`).
  */
 export function rollReminder(r: Reminder, now = new Date()): Reminder {
-  if (!r.repeat || !r.done) return r;
+  if (!r.repeat) return r;
   const today = toISODate(now);
+  if (!r.done) {
+    if (r.date >= today || !startedInPast(r)) return r;
+    const anchor = seriesStart(r);
+    return { ...r, anchor, date: firstOccurrenceFrom(anchor, r.repeat, today) };
+  }
   if (r.doneAt && toISODate(new Date(r.doneAt)) >= today) return r;
   const current = combine(r.date, r.time);
   const dayStart = new Date(combine(today, '00:00').getTime() - 1);
