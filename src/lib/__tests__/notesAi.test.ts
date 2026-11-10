@@ -1,6 +1,6 @@
 /// <reference types="node" />
 // Соцсети и подсказки из заметок и «О себе» силами ИИ: ответу не верим на слово — ник и адрес должны быть в тексте,
-// очищенная заметка не добавляет слов и не выкидывает живой текст, подсказки опираются на текст.
+// подсказки опираются на текст. Сама заметка при разборе не меняется.
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
@@ -18,9 +18,6 @@ import {
   notesPrompt,
   notesSummary,
   parseNotesAnswer,
-  restIsSafe,
-  retidySeen,
-  tidyRest,
   toSocialLink,
   type NotesSubject,
 } from '../notesAi';
@@ -41,6 +38,13 @@ describe('вопрос', () => {
     assert.ok(!p.includes('x'.repeat(NOTES_MAX_TEXT + 1)));
     assert.equal(NOTES_TASK.id, 'notes');
     assert.equal(NOTES_TASK.request(['a']).json, true);
+  });
+  test('текст обратно не просим: заметку не переписываем, ответ короткий', () => {
+    const p = notesPrompt(['Фотограф. inst: anya']);
+    assert.ok(!/\brest\b/.test(p), 'в вопросе нет «очищенного текста»');
+    assert.match(p, /Сам текст не пересказывай и не возвращай/);
+    const long = Array.from({ length: 15 }, () => 'x'.repeat(NOTES_MAX_TEXT));
+    assert.ok((NOTES_TASK.request(long).maxTokens ?? 0) < 4000, 'ответ не растёт вместе с длиной заметок');
   });
 });
 
@@ -71,14 +75,6 @@ describe('ответ', () => {
       { network: 'telegram', handle: 'anya_channel' },
     ]);
   });
-  test('очищенный текст: можно только убрать ссылки и подписи, но не дописать и не выкинуть живой текст', () => {
-    const links = [{ network: 'instagram', handle: 'anya.photo' }];
-    assert.ok(restIsSafe('Фотограф. Пишите в директ: inst anya.photo', 'Фотограф.', links));
-    assert.ok(!restIsSafe('Фотограф', 'Фотограф и путешественница', links), 'добавила слово');
-    const long = 'Люблю горы, кофе и старые фильмы. Работаю в школе учителем музыки уже десять лет, играю на скрипке и пианино по вечерам. inst: anya.photo';
-    assert.ok(!restIsSafe(long, 'Люблю горы.', links), 'выкинула живой текст');
-    assert.ok(restIsSafe(long, long.replace(' inst: anya.photo', ''), links));
-  });
   test('подсказки — только опирающиеся на текст; ответ не по формату — null', () => {
     const text = 'Обожаю пионы и кофе, собираю виниловые пластинки';
     const got = parseNotesAnswer(answer([{ i: 0, links: [], rest: text, facts: { flowers: 'пионы', food: 'кофе', gifts: 'виниловые пластинки', cake: 'торт' } }]), [text]);
@@ -91,50 +87,15 @@ describe('ответ', () => {
   test('ответ в обёртке и с рассуждениями, номера строкой; чужие и повторные номера пропускаем', () => {
     const got = parseNotesAnswer(`<think>хм</think>\n\`\`\`json\n${answer([{ i: '1', links: [], rest: 'Б' }, { i: 1, rest: 'дубль' }, { i: 7, rest: 'x' }])}\n\`\`\``, ['А', 'Б']);
     assert.deepEqual([...(got?.keys() ?? [])], [1]);
-    assert.equal(got?.get(1)?.rest, 'Б');
   });
-  test('текст длиннее предела не чистим — конец ИИ не видел', () => {
-    const text = `${'слово '.repeat(NOTES_MAX_TEXT / 5)}inst: anya`;
-    const got = parseNotesAnswer(answer([{ i: 0, links: [{ network: 'instagram', handle: 'anya' }], rest: 'слово' }]), [text]);
-    assert.equal(got?.get(0)?.rest, null);
+  test('старый ответ с «очищенным текстом» не мешает: поле rest просто не берём', () => {
+    const got = parseNotesAnswer(answer([{ i: 0, links: [{ network: 'instagram', handle: 'anya' }], rest: 'Фотограф' }]), ['Фотограф. inst: anya']);
+    assert.deepEqual(got?.get(0), { links: [{ network: 'instagram', handle: 'anya' }], facts: {} });
+  });
+  test('длинный текст: ссылки из отправленного начала берём', () => {
+    const text = `inst: anya ${'слово '.repeat(NOTES_MAX_TEXT / 5)}`;
+    const got = parseNotesAnswer(answer([{ i: 0, links: [{ network: 'instagram', handle: 'anya' }] }]), [text]);
     assert.equal(got?.get(0)?.links.length, 1);
-  });
-  test('подпись, висящая после ссылки («Донаты:»), и тире в конце строки уходят; пустые строки — только где были', () => {
-    const text = 'Мой канал о путешествиях — t.me/travel_kat\nДонаты: boosty.to/kat';
-    const links = [
-      { network: 'telegram', url: 't.me/travel_kat' },
-      { network: 'boosty', url: 'boosty.to/kat' },
-    ];
-    assert.equal(tidyRest('Мой канал о путешествиях —\nДонаты:', text, links), 'Мой канал о путешествиях');
-    assert.equal(tidyRest('Важно:\nне опаздывать', 'Важно:\nне опаздывать', []), 'Важно:\nне опаздывать', 'обычный заголовок в заметке не трогаем');
-    assert.equal(tidyRest('Пою и рисую\n\nМосква', 'Пою и рисую\n📸 inst: a\nМосква', []), 'Пою и рисую\nМосква');
-    assert.equal(tidyRest('Абзац\n\nЕщё', 'Абзац\n\nЕщё inst: a', []), 'Абзац\n\nЕщё');
-  });
-  test('подпись сети без ссылки в конце строки («О себе: инст:», «мой тг —») уходит — баг с телефона', () => {
-    const links = [{ network: 'instagram', handle: 'dianka' }];
-    assert.equal(tidyRest('О себе: инст:', 'О себе: инст: dianka', links), '');
-    assert.equal(tidyRest('Фотограф. инст:', 'Фотограф. инст: dianka', links), 'Фотограф.');
-    assert.equal(tidyRest('Фотограф, мой тг —', 'Фотограф, мой тг — @dianka', [{ network: 'telegram', handle: 'dianka' }]), 'Фотограф');
-    assert.equal(tidyRest('Пою · inst', 'Пою · inst @dianka', links), 'Пою', 'без двоеточия — если за подписью шла ссылка');
-    assert.equal(tidyRest('Смотрит youtube', 'Смотрит youtube', []), 'Смотрит youtube', 'название сети в тексте без ссылки — живой текст');
-    assert.equal(tidyRest('Люблю фото', 'Люблю фото instagram.com/dianka', [{ network: 'instagram', url: 'instagram.com/dianka' }]), 'Люблю фото', 'слово перед ссылкой — не подпись');
-    assert.equal(tidyRest('О себе: Донаты:', 'О себе: Донаты: boosty.to/kat', [{ network: 'boosty', url: 'boosty.to/kat' }]), '');
-  });
-  test('заметки, разобранные прошлой версией, доочищаются без ИИ и остаются разобранными', () => {
-    const old = friend({ notes: 'О себе: инст:', notesSeen: notesHash('О себе: инст:') });
-    const fixed = retidySeen(old);
-    assert.equal(fixed.notes, '');
-    assert.equal(fixed.notesSeen, notesHash(''));
-    const fine = friend({ notes: 'О себе: Фотограф', notesSeen: notesHash('О себе: Фотограф') });
-    assert.equal(retidySeen(fine), fine);
-    const own = friend({ notes: 'Мой тг:', notesSeen: undefined });
-    assert.equal(retidySeen(own), own, 'неразобранные заметки не трогаем');
-  });
-  test('наша подпись «О себе:» без текста после неё уходит вместе со ссылками', () => {
-    assert.equal(tidyRest('О себе: \nДругое'), 'Другое');
-    assert.equal(tidyRest('О себе: Фотограф'), 'О себе: Фотограф');
-    const got = parseNotesAnswer(answer([{ i: 0, links: [{ network: 'instagram', url: 'instagram.com/katty.sh' }], rest: 'О себе:' }]), ['О себе: instagram.com/katty.sh']);
-    assert.equal(got?.get(0)?.rest, '');
   });
 });
 
@@ -199,9 +160,9 @@ describe('проход', () => {
     assert.deepEqual(ai.asked[0], [tg.notes, own.notes]);
     assert.equal(r.unavailable, false);
     assert.deepEqual(
-      r.updates.map((u) => [u.id, u.notes, u.links.map((l) => `${l.network}:${l.handle}`), u.facts]),
+      r.updates.map((u) => [u.id, u.before, u.links.map((l) => `${l.network}:${l.handle}`), u.facts]),
       [
-        ['tg', 'О себе: Фотограф.', ['instagram:anya.photo'], {}],
+        ['tg', tg.notes, ['instagram:anya.photo'], {}],
         ['own', 'Любит пионы', [], { flowers: 'пионы' }],
       ],
     );
@@ -213,7 +174,7 @@ describe('проход', () => {
     assert.equal(r.unavailable, true);
     assert.equal(r.updates.length, NOTES_BATCH.items);
     const bad = await notesPass([own], fakeAi(() => 'ерунда'), { mode: 'all', idFor: ids() });
-    assert.deepEqual(bad.updates.map((u) => [u.id, u.notes, u.links.length]), [['own', 'Любит пионы', 0]]);
+    assert.deepEqual(bad.updates.map((u) => [u.id, u.before, u.links.length]), [['own', 'Любит пионы', 0]]);
   });
   test('текст, который модель пропустила, — спросим в следующий раз', async () => {
     const r = await notesPass([tg, own], fakeAi(() => answer([{ i: 1, links: [], rest: 'Любит пионы' }])), { mode: 'all', idFor: ids() });
@@ -238,23 +199,22 @@ describe('применение', () => {
   const u = {
     id: 'a',
     before: f.notes,
-    notes: 'О себе: Фотограф.',
     links: [
       { id: 'n1', network: 'instagram', url: 'https://instagram.com/anya.photo', handle: 'anya.photo', source: 'notes' as const },
       { id: 'n2', network: 'vk', url: 'https://vk.com/anya_s', handle: 'anya_s', source: 'notes' as const },
     ],
     facts: { food: 'кофе', flowers: 'пионы' },
   };
-  test('заметка чистится, ссылки добавляются без дублей (ручные главнее), подсказки — только в пустые поля', () => {
+  test('заметка остаётся как была, ссылки добавляются без дублей (ручные главнее), подсказки — только в пустые поля', () => {
     const next = applyNotesUpdate(f, u);
-    assert.equal(next.notes, 'О себе: Фотограф.');
+    assert.equal(next.notes, 'О себе: Фотограф. inst: anya.photo', 'ссылку из заметки не вырезаем');
     assert.deepEqual(next.socials?.map((l) => l.id), ['m', 'n2']);
     assert.equal(next.food, 'суши', 'своё не перезаписываем');
     assert.equal(next.flowers, 'пионы');
-    assert.equal(next.notesSeen, notesHash('О себе: Фотограф.'));
+    assert.equal(next.notesSeen, notesHash(f.notes));
     assert.equal('notesQueue' in next, false);
     assert.equal(notesPending(next, 'all'), false, 'разобранное второй раз не отправляем');
-    assert.deepEqual(notesChanges(f, next), { links: 1, facts: 1, cleaned: true });
+    assert.deepEqual(notesChanges(f, next), { links: 1, facts: 1 });
   });
   test('заметку поменяли, пока ИИ думал, — ничего не трогаем', () => {
     const edited = { ...f, notes: 'Новая заметка' };
@@ -285,7 +245,9 @@ describe('итог', () => {
         : 'x',
     );
     const r = await notesPass(list, ai, { mode: 'all', idFor: ids() });
-    assert.deepEqual(notesSummary(list, r, 'all'), { status: 'done', friends: 2, withLinks: 1, links: 1, facts: 1, cleaned: 1, left: 1 });
+    assert.deepEqual(notesSummary(list, r, 'all'), { status: 'done', friends: 2, withLinks: 1, links: 1, facts: 1, left: 1 });
+    const after = list.map((f) => applyNotesUpdate(f, r.updates.find((u) => u.id === f.id)));
+    assert.deepEqual(after.map((f) => f.notes), list.map((f) => f.notes), 'ни одна заметка не изменилась');
     assert.equal(notesSummary(list, { updates: [], unavailable: true }, 'all').status, 'unavailable');
   });
 });

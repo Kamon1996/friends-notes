@@ -12,6 +12,7 @@ export function FriendsHeader({
   friends,
   today,
   selecting = false,
+  showAi,
   aiBusy,
   onAi,
   onImport,
@@ -25,6 +26,8 @@ export function FriendsHeader({
   today: string;
   /** Режим выбора: шапка остаётся на месте, но прячется — панель действий ложится поверх, и список не прыгает. */
   selecting?: boolean;
+  /** Значок магии пока спрятан: показываем, только если его включили (см. `Settings.aiMenu`). */
+  showAi: boolean;
   aiBusy: boolean;
   onAi: () => void;
   onImport: () => void;
@@ -54,7 +57,7 @@ export function FriendsHeader({
           subtitle={subtitle}
           right={
             <>
-              {n > 0 && <AiButton busy={aiBusy} onPress={onAi} />}
+              {n > 0 && showAi && <AiButton busy={aiBusy} onPress={onAi} />}
               <IconButton icon="import" label="Импорт друзей" onPress={onImport} />
               <IconButton icon="sliders" label="Настройки" onPress={onSettings} />
             </>

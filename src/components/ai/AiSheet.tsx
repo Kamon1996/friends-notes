@@ -47,7 +47,7 @@ export function AiSheet({
   const readNotes = async () => {
     if (notes.busy) return;
     setNotesLine(voice.say('notes.busy') ?? 'Читаю заметки…');
-    const sum = await onNotes().catch((): NotesSummary => ({ status: 'unavailable', friends: 0, withLinks: 0, links: 0, facts: 0, cleaned: 0, left: 0 }));
+    const sum = await onNotes().catch((): NotesSummary => ({ status: 'unavailable', friends: 0, withLinks: 0, links: 0, facts: 0, left: 0 }));
     setNotesLine(notesResult(sum));
   };
   const notesSub =
@@ -131,7 +131,7 @@ function notesResult(sum: NotesSummary): string {
   if (sum.status === 'unavailable') return voice.say('notes.fail') ?? 'Не получилось — попробую позже';
   if (sum.status === 'nothing') return voice.say('notes.nothing') ?? 'Новых заметок нет';
   if (sum.withLinks) return voice.say('notes.done', { n: sum.links, k: sum.withLinks }) ?? `Нашла ${sum.links} ${plural(sum.links, 'соцсеть', 'соцсети', 'соцсетей')}`;
-  if (sum.friends) return voice.say('notes.tidy') ?? 'Заметки прибраны';
+  if (sum.friends) return voice.say('notes.tidy') ?? 'Соцсетей нет, но кое-что записала в карточки';
   return voice.say('notes.none') ?? 'Соцсетей в заметках нет';
 }
 

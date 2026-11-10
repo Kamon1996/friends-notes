@@ -153,8 +153,9 @@ export default function ImportScreen() {
       return { photoUri: k?.photoUri ?? k?.thumbUri ?? null, thumbUri: k?.thumbUri ?? k?.photoUri ?? null };
     };
 
-    // «О себе» из Telegram разберёт ИИ — в фоне, сразу после импорта: соцсети в карточку, из заметки — ссылки.
-    addFriends(chosen.map((c) => ({ ...candidateToFriend(c, newId(), newId), ...photosOf(c), ...(fromTelegram && c.note && { notesQueue: true }) })));
+    // После импорта — два шага в фоне: пол (сам, по именам) и заметки. Заметку контакта и «О себе» из Telegram читает
+    // магия: соцсети и подсказки — в карточку, сама заметка остаётся как была.
+    addFriends(chosen.map((c) => ({ ...candidateToFriend(c, newId(), newId), ...photosOf(c), ...(c.note && { notesQueue: true }) })));
 
     // Уже добавленных друзей (совпали по номеру) дополняем фото и мессенджерами — заполненное не трогаем.
     const map = new Map<string, { links: ImportCandidate['links']; photoUri: string | null; thumbUri: string | null }>();

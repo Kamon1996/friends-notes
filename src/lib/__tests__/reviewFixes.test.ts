@@ -63,6 +63,10 @@ test('копия: настройки календаря и праздников 
   const s = sanitizeSettings({ smartCalendar: false, holidayCountries: ['RU', 'KZ', 'XX', 7], calendarLegend: false, calendarDayView: 'inline', newReminderForm: 'rows' });
   assert.equal(s.newReminderForm, 'rows');
   assert.equal(sanitizeSettings({ newReminderForm: 'tiles' }).newReminderForm, undefined);
+  // Спрятанное меню магии: флаг переживает копию, но только как «включено».
+  assert.equal(sanitizeSettings({ aiMenu: true }).aiMenu, true);
+  assert.equal('aiMenu' in sanitizeSettings({ aiMenu: 'yes' }), false);
+  assert.equal('aiMenu' in sanitizeSettings({}), false);
   assert.equal(s.smartCalendar, false);
   assert.deepEqual(s.holidayCountries, ['RU', 'KZ']);
   assert.equal(s.calendarLegend, false);

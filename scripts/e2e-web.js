@@ -929,6 +929,24 @@ scenario('Импорт: дубликат не выбирается, добавл
   assert.equal((await ui.data()).friends.length, 10);
 });
 
+scenario('Импорт: заметка контакта встаёт в очередь к магии (соцсети и подсказки) и сама не меняется', async ({ ui }) => {
+  await ui.go('/friends');
+  await ui.tap('Импорт друзей');
+  await ui.tap('Выбрать все');
+  await ui.tap(/^Добавить 7/);
+  const note = 'Любит рыбалку. inst: boris.kim';
+  let data = await ui.waitData((x) => x.friends.length === 10, 'друзья не добавились');
+  const boris = () => data.friends.find((f) => f.name === 'Борис Ким');
+  assert.equal(boris().notes, note);
+  assert.equal(boris().notesQueue, true, 'заметку из контактов должна прочитать магия — сама, после импорта');
+  assert.equal(data.friends.find((f) => f.name === 'Дима Петров').notesQueue, undefined, 'без заметки читать нечего');
+  // Магии в этой сборке нет: разбор не вышел — заметка ждёт следующего раза и остаётся слово в слово.
+  await ui.pause(4500);
+  data = await ui.data();
+  assert.equal(boris().notes, note, 'заметку не трогаем');
+  assert.equal(boris().notesQueue, true);
+});
+
 scenario('Импорт: число на кнопке согласовано — «Добавить 2 друзей», «Добавить 1 друга»', async ({ ui }) => {
   await ui.go('/friends');
   await ui.tap('Импорт друзей');
@@ -1102,7 +1120,7 @@ scenario('ИИ: значок → «Пол друзей» → список кру
   await ui.see('Аня Смирнова');
   const text = await ui.text();
   assert.ok(!/gemini|openrouter|genderize|hugging|google/i.test(text), 'в интерфейсе не называем, как это устроено');
-}, { data: seed({ friends: [ANYA, IGOR, MAMA, F({ id: 's', name: 'Саша', genderStage: 'ai' }), F({ id: 'k', name: 'Карина' })] }) });
+}, { data: seed({ settings: { aiMenu: true }, friends: [ANYA, IGOR, MAMA, F({ id: 's', name: 'Саша', genderStage: 'ai' }), F({ id: 'k', name: 'Карина' })] }) });
 
 scenario('ИИ: всё определилось — «Готово» и сам возвращается; «Оставить так» — тоже', async ({ ui }) => {
   await ui.go('/friends');
@@ -1114,7 +1132,7 @@ scenario('ИИ: всё определилось — «Готово» и сам �
   await ui.pause(2600);
   await ui.notSee('Разобралась с');
   assert.equal((await ui.data()).friends.find((f) => f.id === 's').gender, undefined, '«оставить так» ничего не меняет');
-}, { data: seed({ friends: [ANYA, IGOR, F({ id: 's', name: 'Саша', genderStage: 'ai' })] }) });
+}, { data: seed({ settings: { aiMenu: true }, friends: [ANYA, IGOR, F({ id: 's', name: 'Саша', genderStage: 'ai' })] }) });
 
 scenario('ИИ: «Соцсети из заметок» — счётчик заметок; без магии в сборке честно говорит, что не вышло, заметки не трогает', async ({ ui }) => {
   await ui.go('/friends');
@@ -1128,13 +1146,20 @@ scenario('ИИ: «Соцсети из заметок» — счётчик зам
   const data = await ui.data();
   assert.equal(data.friends.find((f) => f.id === 'n').notes, 'О себе: Фотограф. inst: anya.photo', 'заметка на месте');
   assert.equal(data.friends.find((f) => f.id === 'n').socials, undefined);
-}, { data: seed({ friends: [F({ id: 'n', name: 'Аня', notes: 'О себе: Фотограф. inst: anya.photo', notesQueue: true }), F({ id: 'm', name: 'Маша', notes: 'Любит пионы' }), F({ id: 'e', name: 'Без заметок' })] }) });
+}, { data: seed({ settings: { aiMenu: true }, friends: [F({ id: 'n', name: 'Аня', notes: 'О себе: Фотограф. inst: anya.photo', notesQueue: true }), F({ id: 'm', name: 'Маша', notes: 'Любит пионы' }), F({ id: 'e', name: 'Без заметок' })] }) });
+
+scenario('ИИ: значок магии пока спрятан — на экране друзей его нет; включённый флагом, без друзей он тоже не нужен', async ({ ui }) => {
+  await ui.go('/friends');
+  await ui.see('Аня Смирнова');
+  await ui.see('Импорт друзей', { label: true });
+  await ui.notSee('Магия для друзей', { label: true });
+});
 
 scenario('ИИ: без друзей значка нет', async ({ ui }) => {
   await ui.go('/friends');
   await ui.see('Пока никого');
   await ui.notSee('Магия для друзей', { label: true });
-}, { data: seed({ friends: [], reminders: [] }) });
+}, { data: seed({ settings: { aiMenu: true }, friends: [], reminders: [] }) });
 
 scenario('Пол: Валя и Ника бывают у обоих — наружу не уходят, сразу «загадка»; угаданное раньше снимаем', async ({ ui, page }) => {
   const asked = await genderizeStub(page, { 'Валя': 'female', 'Ника': 'female' });

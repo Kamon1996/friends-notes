@@ -15,7 +15,7 @@ import { defaultHolidayCountries } from './holidays';
 import { genderSync } from './genderRun';
 import { ai } from './ai';
 import { applyCalendarUpdate, calendarPass, calendarPending, smartCalendarOn } from './calendarAi';
-import { applyNotesUpdate, notesPass, notesPending, notesSummary, retidySeen, type NotesSummary } from './notesAi';
+import { applyNotesUpdate, notesPass, notesPending, notesSummary, type NotesSummary } from './notesAi';
 
 const STORAGE_KEY = 'friends-notes/data/v1';
 
@@ -50,8 +50,8 @@ interface Store {
   genderNews: number;
   clearGenderNews: () => void;
   /**
-   * Разобрать заметки силами ИИ: соцсети, подсказки для карточки, заметка без ссылок (src/lib/notesAi.ts).
-   * 'all' — все неразобранные (меню магии), 'queued' — только из импорта Telegram (это делается и само, в фоне).
+   * Разобрать заметки силами ИИ: соцсети и подсказки для карточки; сама заметка не меняется (src/lib/notesAi.ts).
+   * 'all' — все неразобранные (меню магии), 'queued' — только друзья из импорта (это делается и само, в фоне).
    */
   readNotes: (mode?: 'queued' | 'all') => Promise<NotesSummary>;
   notesBusy: boolean;
@@ -89,12 +89,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         // Разобрать нельзя — откладываем как есть в резервную копию, а не теряем.
         await AsyncStorage.setItem(`${STORAGE_KEY}.broken-${Date.now()}`, raw).catch(() => setCanPersist(false));
       }
-      // Заметки, разобранные прошлой версией, доочищаем по новым правилам («О себе: инст:» → пусто) — без ИИ.
       // Повторяющиеся, сделанные в прошлые дни, снова активны — на ближайший раз.
       // Пол, угаданный по имени, общему для обоих (Валя, Ника), снимаем — спросим у человека.
       if (loaded) {
         try {
-          setData({ ...loaded, friends: loaded.friends.map((f) => retractUnisexGuess(retidySeen(f))), reminders: loaded.reminders.map((r) => rollReminder(r)) });
+          setData({ ...loaded, friends: loaded.friends.map((f) => retractUnisexGuess(f)), reminders: loaded.reminders.map((r) => rollReminder(r)) });
         } catch (e) {
           // Данные разобрались, но на них споткнулись расчёты: откладываем копию и до следующего запуска ничего не пишем,
           // иначе пустой экран сохранился бы поверх настоящих данных.
@@ -202,8 +201,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return () => clearTimeout(t);
   }, [freshGenders, ready, canPersist, syncGenders]);
 
-  // Заметки: соцсети и подсказки силами ИИ. В фоне — только друзья из импорта Telegram (их «О себе» мы и так
-  // собирались разобрать); остальных — когда попросят из меню магии.
+  // Заметки: соцсети и подсказки силами ИИ. В фоне — друзья, добавленные импортом (контакты телефона и Telegram):
+  // это шаг самого импорта. Остальных — когда попросят из меню магии. Текст заметки при этом не меняется.
   const [notesBusy, setNotesBusy] = useState(false);
   const [notesNews, setNotesNews] = useState<NotesSummary | null>(null);
   const clearNotesNews = useCallback(() => setNotesNews(null), []);
@@ -217,7 +216,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
     const friends = dataRef.current.friends;
     if (!liveRef.current || !friends.some((f) => notesPending(f, mode))) {
-      return { status: 'nothing', friends: 0, withLinks: 0, links: 0, facts: 0, cleaned: 0, left: 0 };
+      return { status: 'nothing', friends: 0, withLinks: 0, links: 0, facts: 0, left: 0 };
     }
     setNotesBusy(true);
     const run = (async () => {

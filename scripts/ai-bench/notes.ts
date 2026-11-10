@@ -2,7 +2,8 @@
 /**
  * Проба задачи «соцсети и подсказки из заметок» (src/lib/notesAi.ts) на настоящих моделях: тот же вопрос, что в
  * приложении, на наборе трудных «О себе» и заметок. Для каждой модели — что она вернула и что из этого приняла
- * проверка приложения, сравнение с ожидаемым и время. Итог — таблицей в сводке запуска (GITHUB_STEP_SUMMARY).
+ * проверка приложения, сравнение с ожидаемым и время. Саму заметку приложение не меняет, поэтому сверяем только
+ * ссылки и подсказки. Итог — таблицей в сводке запуска (GITHUB_STEP_SUMMARY).
  * Запуск — workflow «AI probe» (коммит со словом «[probe]» в первой строке или вручную); ключи — секреты сборки.
  * Локально: GEMINI_API_KEY=… OPENROUTER_API_KEY=… npx tsx scripts/ai-bench/notes.ts
  */
@@ -18,8 +19,6 @@ interface Case {
   text: string;
   /** Ожидаемые ссылки «сеть:ник» (ник в нижнем регистре); для сайтов — «site:домен». */
   links: string[];
-  /** Что должно остаться от текста; несколько — любой из них годится. */
-  rest: string[];
   /** Подсказки, которые хотим увидеть (по ключевому слову). */
   facts?: Partial<Record<'food' | 'flowers' | 'gifts', string>>;
 }
@@ -28,42 +27,37 @@ const CASES: Case[] = [
   {
     text: 'https://band.link/9OzXo 🎙️https://www.tiktok.com/@shameless66613😍 youtube.com/@ShameleSs66613 🎥 behance.net/47935d51📸',
     links: ['bandlink:9ozxo', 'tiktok:shameless66613', 'youtube:shameless66613', 'behance:47935d51'],
-    rest: [''],
   },
-  { text: 'певица, Москва. канал @kattysings и inst instagram.com/katty.sh', links: ['telegram:kattysings', 'instagram:katty.sh'], rest: ['певица, Москва.', 'певица, Москва'] },
-  { text: 'пишите на mail@example.com, т.е. не сюда', links: [], rest: ['пишите на mail@example.com, т.е. не сюда'] },
+  { text: 'певица, Москва. канал @kattysings и inst instagram.com/katty.sh', links: ['telegram:kattysings', 'instagram:katty.sh'] },
+  { text: 'пишите на mail@example.com, т.е. не сюда', links: [] },
   {
     text: 'Фотограф из Казани 📸 inst: anya.photo · вк anya_s\nОбожаю пионы и капучино',
     links: ['instagram:anya.photo', 'vk:anya_s'],
-    rest: ['Фотограф из Казани\nОбожаю пионы и капучино', 'Фотограф из Казани 📸\nОбожаю пионы и капучино'],
     facts: { flowers: 'пион', food: 'капучино' },
   },
-  { text: 'tg: anna, inst: anna.k | vk: id1', links: ['telegram:anna', 'instagram:anna.k', 'vk:id1'], rest: [''] },
-  { text: 'Пою и рисую\n📸 inst: anya.photo\nМосква, Питер', links: ['instagram:anya.photo'], rest: ['Пою и рисую\nМосква, Питер'] },
-  { text: 'О себе: Люблю горы и кофе. Работаю в школе', links: [], rest: ['О себе: Люблю горы и кофе. Работаю в школе'], facts: { food: 'коф' } },
-  { text: 'in: Moscow, line of work: dev, x: 2 + y', links: [], rest: ['in: Moscow, line of work: dev, x: 2 + y'] },
+  { text: 'tg: anna, inst: anna.k | vk: id1', links: ['telegram:anna', 'instagram:anna.k', 'vk:id1'] },
+  { text: 'Пою и рисую\n📸 inst: anya.photo\nМосква, Питер', links: ['instagram:anya.photo'] },
+  { text: 'О себе: Люблю горы и кофе. Работаю в школе', links: [], facts: { food: 'коф' } },
+  { text: 'in: Moscow, line of work: dev, x: 2 + y', links: [] },
   {
     text: 'Мой канал о путешествиях — t.me/travel_kat\nДонаты: boosty.to/kat',
     links: ['telegram:travel_kat', 'boosty:kat'],
-    rest: ['Мой канал о путешествиях', 'Мой канал о путешествиях —', ''],
   },
-  { text: 'bsky: katty.bsky.social, макс: katty', links: ['bluesky:katty.bsky.social', 'max:katty'], rest: [''] },
+  { text: 'bsky: katty.bsky.social, макс: katty', links: ['bluesky:katty.bsky.social', 'max:katty'] },
   {
     text: 'В прошлом году дарили книгу Мураками — понравилась. Не любит сладкое. Инста @dasha_runs',
     links: ['instagram:dasha_runs'],
-    rest: ['В прошлом году дарили книгу Мураками — понравилась. Не любит сладкое.'],
     facts: { food: 'сладк', gifts: 'книг' },
   },
-  { text: 'инст: dianka_v', links: ['instagram:dianka_v'], rest: [''] },
-  { text: 'Рисую 🎨 мой инст — @dianka.art', links: ['instagram:dianka.art'], rest: ['Рисую', 'Рисую 🎨'] },
-  { text: 'Пишите в tg: katty. Всегда отвечаю', links: ['telegram:katty'], rest: ['Всегда отвечаю', 'Всегда отвечаю.'] },
+  { text: 'инст: dianka_v', links: ['instagram:dianka_v'] },
+  { text: 'Рисую 🎨 мой инст — @dianka.art', links: ['instagram:dianka.art'] },
+  { text: 'Пишите в tg: katty. Всегда отвечаю', links: ['telegram:katty'] },
 ];
 
 const env = process.env;
 const keys: Partial<Record<ProviderId, string>> = { gemini: env.GEMINI_API_KEY || undefined, openrouter: env.OPENROUTER_API_KEY || undefined };
 const maxOpenRouter = Number(env.PROBE_OPENROUTER) || 6;
 
-const norm = (s: string) => s.replace(/\s+/g, ' ').trim().toLowerCase();
 const linkKey = (a: NotesAnswer['links'][number]) => {
   const l = toSocialLink(a, 'x');
   if (!l) return `?:${a.network}:${a.handle ?? a.url}`;
@@ -72,20 +66,18 @@ const linkKey = (a: NotesAnswer['links'][number]) => {
 
 interface CaseResult {
   links: 'ok' | string;
-  rest: 'ok' | 'kept' | string;
   facts: string;
 }
 
 function score(c: Case, a: NotesAnswer | undefined): CaseResult {
-  if (!a) return { links: 'нет ответа', rest: 'нет ответа', facts: '' };
+  if (!a) return { links: 'нет ответа', facts: '' };
   const got = [...new Set(a.links.map(linkKey))].sort();
   const want = [...c.links].sort();
   const links = JSON.stringify(got) === JSON.stringify(want) ? 'ok' : `${got.join(' ') || '—'} ≠ ${want.join(' ') || '—'}`;
-  const rest = a.rest === null ? 'kept' : c.rest.some((r) => norm(r) === norm(a.rest!)) ? 'ok' : `«${a.rest.replace(/\n/g, '⏎')}»`;
   const facts = Object.entries(c.facts ?? {})
     .map(([k, w]) => `${k}:${(a.facts[k as 'food'] ?? '').toLowerCase().includes(w!) ? '✓' : '✗'}`)
     .join(' ');
-  return { links, rest, facts };
+  return { links, facts };
 }
 
 async function ask(provider: ProviderId, model: string): Promise<{ ms: number; answers?: Map<number, NotesAnswer>; raw?: string; error?: string }> {
@@ -121,21 +113,19 @@ async function ask(provider: ProviderId, model: string): Promise<{ ms: number; a
       models.push(['openrouter', m.model]);
     }
   }
-  const lines = [`Тексты: ${CASES.length}. Ссылки — точное совпадение набора; текст — один из допустимых вариантов («оставлен» — проверка приложения не приняла очистку и заметка не тронута).`, ''];
-  const table = ['| Сервис | Модель | Время | Ссылки верно | Текст верно | Текст оставлен | Подсказки | Ошибка |', '|---|---|---|---|---|---|---|---|'];
+  const lines = [`Тексты: ${CASES.length}. Ссылки — точное совпадение набора; подсказки — по ключевому слову. Сама заметка в приложении не меняется.`, ''];
+  const table = ['| Сервис | Модель | Время | Ссылки верно | Подсказки | Ошибка |', '|---|---|---|---|---|---|'];
   for (const [provider, model] of models) {
     const r = await ask(provider, model);
     const per = CASES.map((c, i) => score(c, r.answers?.get(i)));
     const linksOk = per.filter((p) => p.links === 'ok').length;
-    const restOk = per.filter((p) => p.rest === 'ok').length;
-    const kept = per.filter((p) => p.rest === 'kept').length;
     const facts = per.map((p) => p.facts).join(' ');
     const factsOk = (facts.match(/✓/g) ?? []).length;
     const factsAll = (facts.match(/[✓✗]/g) ?? []).length;
-    table.push(`| ${provider} | \`${model}\` | ${(r.ms / 1000).toFixed(1)} с | ${r.answers ? `${linksOk}/${CASES.length}` : '—'} | ${r.answers ? `${restOk}/${CASES.length}` : '—'} | ${r.answers ? kept : '—'} | ${r.answers ? `${factsOk}/${factsAll}` : '—'} | ${r.error ?? ''} |`);
+    table.push(`| ${provider} | \`${model}\` | ${(r.ms / 1000).toFixed(1)} с | ${r.answers ? `${linksOk}/${CASES.length}` : '—'} | ${r.answers ? `${factsOk}/${factsAll}` : '—'} | ${r.error ?? ''} |`);
     console.log(`\n=== ${provider} ${model} — ${(r.ms / 1000).toFixed(1)} с ${r.error ?? ''}`);
     per.forEach((p, i) => {
-      if (p.links !== 'ok' || (p.rest !== 'ok' && p.rest !== 'kept') || p.facts.includes('✗')) console.log(`  #${i}: ссылки ${p.links} · текст ${p.rest} · ${p.facts}`);
+      if (p.links !== 'ok' || p.facts.includes('✗')) console.log(`  #${i}: ссылки ${p.links} · ${p.facts}`);
     });
     if (r.raw) console.log(`  RAW ${r.raw.replace(/\n/g, ' ')}`);
   }

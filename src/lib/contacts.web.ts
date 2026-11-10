@@ -8,7 +8,7 @@ export type ContactsResult =
 export async function loadContacts(): Promise<ContactsResult> {
   const contacts: RawContact[] = [
     { id: 's1', fullName: 'Алина Смирнова', phones: [{ number: '+7 916 555-12-34' }], birthday: { year: 1997, month: 4, day: 12 }, links: { telegramId: 111, whatsapp: '79165551234' } },
-    { id: 's2', fullName: 'Борис Ким', phones: [{ number: '+7 903 111-22-33' }], birthday: { month: 9, day: 3 } },
+    { id: 's2', fullName: 'Борис Ким', phones: [{ number: '+7 903 111-22-33' }], birthday: { month: 9, day: 3 }, note: 'Любит рыбалку. inst: boris.kim' },
     { id: 's3', fullName: 'Вика', phones: [{ number: '8 926 000-00-01' }] },
     { id: 's4', fullName: 'Дима Петров', phones: [{ number: '+7 985 777-66-55' }], birthday: { year: 1993, month: 12, day: 30 }, dates: [{ label: 'anniversary', date: { year: 2018, month: 6, day: 15 } }] },
     { id: 's5', fullName: 'Катя Орлова', phones: [{ number: '+7 999 234-56-78' }], birthday: { year: 1999, month: 2, day: 14 }, links: { telegramId: 333 }, websites: ['https://www.instagram.com/katya.orlova'] },

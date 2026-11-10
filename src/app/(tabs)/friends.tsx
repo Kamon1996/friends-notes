@@ -52,7 +52,7 @@ export default function FriendsScreen() {
   const n = data.friends.length;
   const notesWaiting = useMemo(() => data.friends.filter((f) => notesPending(f, 'all')).length, [data.friends]);
 
-  // Тихий тост магии — про соцсети из «О себе». Про пол новых друзей молчим: пол просто появляется в карточке.
+  // Тихий тост магии — про соцсети и подсказки из заметок новых друзей. Про пол молчим: он просто появляется в карточке.
   const toast = useMemo(() => {
     if (notesNews)
       return notesNews.links
@@ -114,6 +114,7 @@ export default function FriendsScreen() {
                 friends={data.friends}
                 today={today}
                 selecting={selecting}
+                showAi={data.settings.aiMenu === true}
                 aiBusy={genderBusy}
                 onAi={() => setAiOpen(true)}
                 onImport={() => router.push('/import')}

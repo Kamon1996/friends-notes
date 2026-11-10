@@ -100,6 +100,7 @@ export function sanitizeSettings(raw: unknown): Settings {
     ...(typeof s.calendarLegend === 'boolean' ? { calendarLegend: s.calendarLegend } : {}),
     ...(s.calendarDayView === 'sheet' || s.calendarDayView === 'inline' ? { calendarDayView: s.calendarDayView } : {}),
     ...(s.newReminderForm === 'quick' || s.newReminderForm === 'rows' ? { newReminderForm: s.newReminderForm } : {}),
+    ...(s.aiMenu === true ? { aiMenu: true } : {}),
   };
 }
 
