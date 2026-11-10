@@ -561,6 +561,8 @@ scenario('Напоминание: «каждые N» — стёр число и 
   await ui.tap('Свой…');
   const every = page.getByLabel('Каждые сколько');
   await every.click();
+  // Курсор — в конец: число стоит по центру поля, и нажатие мышью может поставить курсор перед цифрой.
+  await page.keyboard.press('End');
   await page.keyboard.press('Backspace');
   assert.equal(await every.inputValue(), '', 'пустое поле не должно само превращаться в единицу');
   await page.keyboard.type('5');
