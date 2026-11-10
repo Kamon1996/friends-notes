@@ -19,7 +19,8 @@ export function Avatar({
   bg?: string;
   fg?: string;
 }) {
-  const [failed, setFailed] = useState(false);
+  // Какая картинка не загрузилась. Новое фото пробуем заново: иначе после битой аватарки инициалы оставались бы навсегда.
+  const [failedUri, setFailedUri] = useState<string | null>(null);
   const { scheme } = useTheme();
   const tint = avatarTint(friend.name, scheme);
   const box = {
@@ -33,10 +34,10 @@ export function Avatar({
   };
   // В списках — маленькая версия (быстрее и легче), в карточке — большая.
   const uri = size <= 64 ? (friend.thumbUri ?? friend.photoUri) : (friend.photoUri ?? friend.thumbUri);
-  if (uri && !failed) {
+  if (uri && failedUri !== uri) {
     return (
       <View style={box}>
-        <Image source={{ uri }} style={{ width: size, height: size }} onError={() => setFailed(true)} />
+        <Image source={{ uri }} style={{ width: size, height: size }} onError={() => setFailedUri(uri)} />
       </View>
     );
   }

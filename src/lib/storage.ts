@@ -28,17 +28,35 @@ function isObject(v: unknown): v is Record<string, unknown> {
 
 const str = (v: unknown, fallback = '') => (typeof v === 'string' ? v : fallback);
 
+/** Настоящая дата в виде ГГГГ-ММ-ДД: «10.11.2026», пустая строка и 31 февраля — не даты. */
+export function isStoredDate(v: unknown): v is string {
+  if (typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return false;
+  const [y, m, d] = v.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d;
+}
+
+const REPEAT_UNITS = ['day', 'week', 'month', 'year'];
+const ADVANCES = [0, 60, 1440, 4320, 10080];
+/** Повтор — только понятный: счёт по известной единице и разумный шаг. Иначе пересчёт дат не закончится никогда. */
+function normalizeRepeat(v: unknown): Reminder['repeat'] {
+  if (!isObject(v) || typeof v.unit !== 'string' || !REPEAT_UNITS.includes(v.unit)) return null;
+  const every = v.every;
+  if (typeof every !== 'number' || !Number.isInteger(every) || every < 1 || every > 999) return null;
+  return { every, unit: v.unit as NonNullable<Reminder['repeat']>['unit'] };
+}
+
 function normalizeFriend(v: unknown): Friend | null {
   if (!isObject(v) || typeof v.id !== 'string' || typeof v.name !== 'string') return null;
   const dates = Array.isArray(v.dates)
-    ? v.dates.filter((d): d is ImportantDate => isObject(d) && typeof d.id === 'string' && typeof d.date === 'string').map((d) => ({ ...d, title: str(d.title), yearly: d.yearly !== false }))
+    ? v.dates.filter((d): d is ImportantDate => isObject(d) && typeof d.id === 'string' && isStoredDate(d.date)).map((d) => ({ ...d, title: str(d.title), yearly: d.yearly !== false }))
     : [];
   // Пол берём только из проверенных полей ниже, а не из исходной записи как есть.
   const { gender: _gender, genderBy: _genderBy, genderStage: _genderStage, notesSeen: _seen, notesQueue: _queue, ...rest } = v;
   return {
     ...(rest as unknown as Friend),
     emoji: str(v.emoji),
-    birthday: typeof v.birthday === 'string' ? v.birthday : null,
+    birthday: isStoredDate(v.birthday) ? v.birthday : null,
     phone: str(v.phone),
     food: str(v.food),
     flowers: str(v.flowers),
@@ -76,8 +94,9 @@ function genderFields(v: Record<string, unknown>): Pick<Friend, 'gender' | 'gend
 }
 
 function normalizeReminder(v: unknown): Reminder | null {
-  if (!isObject(v) || typeof v.id !== 'string' || typeof v.date !== 'string') return null;
-  const repeat = isObject(v.repeat) && typeof v.repeat.every === 'number' && typeof v.repeat.unit === 'string' ? (v.repeat as unknown as Reminder['repeat']) : null;
+  // Без настоящей даты дело не посчитать: ни срок, ни повтор, ни уведомления.
+  if (!isObject(v) || typeof v.id !== 'string' || !isStoredDate(v.date)) return null;
+  const repeat = normalizeRepeat(v.repeat);
   const { daily, kind, priority, minutes, doneAt, calendar, calendarAi, calendarSeen, ...rest } = v;
   const done = v.done === true;
   return {
@@ -95,7 +114,7 @@ function normalizeReminder(v: unknown): Reminder | null {
     friendId: typeof v.friendId === 'string' ? v.friendId : null,
     time: typeof v.time === 'string' && /^\d{2}:\d{2}$/.test(v.time) ? v.time : '10:00',
     repeat,
-    advance: (typeof v.advance === 'number' ? v.advance : 0) as Reminder['advance'],
+    advance: (typeof v.advance === 'number' && ADVANCES.includes(v.advance) ? v.advance : 0) as Reminder['advance'],
     done,
     createdAt: typeof v.createdAt === 'number' ? v.createdAt : 0,
   };

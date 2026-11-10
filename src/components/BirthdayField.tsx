@@ -1,7 +1,7 @@
 import { useEffect, useEffectEvent, useRef, useState, type ComponentRef } from 'react';
 import { Pressable, Text, TextInput, View, type TextInputKeyPressEvent } from 'react-native';
 
-import { EMPTY_PARTS, composeDate, dateIssue, partsErrors, splitDate, type DateParts } from '@/lib/birthday';
+import { EMPTY_PARTS, composeDate, dateIssue, partsErrors, splitDate, type DateParts, type DateRules } from '@/lib/birthday';
 import type { ISODate } from '@/lib/types';
 import { DatePickerButton } from './DatePickerButton';
 import { Icon } from './Icon';
@@ -21,6 +21,8 @@ export function BirthdayField({
   required = false,
   showIncomplete = false,
   onInvalidChange,
+  future = false,
+  yearRequired = false,
 }: {
   label: string;
   value: ISODate | null;
@@ -32,6 +34,10 @@ export function BirthdayField({
   showIncomplete?: boolean;
   /** Набранное нельзя сохранить: форма не должна сохраняться молча с другой датой. */
   onInvalidChange?: (invalid: boolean) => void;
+  /** Год может быть из будущего: важная дата, а не день рождения. */
+  future?: boolean;
+  /** Без года нельзя: дата разовая. */
+  yearRequired?: boolean;
 }) {
   const { s, colors } = useTheme();
   const [parts, setParts] = useState<DateParts>(() => splitDate(value));
@@ -44,8 +50,9 @@ export function BirthdayField({
   const dayRef = useRef<ComponentRef<typeof TextInput>>(null);
   const monthRef = useRef<ComponentRef<typeof TextInput>>(null);
   const yearRef = useRef<ComponentRef<typeof TextInput>>(null);
-  const errors = partsErrors(parts);
-  const issue = dateIssue(parts, required);
+  const rules: DateRules = { future, yearRequired };
+  const errors = partsErrors(parts, rules);
+  const issue = dateIssue(parts, required, rules);
   const shownIssue = issue && (issue.hard || showIncomplete) ? issue : null;
   const filled = !!(parts.day || parts.month || parts.year);
   const invalid = !!issue;
@@ -58,7 +65,7 @@ export function BirthdayField({
 
   const commit = (next: DateParts) => {
     setParts(next);
-    const iso = composeDate(next);
+    const iso = composeDate(next, rules);
     setSyncedWith(iso);
     onChange(iso);
   };
@@ -126,7 +133,7 @@ export function BirthdayField({
             maxLength={4}
             maxFontSizeMultiplier={1.3}
             accessibilityLabel="Год"
-            style={[...cellStyle(errors.year || (!!shownIssue && parts.year.length > 0 && parts.year.length < 4)), filled && { paddingRight: 34 }]}
+            style={[...cellStyle(errors.year || (!!shownIssue && parts.year.length < 4 && (yearRequired || parts.year.length > 0))), filled && { paddingRight: 34 }]}
           />
           {filled && (
             <Pressable

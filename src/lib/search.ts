@@ -83,6 +83,8 @@ export interface SearchQuery {
   raw: string;
   /** Варианты скелета: как набрано и в другой раскладке; каждый — список слов. */
   variants: string[][];
+  /** Скелет запроса как он набран, без другой раскладки. Пусто, если в запросе нет букв и цифр. */
+  typed: string[];
 }
 
 export function prepareQuery(query: string): SearchQuery | null {
@@ -91,7 +93,7 @@ export function prepareQuery(query: string): SearchQuery | null {
   const variants = [searchKey(raw), searchKey(swapLayout(raw))]
     .map((k) => k.split(' ').filter(Boolean))
     .filter((words, i, arr) => words.length > 0 && arr.findIndex((w) => w.join(' ') === words.join(' ')) === i);
-  return { raw, variants };
+  return { raw, variants, typed: searchKey(raw).split(' ').filter(Boolean) };
 }
 
 /** Каждое слово запроса — начало какого-то слова имени (в любом из вариантов записи). */
@@ -99,6 +101,24 @@ export function matchesName(name: string, q: SearchQuery): boolean {
   if (name.toLowerCase().includes(q.raw)) return true;
   const words = searchKey(name).split(' ');
   return q.variants.some((variant) => variant.every((qw) => words.some((w) => w.startsWith(qw))));
+}
+
+/** То же, но только как набрано: без варианта «в другой раскладке». */
+export function matchesTyped(name: string, q: SearchQuery): boolean {
+  if (name.toLowerCase().includes(q.raw)) return true;
+  if (q.typed.length === 0) return false;
+  const words = searchKey(name).split(' ');
+  return q.typed.every((qw) => words.some((w) => w.startsWith(qw)));
+}
+
+/**
+ * Отбор списка по имени. Сначала — как набрано; другая раскладка («fyz» вместо «аня») идёт в дело, только если
+ * как набрано не нашлось никого. Иначе «тол» находил бы и Никиту с Николаем: в латинице это «njk».
+ * `also` — что ещё считать совпадением (например, телефон по цифрам).
+ */
+export function filterByName<T>(items: readonly T[], q: SearchQuery, name: (item: T) => string, also?: (item: T) => boolean): T[] {
+  const typed = items.filter((x) => matchesTyped(name(x), q) || !!also?.(x));
+  return typed.length > 0 ? typed : items.filter((x) => matchesName(name(x), q));
 }
 
 /** Поиск по имени умный, по остальным полям — обычное вхождение. */

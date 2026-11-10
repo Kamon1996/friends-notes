@@ -1,6 +1,6 @@
 import { router, useIsFocused } from 'expo-router';
-import { useMemo, useRef, useState, type ReactNode } from 'react';
-import { FlatList, Pressable, Text, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { BackHandler, FlatList, Pressable, Text, View } from 'react-native';
 import ReanimatedSwipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 
 import { AiSheet } from '@/components/ai/AiSheet';
@@ -37,6 +37,15 @@ export default function FriendsScreen() {
   const [scrolled, setScrolled] = useState(false);
   const today = todayISO();
   const focused = useIsFocused();
+  // Системная «Назад» в режиме выбора снимает выбор, а не уводит на другую вкладку с отмеченными друзьями.
+  useEffect(() => {
+    if (!selecting || !focused) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      setSelected(new Set());
+      return true;
+    });
+    return () => sub.remove();
+  }, [selecting, focused]);
 
   const items = useMemo(() => buildFriendList(data.friends, query, sort, today), [data.friends, query, sort, today]);
 

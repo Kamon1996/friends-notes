@@ -1,4 +1,4 @@
-import { createElement } from 'react';
+import { createElement, useState } from 'react';
 import { View } from 'react-native';
 
 import { DateFieldBase, usePickerButtonStyle, type DateFieldProps } from './DateFieldBase';
@@ -12,6 +12,7 @@ import { useTheme } from './ui';
 export function DateField(props: DateFieldProps) {
   const { colors } = useTheme();
   const pickerButton = usePickerButtonStyle();
+  const [picked, setPicked] = useState(0);
   const picker = (
     <View style={[pickerButton, { position: 'relative', overflow: 'hidden' }]}>
       <Icon name={props.mode === 'date' ? 'calendar' : 'clock'} size={20} color={colors.text2} />
@@ -24,6 +25,7 @@ export function DateField(props: DateFieldProps) {
           if (!v) return;
           if (props.mode === 'date') props.onChange(v);
           else props.onChange(v);
+          setPicked((n) => n + 1);
         },
         style: {
           position: 'absolute',
@@ -39,5 +41,5 @@ export function DateField(props: DateFieldProps) {
     </View>
   );
 
-  return <DateFieldBase {...props} picker={picker} />;
+  return <DateFieldBase {...props} picker={picker} picked={picked} />;
 }

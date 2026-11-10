@@ -94,9 +94,24 @@ export function rollReminder(r: Reminder, now = new Date()): Reminder {
   return { ...reopenReminder(r), anchor, date: next };
 }
 
+/**
+ * По какой день серия закрыта отметкой «сделано»: текущий раз, а если отметили позже срока — день отметки.
+ * Разы до этого дня включительно не напоминают: дело сделано, пропущенное уже не вернётся. Так же считает
+ * `rollReminder`, когда на следующий день переносит дело на ближайший раз.
+ */
+export function doneThrough(r: Reminder): ISODate | null {
+  if (!r.repeat || !r.done) return null;
+  const doneDay = r.doneAt ? toISODate(new Date(r.doneAt)) : r.date;
+  return doneDay > r.date ? doneDay : r.date;
+}
+
 /** Следующий раз повторяющегося после текущего — «снова завтра» у сделанного. */
 export function nextAfterCurrent(r: Reminder): ISODate | null {
-  return r.repeat ? nextOccurrenceAfter(seriesStart(r), r.time, r.repeat, combine(r.date, r.time)) : null;
+  if (!r.repeat) return null;
+  const through = doneThrough(r);
+  // Сделано позже срока — считаем от дня отметки: «снова» должно совпасть с тем, куда дело перенесётся завтра.
+  const after = through && through > r.date ? combine(through, '23:59') : combine(r.date, r.time);
+  return nextOccurrenceAfter(seriesStart(r), r.time, r.repeat, after);
 }
 
 /**
@@ -226,6 +241,8 @@ export function planNotifications(data: AppData, now = new Date()): PlannedNotif
         ? [0, 1].map((k) => sameDayInYear(d.date, parseISODate(today).getFullYear() + k))
         : [d.date];
       for (const date of dates) {
+        // Ежегодная дата с годом впереди (свадьба в 2027-м) до самой даты не наступает — как и в календаре.
+        if (d.yearly && hasYear(d.date) && date < d.date) continue;
         const years = d.yearly && hasYear(d.date) ? parseISODate(date).getFullYear() - parseISODate(d.date).getFullYear() : 0;
         const yearsText = years > 0 ? ` · ${years} ${plural(years, 'год', 'года', 'лет')}` : '';
         pushEvent(date, `${d.title} — ${f.name}${yearsText}`, 'Сегодня важная дата.', 'Завтра важная дата.', url, f);
@@ -275,8 +292,9 @@ export function planNotifications(data: AppData, now = new Date()): PlannedNotif
     }
 
     let n = 0;
+    const closed = doneThrough(r);
     for (const date of occurrences(seriesStart(r), r.repeat)) {
-      if (date < r.date || (r.done && date === r.date)) continue; // прошедшие разы серии до ближайшего; сделанный раз
+      if (date < r.date || (closed && date <= closed)) continue; // прошедшие разы серии до ближайшего; сделанные разы
       const at = combine(date, r.time);
       if (at > now) {
         out.push({ at, title, body, url });

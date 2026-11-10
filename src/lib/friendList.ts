@@ -1,5 +1,5 @@
 import { daysBetween, nextAnniversary } from './dates';
-import { matchesName, prepareQuery } from './search';
+import { filterByName, matchesName, prepareQuery } from './search';
 import type { Friend } from './types';
 
 export type FriendSort = 'name' | 'date';
@@ -16,9 +16,13 @@ export const favoritesFirst =
   (a: Friend, b: Friend) =>
     Number(!!b.favorite) - Number(!!a.favorite) || cmp(a, b);
 
-/** Буква для группы в списке; имена без букв (номера, эмодзи) попадают в «#». */
+/**
+ * Буква для группы в списке; имена без букв (номера, эмодзи) попадают в «#». «Ё» — в группе «Е»: по алфавиту
+ * «Ёжик» стоит между «Егором» и «Екатериной», и своя группа разорвала бы «Е» надвое.
+ */
 export function letterOf(f: Friend): string {
   const ch = (f.name.trim()[0] ?? '').toUpperCase();
+  if (ch === 'Ё') return 'Е';
   return /\p{L}/u.test(ch) ? ch : '#';
 }
 
@@ -34,7 +38,7 @@ export function matchesQuery(f: Friend, query: string): boolean {
  */
 export function buildFriendList(friends: Friend[], query: string, sort: FriendSort, today: string): FriendListItem[] {
   const q = prepareQuery(query);
-  const list = q ? friends.filter((f) => matchesName(f.name, q)) : [...friends];
+  const list = q ? filterByName(friends, q, (f) => f.name) : [...friends];
   const next = (f: Friend) => (f.birthday ? daysBetween(today, nextAnniversary(f.birthday, today)) : 10_000);
   const cmp = sort === 'date' ? (a: Friend, b: Friend) => next(a) - next(b) || byName(a, b) : byName;
   list.sort(favoritesFirst(cmp));

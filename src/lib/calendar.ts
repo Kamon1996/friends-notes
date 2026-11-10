@@ -126,15 +126,35 @@ export function nextEvents(data: Pick<AppData, 'friends' | 'reminders'> & { sett
   return out.slice(0, limit);
 }
 
-/** Сколько чего в месяце — для обозначений под календарём. Праздник на несколько дней считаем один раз. */
+/**
+ * Сколько чего в месяце — для обозначений под календарём. Праздник на несколько дней считаем один раз, даже с
+ * перерывом («Новогодние каникулы» 1–6 и 8 января). Один праздник у нескольких стран в один день — тоже один.
+ * А тёзки в разные дни (три «Дня независимости» у трёх стран) — разные праздники.
+ */
 export function monthCounts(events: readonly CalendarEvent[], from: ISODate, to: ISODate): Record<CalendarEvent['kind'], number> {
   const counts = { birthday: 0, date: 0, meeting: 0, holiday: 0 };
-  const holidays = new Set<string>();
+  // Название → праздники с этим названием: у каждого свои дни.
+  const byName = new Map<string, Map<string, Set<ISODate>>>();
   for (const e of events) {
     if (e.date < from || e.date > to) continue;
-    if (e.kind === 'holiday') holidays.add(e.name);
-    else counts[e.kind]++;
+    if (e.kind !== 'holiday') {
+      counts[e.kind]++;
+      continue;
+    }
+    const ids = byName.get(e.name) ?? new Map<string, Set<ISODate>>();
+    byName.set(e.name, ids);
+    for (const h of e.holidays) ids.set(h.id, (ids.get(h.id) ?? new Set<ISODate>()).add(e.date));
   }
-  counts.holiday = holidays.size;
+  for (const ids of byName.values()) {
+    // Тёзки, у которых совпал хотя бы день, — один праздник.
+    const groups: Set<ISODate>[] = [];
+    for (const days of ids.values()) {
+      const same = groups.filter((g) => [...days].some((d) => g.has(d)));
+      const merged = new Set([...days, ...same.flatMap((g) => [...g])]);
+      for (const g of same) groups.splice(groups.indexOf(g), 1);
+      groups.push(merged);
+    }
+    counts.holiday += groups.length;
+  }
   return counts;
 }

@@ -108,8 +108,31 @@ export const CALENDAR_TASK: AiTask<string[], Map<number, boolean>> = {
  */
 export function calendarLine(r: Pick<Reminder, 'title' | 'time' | 'repeat'>, friendName?: string): string {
   let title = r.title.trim();
-  if (friendName) title = title.split(friendName).join('').replace(/\s*[—–-]\s*$/, '').replace(/^\s*[—–-]\s*/, '').trim() || title;
+  if (friendName) title = withoutName(title, friendName) || title;
   return [title, r.repeat ? formatRepeat(r.repeat) : null, r.time].filter(Boolean).join(' · ');
+}
+
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * Название без имени друга — целыми словами и в любом падеже: «Встреча с Олегом в кафе» → «Встреча в кафе».
+ * Вырезать имя как подстроку нельзя: от «Олегом» оставалось «ом». Осиротевший предлог перед именем тоже убираем.
+ */
+export function withoutName(title: string, friendName: string): string {
+  let out = title;
+  for (const word of friendName.split(/\s+/).filter((w) => w.length >= 2)) {
+    // Основа без окончания: «Аня» → «Ан» (Ане, Аню), «Олег» → «Олег» (Олегу, Олегом).
+    const stem = word.length > 3 ? word.replace(/[аяйьеиоуюы]$/i, '') : word.replace(/[аяйь]$/i, '');
+    if (stem.length < 2) continue;
+    const name = new RegExp(`(?<![\\p{L}])(?:(?:с|со|к|ко|у|от|для|про|о|об|за)\\s+)?${escapeRe(stem)}[\\p{L}]{0,${stem.length >= 3 ? 3 : 2}}(?![\\p{L}])`, 'giu');
+    out = out.replace(name, ' ');
+  }
+  return out
+    .replace(/\s{2,}/g, ' ')
+    .replace(/\s+([,.!?:;])/g, '$1')
+    .replace(/[\s:;,—–-]+$/, '')
+    .replace(/^[\s:;,.—–-]+/, '')
+    .trim();
 }
 
 export interface CalendarUpdate {

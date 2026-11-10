@@ -6,6 +6,7 @@ import {
   Text,
   TextInput,
   View,
+  useWindowDimensions,
   type StyleProp,
   type TextInputProps,
   type TextStyle,
@@ -79,19 +80,28 @@ const PAD_Y = 12;
  */
 export function GrowingInput({ minLines = 1, maxLines, singleLine = false, style, onChangeText, onContentSizeChange, ...props }: TextInputProps & GrowProps) {
   const { s, colors } = useTheme();
-  const minH = Math.max(50, minLines * LINE + PAD_Y * 2 + 2);
-  const maxH = maxLines ? maxLines * LINE + PAD_Y * 2 + 2 : undefined;
+  // Строка растёт вместе с системным шрифтом — и границы поля тоже: иначе третья строка обрезалась бы пополам.
+  const { fontScale } = useWindowDimensions();
+  const line = LINE * Math.max(1, Math.min(fontScale, props.maxFontSizeMultiplier || Infinity));
+  const minH = Math.max(50, Math.ceil(minLines * line + PAD_Y * 2 + 2));
+  const maxH = maxLines ? Math.ceil(maxLines * line + PAD_Y * 2 + 2) : undefined;
   const [webH, setWebH] = useState(minH);
   const web = Platform.OS === 'web';
+  const change = (v: string) => {
+    // В браузере поле само не сжимается: стёрли текст — начинаем с малой высоты, содержимое тут же вернёт нужную.
+    if (web && v.length < (props.value?.length ?? 0)) setWebH(minH);
+    onChangeText?.(singleLine ? v.replace(/\s*\n\s*/g, ' ') : v);
+  };
   return (
     <TextInput
       placeholderTextColor={colors.placeholder}
       multiline
       submitBehavior={singleLine ? 'blurAndSubmit' : undefined}
       returnKeyType={singleLine ? 'done' : undefined}
-      onChangeText={onChangeText && singleLine ? (v) => onChangeText(v.replace(/\s*\n\s*/g, ' ')) : onChangeText}
+      onChangeText={change}
       onContentSizeChange={(e) => {
-        if (web) setWebH(Math.min(maxH ?? Infinity, Math.max(minH, Math.ceil(e.nativeEvent.contentSize.height))));
+        // +2 — рамка: без неё поле на два пикселя ниже текста и прокручивается внутри.
+        if (web) setWebH(Math.min(maxH ?? Infinity, Math.max(minH, Math.ceil(e.nativeEvent.contentSize.height) + 2)));
         onContentSizeChange?.(e);
       }}
       {...props}
@@ -262,13 +272,20 @@ export function Segmented<T extends string | number>({
               justifyContent: 'center',
               flexDirection: 'row',
               gap: 3,
-              paddingHorizontal: 4,
+              paddingHorizontal: o.icon ? 2 : 4,
               backgroundColor: on ? colors.text : 'transparent',
               opacity: pressed && !on ? 0.6 : 1,
             })}
           >
             {o.icon && <Icon name={o.icon} size={14} strokeWidth={2.8} color={on ? colors.bg : (o.iconColor ?? colors.text2)} />}
-            <Text numberOfLines={1} style={{ flexShrink: 1, fontFamily: on ? fonts.semibold : fonts.medium, fontSize: 14, color: on ? colors.bg : colors.text2 }}>
+            {/* На узком экране подпись со значком («Средняя») не влезает — слегка уменьшаем шрифт, а не режем слово. */}
+            <Text
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.8}
+              maxFontSizeMultiplier={1.2}
+              style={{ flexShrink: 1, fontFamily: on ? fonts.semibold : fonts.medium, fontSize: 14, color: on ? colors.bg : colors.text2 }}
+            >
               {o.label}
             </Text>
           </Pressable>

@@ -400,6 +400,28 @@ scenario('Новый друг: недописанный год не сохран
   await ui.see('Год — четыре цифры');
 });
 
+scenario('Важная дата впереди (свадьба через год) сохраняется; разовой дате без года — нужен год', async ({ ui }) => {
+  await ui.go('/friend/edit?id=c');
+  await ui.tap('Свадьба');
+  await ui.typeInto('ДД', '14022027'); // часы стоят на июне 2026-го: это будущее
+  await ui.notSee('Проверь год');
+  await ui.tap('Сохранить');
+  let data = await ui.waitData((x) => x.friends.find((f) => f.id === 'c').dates.length === 1, 'дата с годом впереди не сохранилась');
+  assert.deepEqual(data.friends.find((f) => f.id === 'c').dates.map((d) => [d.title, d.date, d.yearly]), [['Свадьба', '2027-02-14', true]]);
+  // Разовая дата без года никогда не наступит — просим год, а не сохраняем молча.
+  await ui.go('/friend/edit?id=b');
+  await ui.tap('Годовщина знакомства');
+  await ui.typeInto('ДД', '0503');
+  await ui.tap('Повторять каждый год');
+  await ui.tap('Сохранить');
+  await ui.see('Дата не повторяется — укажи год.');
+  assert.equal((await ui.data()).friends.find((f) => f.id === 'b').dates.length, 0, 'сохранено без года');
+  await ui.typeInto('Год', '2027');
+  await ui.tap('Сохранить');
+  data = await ui.waitData((x) => x.friends.find((f) => f.id === 'b').dates.length === 1, 'с годом должно сохраниться');
+  assert.deepEqual(data.friends.find((f) => f.id === 'b').dates.map((d) => [d.date, d.yearly]), [['2027-03-05', false]]);
+});
+
 scenario('Новый друг: важная дата без числа не пропадает молча', async ({ ui }) => {
   await ui.go('/friends');
   await ui.tap('Добавить друга');
@@ -526,6 +548,23 @@ scenario('Напоминание: свой интервал и «за 3 дня»
   assert.equal(r.advance, 4320);
   assert.deepEqual(r.repeat, { every: 3, unit: 'week' });
   await ui.see('каждые 3 недели');
+});
+
+scenario('Напоминание: «каждые N» — стёр число и набрал новое: получается оно, а не «15»', async ({ ui, page }) => {
+  await ui.go('/');
+  await ui.tap('Новое напоминание');
+  await ui.fill('Например, сдать отчёт', 'Полить цветы');
+  await ui.tap('Повторять');
+  await ui.tap('Свой…');
+  const every = page.getByLabel('Каждые сколько');
+  await every.click();
+  await page.keyboard.press('Backspace');
+  assert.equal(await every.inputValue(), '', 'пустое поле не должно само превращаться в единицу');
+  await page.keyboard.type('5');
+  assert.equal(await every.inputValue(), '5');
+  await ui.tap('Сохранить');
+  const data = await ui.waitData((x) => x.reminders.some((r) => r.title === 'Полить цветы'), 'не сохранилось');
+  assert.deepEqual(data.reminders.find((r) => r.title === 'Полить цветы').repeat, { every: 5, unit: 'day' });
 });
 
 scenario('Напоминание: «каждый день до срока» — подпись в форме и в списке; «за день» и повтор его снимают', async ({ ui }) => {

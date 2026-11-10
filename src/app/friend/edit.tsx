@@ -62,6 +62,8 @@ function FriendForm() {
   const [invalid, setInvalid] = useState<Record<string, boolean>>({});
   const [attempted, setAttempted] = useState(false);
   const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
+  // Экран уже закрывается: второе нажатие «Сохранить» не должно уйти назад ещё на экран.
+  const leaving = useRef(false);
   const positions = useRef<Record<string, number>>({});
   const markInvalid = (key: string) => (bad: boolean) => setInvalid((prev) => (!!prev[key] === bad ? prev : { ...prev, [key]: bad }));
 
@@ -88,6 +90,8 @@ function FriendForm() {
       );
       return;
     }
+    if (leaving.current) return;
+    leaving.current = true;
     saveFriend({ ...f, name: f.name.trim(), dates: f.dates.filter((d) => d.title.trim() && d.date) });
     // Файлы фото, которые больше не используются (заменили или убрали), удаляем.
     cleanupAvatars(f.id, [f.photoUri, f.thumbUri]);
@@ -202,8 +206,10 @@ function FriendForm() {
               label="Дата"
               value={d.date || null}
               onChange={(v) => updateDate(d.id, { date: v ?? '' })}
-              hint="Год можно не указывать."
+              hint={d.yearly ? 'Год можно не указывать.' : 'Разовой дате нужен год — иначе она не наступит.'}
               required={!!d.title.trim()}
+              future
+              yearRequired={!d.yearly}
               showIncomplete={attempted}
               onInvalidChange={markInvalid(`date-${d.id}`)}
             />

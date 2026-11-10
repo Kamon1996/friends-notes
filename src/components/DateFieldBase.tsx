@@ -34,7 +34,7 @@ const format = (p: DateFieldProps) =>
  * Поле даты/времени: ввод цифрами с автоподстановкой точек/двоеточия
  * плюс кнопка справа (`picker`) для выбора в календаре/часах.
  */
-export function DateFieldBase({ picker, ...props }: DateFieldProps & { picker: ReactNode }) {
+export function DateFieldBase({ picker, picked = 0, ...props }: DateFieldProps & { picker: ReactNode; /** Счётчик выборов в календаре или часах. */ picked?: number }) {
   const { s, colors } = useTheme();
   const [text, setText] = useState(() => format(props));
   const [focused, setFocused] = useState(false);
@@ -46,6 +46,13 @@ export function DateFieldBase({ picker, ...props }: DateFieldProps & { picker: R
   if (shown !== external) {
     setShown(external);
     if (!focused) setText(external);
+  }
+  // Выбрали в календаре или на часах — в поле сразу то, что выбрано: и когда курсор стоит в поле, и когда набранное
+  // было с ошибкой, а выбрали ту же дату, что уже сохранена. Иначе форма ругалась бы на дату, которую только что выбрали.
+  const [seenPick, setSeenPick] = useState(picked);
+  if (seenPick !== picked) {
+    setSeenPick(picked);
+    setText(external);
   }
 
   const withYear = props.mode === 'date' && !props.noYear;

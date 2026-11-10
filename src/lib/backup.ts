@@ -1,3 +1,4 @@
+import { holidayCountry } from './holidays';
 import { normalizeData } from './storage';
 import { ACCENTS } from './theme';
 import { DEFAULT_SETTINGS, type AppData, type Friend, type Settings } from './types';
@@ -93,6 +94,11 @@ export function sanitizeSettings(raw: unknown): Settings {
     crashReports: typeof s.crashReports === 'boolean' ? s.crashReports : DEFAULT_SETTINGS.crashReports,
     ...(typeof s.calendarSync === 'boolean' ? { calendarSync: s.calendarSync } : {}),
     ...(typeof s.showZodiac === 'boolean' ? { showZodiac: s.showZodiac } : {}),
+    ...(typeof s.smartCalendar === 'boolean' ? { smartCalendar: s.smartCalendar } : {}),
+    // Пустой список — тоже выбор («праздники не показывать»); незнакомые страны отбрасываем.
+    ...(Array.isArray(s.holidayCountries) ? { holidayCountries: s.holidayCountries.filter((c): c is string => typeof c === 'string' && !!holidayCountry(c)) } : {}),
+    ...(typeof s.calendarLegend === 'boolean' ? { calendarLegend: s.calendarLegend } : {}),
+    ...(s.calendarDayView === 'sheet' || s.calendarDayView === 'inline' ? { calendarDayView: s.calendarDayView } : {}),
   };
 }
 

@@ -13,6 +13,7 @@ export function DateField(props: DateFieldProps) {
   const pickerButton = usePickerButtonStyle();
   const [iosOpen, setIosOpen] = useState(false);
   const [draft, setDraft] = useState(new Date());
+  const [picked, setPicked] = useState(0);
 
   const current =
     props.mode === 'date'
@@ -24,6 +25,7 @@ export function DateField(props: DateFieldProps) {
   const apply = (d: Date) => {
     if (props.mode === 'date') props.onChange(toISODate(d));
     else props.onChange(toTime(d));
+    setPicked((n) => n + 1);
   };
 
   const open = () => {
@@ -73,5 +75,5 @@ export function DateField(props: DateFieldProps) {
     </>
   );
 
-  return <DateFieldBase {...props} picker={picker} />;
+  return <DateFieldBase {...props} picker={picker} picked={picked} />;
 }

@@ -19,12 +19,15 @@ const TABS: { icon: IconName; label: string }[] = [
   { icon: 'calendar', label: 'Календарь' },
 ];
 
-/** Два дела для предпросмотра: звонок Насте сегодня вечером и важный подарок Андрею через две недели. */
+/**
+ * Два дела для предпросмотра: позвонить Насте сегодня и важный подарок Андрею через две недели. Звонок — «до конца дня»,
+ * без точного часа: иначе вечером предпросмотр показывал бы его просроченным.
+ */
 function samples(today: string) {
   const d = parseISODate(today);
   const nastya: Friend = { id: 'preview-nastya', name: 'Настя', emoji: '', birthday: null, phone: '', food: '', flowers: '', gifts: '', notes: '', dates: [], createdAt: 0 };
   const base = { note: '', repeat: null, advance: 0 as const, done: false, createdAt: d.getTime() - 7 * 86_400_000 };
-  const call: Reminder = { ...base, id: 'preview-call', title: 'Позвонить Насте', friendId: nastya.id, date: today, time: '19:00', kind: 'at', minutes: 20 };
+  const call: Reminder = { ...base, id: 'preview-call', title: 'Позвонить Насте', friendId: nastya.id, date: today, time: '19:00', minutes: 20 };
   const gift: Reminder = {
     ...base,
     id: 'preview-gift',

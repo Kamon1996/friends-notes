@@ -11,7 +11,7 @@ import { getContactsSnapshot, refreshContacts, type ContactsSnapshot } from '@/l
 import { candidateToFriend, phoneKey, toCandidates, type ImportCandidate } from '@/lib/contactsImport';
 import { applyEnrichment } from '@/lib/enrich';
 import { formatDateCompact, hasYear, plural } from '@/lib/dates';
-import { matchesName, prepareQuery } from '@/lib/search';
+import { filterByName, prepareQuery } from '@/lib/search';
 import { newId, useStore } from '@/lib/store';
 import { telegramAvailable } from '@/lib/telegramClient';
 import { tgToRawContact } from '@/lib/telegramImport';
@@ -102,11 +102,9 @@ export default function ImportScreen() {
   const visible = useMemo(() => {
     const q = prepareQuery(query);
     const digits = q ? q.raw.replace(/\D/g, '') : '';
-    return all.filter(
-      (c) =>
-        (filter === 'all' || (filter === 'birthday' ? c.birthday : c.phone)) &&
-        (!q || matchesName(c.name, q) || (digits.length >= 3 && c.phone.replace(/\D/g, '').includes(digits))),
-    );
+    const shown = all.filter((c) => filter === 'all' || (filter === 'birthday' ? c.birthday : c.phone));
+    if (!q) return shown;
+    return filterByName(shown, q, (c) => c.name, (c) => digits.length >= 3 && c.phone.replace(/\D/g, '').includes(digits));
   }, [all, query, filter]);
 
   const selectable = visible.filter((c) => !c.duplicateOf);
@@ -130,16 +128,24 @@ export default function ImportScreen() {
       return next;
     });
 
+  const importing = useRef(false);
   const doImport = async () => {
     const chosen = all.filter((c) => selected.has(c.key) && !c.duplicateOf);
-    if (!chosen.length) return;
+    if (!chosen.length || importing.current) return;
+    // Быстрое двойное нажатие: без этого каждый выбранный добавился бы дважды.
+    importing.current = true;
     const dups = all.filter((c) => c.duplicateOf);
 
     // Аватарки из Telegram лежат во временной папке: оставляем только нужные.
     let kept: Record<string, { photoUri?: string; thumbUri?: string }> = {};
     if (fromTelegram && Telegram) {
       const ids = [...chosen, ...dups].map((c) => c.links.telegramId).filter((id): id is number => !!id);
-      kept = await Telegram.finalizeImport(ids);
+      try {
+        kept = await Telegram.finalizeImport(ids);
+      } catch (e) {
+        importing.current = false;
+        throw e;
+      }
     }
     const photosOf = (c: ImportCandidate) => {
       if (!fromTelegram) return { photoUri: c.photoUri, thumbUri: c.thumbUri };

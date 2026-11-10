@@ -12,7 +12,7 @@ import { calendarCandidate, calendarSource, inCalendar, smartCalendarOn } from '
 import { completeReminder, reopenReminder } from '@/lib/events';
 import { DURATIONS, PRIORITY_LABELS, formatMinutes } from '@/lib/reminderList';
 import { newId, useStore } from '@/lib/store';
-import type { Advance, Priority, Reminder, Repeat, RepeatUnit } from '@/lib/types';
+import type { Advance, Priority, Reminder, Repeat, RepeatUnit, TimeOfDay } from '@/lib/types';
 
 /** Какое это дело: сделать до срока, на дату и время или повторять. */
 type Kind = 'due' | 'at' | 'repeat';
@@ -63,11 +63,21 @@ const sameRepeat = (a: Repeat | null, b: Repeat | null) => a === b || (!!a && !!
 export default function EditReminderScreen() {
   const { ready, data } = useStore();
   const { id } = useLocalSearchParams<{ id?: string }>();
+  const exists = !!id && data.reminders.some((r) => r.id === id);
+  // Форму уже показали: если дело удаляют прямо из неё, экран закрывается с формой, а не мигает «не найдено».
+  const [opened, setOpened] = useState(false);
+  if (ready && exists && !opened) setOpened(true);
   // Ждём загрузки данных, иначе при открытии из уведомления форма стартует пустой.
   if (!ready) return null;
   // Старое уведомление или ссылка на удалённое напоминание — не подсовываем пустую форму «Новое напоминание».
-  if (id && !data.reminders.some((r) => r.id === id)) return <ReminderNotFound />;
+  if (id && !exists && !opened) return <ReminderNotFound />;
   return <ReminderForm />;
+}
+
+/** Ближайший ровный час — время по умолчанию для события на сегодня. */
+function nextHour(now = new Date()): TimeOfDay {
+  const h = now.getHours() + 1;
+  return h > 23 ? '23:59' : `${String(h).padStart(2, '0')}:00`;
 }
 
 function ReminderNotFound() {
@@ -100,7 +110,8 @@ function ReminderForm() {
         note: '',
         friendId: params.friendId ?? null,
         date: params.date && /^\d{4}-\d{2}-\d{2}$/.test(params.date) ? params.date : addInterval(todayISO(), 'day', 1),
-        time: '10:00',
+        // Событие на сегодня — на ближайший час: «сегодня в 10:00» после десяти сразу было бы просроченным и без уведомления.
+        time: params.kind === 'at' && params.date === todayISO() ? nextHour() : '10:00',
         repeat: null,
         advance: 0,
         done: false,
@@ -141,6 +152,10 @@ function ReminderForm() {
   const [attempted, setAttempted] = useState(false);
   const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
   const whenY = useRef(0);
+  // Экран уже закрывается: второе нажатие «Сохранить» не должно ни сохранить ещё раз, ни уйти назад на экран дальше.
+  const leaving = useRef(false);
+  // «Каждые N»: пока поле в работе, держим набранное как есть — пустое не превращаем в единицу.
+  const [everyText, setEveryText] = useState<string | null>(null);
   const markInvalid = (key: 'date' | 'time') => (bad: boolean) => setInvalid((prev) => (!!prev[key] === bad ? prev : { ...prev, [key]: bad }));
 
   const friend = data.friends.find((f) => f.id === r.friendId);
@@ -158,12 +173,17 @@ function ReminderForm() {
       notify(invalid.date ? 'Проверь дату' : 'Проверь время', 'Такой даты или времени нет, либо они не дописаны. Поправь, и напоминание сохранится.');
       return;
     }
+    if (leaving.current) return;
+    leaving.current = true;
     // Новая дата или другой повтор — новая серия: старый якорь больше не нужен.
     const sameSeries = !!existing && existing.date === r.date && sameRepeat(existing.repeat, r.repeat);
+    // У сделанного повторяющегося поменяли ближайший раз или сам повтор — это уже новый раз, он не сделан.
+    // Иначе отметка «сделано» съела бы его: дело перенеслось бы ещё на раз вперёд, и напоминание не пришло бы.
+    const reopened = !!existing && !!r.repeat && r.done && (!sameSeries || existing.time !== r.time);
     // «Каждый день до срока» — только у дел «до срока», «на дату и время» напоминает само; необязательное — только заданное.
     const { daily, kind: _kind, priority, minutes, ...rest } = r;
     saveReminder({
-      ...rest,
+      ...(reopened ? reopenReminder(rest) : rest),
       ...(kind === 'at' ? { kind: 'at' as const, advance: 0 as const } : {}),
       ...(kind === 'due' && daily ? { daily: true, advance: 0 as const } : {}),
       ...(priority ? { priority } : {}),
@@ -176,6 +196,8 @@ function ReminderForm() {
 
   const remove = async () => {
     if (!(await confirm('Удалить напоминание?', r.title))) return;
+    if (leaving.current) return;
+    leaving.current = true;
     deleteReminder(r.id);
     router.back();
   };
@@ -282,11 +304,16 @@ function ReminderForm() {
                 <View style={s.row}>
                   <Text style={s.body}>Каждые</Text>
                   <TextInput
-                    value={String(r.repeat.every)}
+                    value={everyText ?? String(r.repeat.every)}
                     onChangeText={(v) => {
-                      const n = Math.min(365, Math.max(1, parseInt(v.replace(/\D/g, ''), 10) || 1));
-                      set('repeat', { ...r.repeat!, every: n });
+                      const digits = v.replace(/\D/g, '').slice(0, 3);
+                      setEveryText(digits);
+                      const n = parseInt(digits, 10);
+                      if (n >= 1) set('repeat', { ...r.repeat!, every: Math.min(365, n) });
                     }}
+                    onBlur={() => setEveryText(null)}
+                    accessibilityLabel="Каждые сколько"
+                    maxLength={3}
                     keyboardType="number-pad"
                     style={[s.input, { width: 72, textAlign: 'center', paddingVertical: 8, minHeight: 44 }]}
                   />

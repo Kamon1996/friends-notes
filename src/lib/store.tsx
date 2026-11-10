@@ -3,11 +3,12 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { AppState } from 'react-native';
 
 import { cleanupAvatars, deleteOwnedFiles } from './avatars';
+import { todayISO } from './dates';
 import { completeReminder, reopenReminder, rollReminder } from './events';
 import { markCalendarStale, syncDeviceCalendar } from './deviceCalendar';
 import { syncNotifications } from './notifications';
 import { parseStored } from './storage';
-import { EMPTY_DATA, type AppData, type Friend, type Reminder, type Settings } from './types';
+import { EMPTY_DATA, type AppData, type Friend, type ISODate, type Reminder, type Settings } from './types';
 import { genderOnSave } from './gender';
 import { applyGenderUpdate, genderPending, retractUnisexGuess } from './genderDetect';
 import { defaultHolidayCountries } from './holidays';
@@ -25,6 +26,8 @@ export function newId(): string {
 interface Store {
   ready: boolean;
   data: AppData;
+  /** Сегодняшняя дата. Меняется в полночь и при возврате в приложение — экраны пересчитывают «сегодня» и «через N дней». */
+  today: ISODate;
   saveFriend: (f: Friend) => void;
   addFriends: (list: Friend[]) => void;
   updateFriends: (update: (f: Friend) => Friend) => void;
@@ -89,7 +92,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       // Заметки, разобранные прошлой версией, доочищаем по новым правилам («О себе: инст:» → пусто) — без ИИ.
       // Повторяющиеся, сделанные в прошлые дни, снова активны — на ближайший раз.
       // Пол, угаданный по имени, общему для обоих (Валя, Ника), снимаем — спросим у человека.
-      if (loaded) setData({ ...loaded, friends: loaded.friends.map((f) => retractUnisexGuess(retidySeen(f))), reminders: loaded.reminders.map((r) => rollReminder(r)) });
+      if (loaded) {
+        try {
+          setData({ ...loaded, friends: loaded.friends.map((f) => retractUnisexGuess(retidySeen(f))), reminders: loaded.reminders.map((r) => rollReminder(r)) });
+        } catch (e) {
+          // Данные разобрались, но на них споткнулись расчёты: откладываем копию и до следующего запуска ничего не пишем,
+          // иначе пустой экран сохранился бы поверх настоящих данных.
+          console.warn('Не удалось подготовить данные', e);
+          setCanPersist(false);
+          if (raw !== null) await AsyncStorage.setItem(`${STORAGE_KEY}.broken-${Date.now()}`, raw).catch(() => {});
+          return;
+        }
+      }
       // Праздники: пока страну не выбирали — страна телефона (один раз; дальше — как выбрал человек).
       setData((d) => (Array.isArray(d.settings.holidayCountries) ? d : { ...d, settings: { ...d.settings, holidayCountries: defaultHolidayCountries() } }));
     })().finally(() => setReady(true));
@@ -123,12 +137,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     });
   }, []);
   const [dayTick, setDayTick] = useState(0);
+  // Открытое всю ночь или свёрнутое приложение само не перерисуется: без этого вчерашнее «завтра» так и висело бы завтрашним.
+  const [today, setToday] = useState<ISODate>(todayISO);
   useEffect(() => {
     if (!ready) return;
     const now = new Date();
     const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 2);
     const t = setTimeout(() => {
       rollDay();
+      setToday(todayISO());
       setDayTick((n) => n + 1);
     }, midnight.getTime() - now.getTime());
     return () => clearTimeout(t);
@@ -256,6 +273,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // При возврате в приложение — пересчитываем окно уведомлений (их число ограничено).
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') setToday(todayISO());
       if (state === 'active' && liveRef.current) {
         rollDay();
         void syncCalendarAi();
@@ -350,6 +368,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     () => ({
       ready,
       data,
+      today,
       saveFriend,
       addFriends,
       updateFriends,
@@ -374,6 +393,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [
       ready,
       data,
+      today,
       saveFriend,
       addFriends,
       updateFriends,

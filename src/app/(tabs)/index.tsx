@@ -1,6 +1,6 @@
 import { router, useIsFocused } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { FlatList, Text, View } from 'react-native';
+import { BackHandler, FlatList, Text, View } from 'react-native';
 // Строка фильтров — прокрутка из обработчика жестов: свайп по ней листает фильтры, а не вкладки.
 import { ScrollView } from 'react-native-gesture-handler';
 
@@ -11,7 +11,7 @@ import { TabSwipe } from '@/components/TabSwipe';
 import type { IconName } from '@/components/Icon';
 import { Chip, Empty, Fab, GroupedRow, IconButton, ScreenHeader, useTheme } from '@/components/ui';
 import { confirm } from '@/lib/confirm';
-import { plural, todayISO } from '@/lib/dates';
+import { plural } from '@/lib/dates';
 import { reminderOverdue } from '@/lib/events';
 import { reminderSections, type ReminderFilter } from '@/lib/reminderList';
 import { useStore } from '@/lib/store';
@@ -45,38 +45,50 @@ type Item = { type: 'label'; key: string; text: string } | { type: 'reminder'; k
 let sentToFriends = false;
 
 export default function RemindersScreen() {
-  const { ready, data, setRemindersDone, deleteReminders } = useStore();
+  const { ready, data, today, setRemindersDone, deleteReminders } = useStore();
   // Первый запуск — сначала «Друзья»: без них приложению нечего показать, а импорт — там. Только если открыта именно
   // эта вкладка: соседние вкладки подгружаются заранее, и открытый по ссылке «Календарь» не должен уезжать.
   const focused = useIsFocused();
-  const firstRun = ready && focused && !sentToFriends && data.friends.length === 0 && data.reminders.length === 0;
+  const empty = data.friends.length === 0 && data.reminders.length === 0;
   useEffect(() => {
-    if (!firstRun) return;
+    // Решаем один раз — когда данные прочитаны. Была открыта другая вкладка — позже уже не уводим: иначе первое же
+    // нажатие на «Напоминания» перебрасывало бы на «Друзей».
+    if (!ready || sentToFriends) return;
     sentToFriends = true;
-    router.replace('/friends');
-  }, [firstRun]);
+    if (focused && empty) router.replace('/friends');
+  }, [ready, focused, empty]);
   const { s, colors } = useTheme();
   const [filter, setFilter] = useState<ReminderFilter>('all');
   // Режим выбора (долгое нажатие на строку): отмеченные напоминания, как у друзей.
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
   const selecting = selected.size > 0;
+  // Системная «Назад» в режиме выбора снимает выбор, а не сворачивает приложение.
+  useEffect(() => {
+    if (!selecting || !focused) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      setSelected(new Set());
+      return true;
+    });
+    return () => sub.remove();
+  }, [selecting, focused]);
   const [scrolled, setScrolled] = useState(false);
 
   const friendById = useMemo(() => new Map(data.friends.map((f) => [f.id, f])), [data.friends]);
 
   const items = useMemo(() => {
+    // Разделы «Сегодня» и «На неделе» зависят от даты: пересобираем их в полночь и при возврате в приложение.
+    void today;
     const out: Item[] = [];
     for (const g of reminderSections(data.reminders, filter)) {
       out.push({ type: 'label', key: `l-${g.key}`, text: g.title });
       g.rows.forEach((r, i) => out.push({ type: 'reminder', key: r.id, reminder: r, first: i === 0, last: i === g.rows.length - 1 }));
     }
     return out;
-  }, [data.reminders, filter]);
+  }, [data.reminders, filter, today]);
   // Подсказку «можно провести» показывает первая строка.
   const hintKey = items.find((i) => i.type === 'reminder')?.key;
 
   const active = data.reminders.filter((r) => !r.done);
-  const today = todayISO();
   const todayCount = active.filter((r) => r.date <= today).length;
   const overdueCount = active.filter((r) => reminderOverdue(r)).length;
   const subtitle = active.length

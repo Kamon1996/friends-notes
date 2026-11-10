@@ -51,7 +51,8 @@ test('поиск только по имени и сохраняет группы
 test('favoritesFirst и letterOf', () => {
   const sorted = [...friends].sort(favoritesFirst(byName)).map((f) => f.name);
   assert.deepEqual(sorted, ['Борис', 'Мама', '+375 29 1', 'Аня', 'Вика']);
-  assert.equal(letterOf(F('x', '  ёжик')), 'Ё');
+  // «Ё» — в группе «Е»: по алфавиту «Ёжик» стоит внутри «Е», своя группа разорвала бы её надвое.
+  assert.equal(letterOf(F('x', '  ёжик')), 'Е');
   assert.equal(letterOf(F('x', '🎉 Праздник')), '#');
   assert.equal(letterOf(F('x', '')), '#');
 });
