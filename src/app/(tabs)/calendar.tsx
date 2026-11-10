@@ -723,18 +723,26 @@ function DaySheet({
     });
     return () => sub.remove();
   }, [open, active, onClose]);
-  // Смахнул вниз за шапку — закрылась; немного — вернулась на место.
-  const drag = Gesture.Pan()
-    .activeOffsetY([-8, 8])
-    .onUpdate((e) => {
-      'worklet';
-      y.set(Math.max(0, e.translationY));
-    })
-    .onEnd((e) => {
-      'worklet';
-      if (e.translationY > 70 || e.velocityY > 600) scheduleOnRN(onClose);
-      else y.set(withTiming(0, { duration: 180, easing: Easing.out(Easing.cubic) }));
-    });
+  // Смахнул вниз — закрылась; немного — вернулась на место. Тянуть можно за шапку, за кнопку внизу и за сам список,
+  // пока он помещается целиком. Длинный список палец листает — тогда шторку тянут за шапку или кнопку.
+  const [fits, setFits] = useState(true);
+  const list = useRef({ view: 0, content: 0 });
+  const checkFits = () => setFits(list.current.content <= list.current.view + 1);
+  const makeDrag = () =>
+    Gesture.Pan()
+      .activeOffsetY([-8, 8])
+      .onUpdate((e) => {
+        'worklet';
+        y.set(Math.max(0, e.translationY));
+      })
+      .onEnd((e) => {
+        'worklet';
+        if (e.translationY > 70 || e.velocityY > 600) scheduleOnRN(onClose);
+        else y.set(withTiming(0, { duration: 180, easing: Easing.out(Easing.cubic) }));
+      });
+  const dragHead = makeDrag();
+  const dragList = makeDrag().enabled(fits);
+  const dragFoot = makeDrag();
   const style = useAnimatedStyle(() => ({ transform: [{ translateY: y.get() }] }));
   const d = shown.date;
   // Шторка у самой нижней панели — панель прячет свою верхнюю линию, иначе между ними видна полоска.
@@ -768,7 +776,7 @@ function DaySheet({
         style,
       ]}
     >
-      <GestureDetector gesture={drag}>
+      <GestureDetector gesture={dragHead}>
         <View style={{ paddingTop: 10, paddingHorizontal: 20 }}>
           <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: colors.hairline, alignSelf: 'center' }} />
           <View style={{ flexDirection: 'row', alignItems: 'center', paddingTop: 8 }}>
@@ -783,10 +791,30 @@ function DaySheet({
         </View>
       </GestureDetector>
       {/* Шапка и кнопка снизу на месте, список между ними прокручивается — хоть двадцать событий. */}
-      <ScrollView style={{ flexGrow: 0 }} contentContainerStyle={{ paddingHorizontal: 20 }}>
-        <DayEvents key={d} events={shown.events} today={today} compact />
-      </ScrollView>
-      <NewEventButton date={d} style={{ marginHorizontal: 20, marginTop: 10 }} />
+      <GestureDetector gesture={dragList}>
+        <View style={{ flexShrink: 1, minHeight: 0 }}>
+          <ScrollView
+            style={{ flexGrow: 0 }}
+            contentContainerStyle={{ paddingHorizontal: 20 }}
+            scrollEnabled={!fits}
+            onLayout={(e) => {
+              list.current.view = e.nativeEvent.layout.height;
+              checkFits();
+            }}
+            onContentSizeChange={(_w, h) => {
+              list.current.content = h;
+              checkFits();
+            }}
+          >
+            <DayEvents key={d} events={shown.events} today={today} compact />
+          </ScrollView>
+        </View>
+      </GestureDetector>
+      <GestureDetector gesture={dragFoot}>
+        <View style={{ paddingTop: 10 }}>
+          <NewEventButton date={d} style={{ marginHorizontal: 20 }} />
+        </View>
+      </GestureDetector>
     </Animated.View>
   );
 }

@@ -6,6 +6,10 @@ import { useTheme } from './ui';
 const nativeDriver = Platform.OS !== 'web';
 /** Если окно так и не сообщило, что показалось, — выезжаем сами. */
 const START_FALLBACK_MS = 300;
+/** Стянул дальше этого (или на треть высоты) — закрываем; ближе — возвращаем на место. */
+const SWIPE_CLOSE_PX = 120;
+/** Резкий короткий взмах тоже закрывает; скорость — в точках за миллисекунду. */
+const SWIPE_CLOSE_SPEED = 0.6;
 
 /**
  * Шторка снизу. Фон плавно темнеет на месте, а выезжает только сама шторка; закрывается в обратном порядке.
@@ -14,6 +18,9 @@ const START_FALLBACK_MS = 300;
  *
  * Выезд начинается только когда окно уже на экране и высота шторки измерена. Иначе первые кадры съедает открытие
  * окна, а путь считается от высоты экрана: шторка сначала ползёт за краем, а потом прыжком догоняет своё место.
+ *
+ * Закрывается четырьмя способами: фон, системная «Назад», своя кнопка и свайп вниз — за любое место шторки.
+ * Исключение — прокручиваемый список внутри: там палец листает список, а тянуть шторку можно за шапку и кнопки.
  */
 export function Sheet({
   visible,
@@ -22,6 +29,7 @@ export function Sheet({
   style,
   dim = 0.5,
   closeLabel = 'Закрыть',
+  swipeToClose = true,
 }: {
   visible: boolean;
   /** Нажатие на фон и системная «Назад». */
@@ -31,6 +39,8 @@ export function Sheet({
   /** Насколько темнеет фон. */
   dim?: number;
   closeLabel?: string;
+  /** Смахнуть вниз — закрыть. Выключай только там, где внутри свой вертикальный жест. */
+  swipeToClose?: boolean;
 }) {
   const { colors } = useTheme();
   const { height: screen } = useWindowDimensions();
@@ -39,8 +49,20 @@ export function Sheet({
   const [progress] = useState(() => new Animated.Value(0));
   // Высота шторки живёт в анимированном значении: её смена не перестраивает анимацию и не роняет кадр.
   const [sheetH] = useState(() => new Animated.Value(screen));
-  const [translateY] = useState(() => Animated.multiply(sheetH, progress.interpolate({ inputRange: [0, 1], outputRange: [1, 0] })));
+  // Насколько шторку стянули пальцем.
+  const [drag] = useState(() => new Animated.Value(0));
+  const [translateY] = useState(() => Animated.add(Animated.multiply(sheetH, progress.interpolate({ inputRange: [0, 1], outputRange: [1, 0] })), drag));
+  // Тянешь шторку вниз — фон светлеет вместе с ней.
+  const [dimOpacity] = useState(() => Animated.multiply(progress, drag.interpolate({ inputRange: [0, 480], outputRange: [1, 0.25], extrapolate: 'clamp' })));
   const gate = useRef({ shown: false, measured: false });
+  // Жест: где палец начал, где был в прошлый раз и с какой скоростью идёт вниз.
+  const touch = useRef({ x: 0, y: 0, lastY: 0, lastT: 0, vy: 0 });
+  const sheetHeight = useRef(0);
+  const visibleNow = useRef(visible);
+  useEffect(() => {
+    visibleNow.current = visible;
+  }, [visible]);
+  const back = () => Animated.spring(drag, { toValue: 0, bounciness: 0, speed: 18, useNativeDriver: nativeDriver }).start();
   // Открыли — сразу показываем Modal; закроем его сами, когда шторка доедет вниз.
   if (visible && !mounted) setMounted(true);
 
@@ -69,11 +91,12 @@ export function Sheet({
       gate.current = { shown: false, measured: false };
       // Следующее содержимое может быть выше: до замера держим шторку целиком за краем.
       sheetH.setValue(screen);
+      drag.setValue(0);
       setReady(false);
       setMounted(false);
     });
     return () => anim.stop();
-  }, [visible, mounted, ready, progress, sheetH, screen]);
+  }, [visible, mounted, ready, progress, sheetH, drag, screen]);
 
   return (
     <Modal
@@ -86,13 +109,46 @@ export function Sheet({
         arm();
       }}
     >
-      <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: `rgba(0,0,0,${dim})`, opacity: progress }]} />
+      <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: `rgba(0,0,0,${dim})`, opacity: dimOpacity }]} />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <Pressable style={{ flex: 1 }} onPress={onClose} accessibilityLabel={closeLabel} />
         <Animated.View
+          // Запоминаем начало касания, но само касание не забираем: кнопки и поля внутри работают как обычно.
+          onStartShouldSetResponderCapture={(e) => {
+            const { pageX, pageY } = e.nativeEvent;
+            touch.current = { x: pageX, y: pageY, lastY: pageY, lastT: Date.now(), vy: 0 };
+            return false;
+          }}
+          // Забираем только уверенное движение вниз: боковые свайпы и нажатия остаются содержимому.
+          onMoveShouldSetResponder={(e) => {
+            if (!swipeToClose) return false;
+            const dy = e.nativeEvent.pageY - touch.current.y;
+            return dy > 8 && dy > Math.abs(e.nativeEvent.pageX - touch.current.x) * 1.5;
+          }}
+          onResponderTerminationRequest={() => false}
+          onResponderMove={(e) => {
+            const t = touch.current;
+            const now = Date.now();
+            const y = e.nativeEvent.pageY;
+            if (now > t.lastT) t.vy = (y - t.lastY) / (now - t.lastT);
+            t.lastY = y;
+            t.lastT = now;
+            drag.setValue(Math.max(0, y - t.y));
+          }}
+          onResponderRelease={(e) => {
+            const dy = e.nativeEvent.pageY - touch.current.y;
+            const far = dy > Math.min(SWIPE_CLOSE_PX, sheetHeight.current * 0.3);
+            const fast = touch.current.vy > SWIPE_CLOSE_SPEED && dy > 24;
+            if (!far && !fast) return back();
+            onClose();
+            // Закрытие могли отменить (вопрос про несохранённое) — тогда шторка возвращается на место.
+            setTimeout(() => visibleNow.current && back(), 150);
+          }}
+          onResponderTerminate={back}
           onLayout={(e) => {
             const h = e.nativeEvent.layout.height;
             if (h <= 0) return;
+            sheetHeight.current = h;
             sheetH.setValue(h);
             gate.current.measured = true;
             arm();

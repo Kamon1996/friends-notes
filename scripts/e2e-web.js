@@ -1132,6 +1132,41 @@ scenario('«Что нового» после обновления: только 
   await ui.notSee(`обновилось до версии ${VERSION}`);
 }, { data: seed({ settings: { lastSeenVersion: '1.21.0' } }) });
 
+scenario('Шторки закрываются свайпом вниз: «Что нового», поле в карточке, шторка дня; короткое движение — остаётся', async ({ ui }) => {
+  await ui.go('/');
+  await ui.see(`обновилось до версии ${VERSION}`);
+  // Чуть потянул и отпустил — шторка вернулась.
+  await ui.swipeDown('Что нового', 40);
+  await ui.see(`обновилось до версии ${VERSION}`);
+  // Потянул как следует — закрылась, версия запомнилась, как по «Понятно».
+  await ui.swipeDown('Что нового', 220);
+  await ui.notSee(`обновилось до версии ${VERSION}`);
+  await ui.waitData((x) => x.settings.lastSeenVersion === VERSION, 'после свайпа версия не запомнилась');
+  // Шторка поля в карточке друга: без правок закрывается молча; с правками — спрашивает и остаётся на месте.
+  await ui.go('/friend/a');
+  await ui.tap('Пионы');
+  await ui.see('Закрыть', { label: true });
+  await ui.swipeDown('Цветы', 220);
+  await ui.notSee('Закрыть', { label: true });
+  assert.equal(ui.dialogs.length, 0, 'без правок вопросов быть не должно');
+  // Шторка дня в календаре: тянется за шапку, за кнопку внизу и за само событие.
+  await ui.go('/calendar');
+  await ui.tap('Понедельник, 22 июня, 1 событие');
+  await ui.see('Понедельник, 22 июня');
+  await ui.swipeDown('Понедельник, 22 июня', 30);
+  await ui.see('Понедельник, 22 июня');
+  await ui.swipeDown('Понедельник, 22 июня', 160);
+  await ui.notSee('Понедельник, 22 июня');
+  await ui.tap('Понедельник, 22 июня, 1 событие');
+  await ui.see('Понедельник, 22 июня');
+  await ui.swipeDown(/Новое событие/, 160);
+  await ui.notSee('Понедельник, 22 июня');
+  await ui.tap('Понедельник, 22 июня, 1 событие');
+  await ui.see('Понедельник, 22 июня');
+  await ui.swipeDown('Познакомились · 8 лет', 160);
+  await ui.notSee('Понедельник, 22 июня');
+}, { data: seed({ settings: { lastSeenVersion: '1.21.0' } }) });
+
 scenario('«Что нового»: «Вся история изменений» открывает экран истории', async ({ ui }) => {
   await ui.go('/');
   await ui.tap(/Вся история изменений/);
@@ -1709,6 +1744,25 @@ function helpers(page, dialogs) {
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
       await cdp.detach();
       await page.waitForTimeout(700);
+    },
+    /** Провести пальцем вниз от этого текста на dy — так закрывают шторки. */
+    async swipeDown(target, dy) {
+      const h = await find(target);
+      const b = await h.boundingBox();
+      const x = b.x + b.width / 2;
+      const y = b.y + b.height / 2;
+      const cdp = await page.context().newCDPSession(page);
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+      for (let k = 1; k <= 20; k++) {
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: y + (dy * k) / 20 }] });
+        await page.waitForTimeout(12);
+      }
+      // Палец замер перед тем, как оторваться: решает расстояние, а не скорость.
+      await page.waitForTimeout(120);
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: y + dy }] });
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      await cdp.detach();
+      await page.waitForTimeout(600);
     },
     /** «Сделано» у напоминания с этим текстом — свайпом вправо (кружков в строках нет). */
     async check(title) { await ui.swipe(title, 160); },
