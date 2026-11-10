@@ -17,6 +17,7 @@ export function WhatsNewSheet() {
   const { ready, data, updateSettings } = useStore();
   const [releases, setReleases] = useState<Release[] | null>(null);
   const decided = useRef(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Пока шторка уезжает, показываем то же, что было.
   const [shown, setShown] = useState<Release[] | null>(null);
   if (releases && releases !== shown) setShown(releases);
@@ -28,12 +29,18 @@ export function WhatsNewSheet() {
     // Ни отметки, ни данных — приложение только что установили: показывать нечего.
     const freshInstall = !lastSeenVersion && data.friends.length === 0 && data.reminders.length === 0;
     const list = freshInstall ? [] : unseenReleases(APP_VERSION, lastSeenVersion);
-    if (list.length) {
-      const t = setTimeout(() => setReleases(list), 600);
-      return () => clearTimeout(t);
-    }
-    if (lastSeenVersion !== APP_VERSION) updateSettings({ lastSeenVersion: APP_VERSION });
+    // Таймер живёт отдельно от этого эффекта: данные на старте меняются (перенос повторов, фоновые проверки),
+    // и сброс таймера при каждой такой правке оставлял бы обновление без шторки.
+    if (list.length) timer.current = setTimeout(() => setReleases(list), 600);
+    else if (lastSeenVersion !== APP_VERSION) updateSettings({ lastSeenVersion: APP_VERSION });
   }, [ready, data, updateSettings]);
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+      decided.current = false;
+    },
+    [],
+  );
 
   const close = () => {
     setReleases(null);
