@@ -516,14 +516,16 @@ scenario('Соцсети: убрать сеть в форме друга', async
 });
 
 // ===== Напоминания =====
-scenario('Напоминание: шаблон, друг, дата и время цифрами, каждую неделю', async ({ ui }) => {
+scenario('Напоминание: шаблон, друг, срок в календаре и своё время, каждую неделю', async ({ ui }) => {
   await ui.go('/');
   await ui.tap('Новое напоминание');
   await ui.tap('Оплатить счета');
+  // «Для кого» раскрывается на месте; выбрал друга — шаблоны стали «для друга».
+  await ui.tap('Для кого');
   await ui.tap('Игорь Ветров');
   await ui.tap('Позвонить');
-  await ui.typeInto('ДД.ММ.ГГГГ', '20062026', { clear: true });
-  await ui.typeInto('ЧЧ:ММ', '0930', { clear: true });
+  await ui.pickDate('2026-06-20');
+  await ui.pickTime('09:30');
   await ui.tap('Повторять');
   await ui.tap('Каждую неделю');
   await ui.tap('Сохранить');
@@ -571,10 +573,10 @@ scenario('Напоминание: «каждый день до срока» — 
   await ui.go('/');
   await ui.tap('Новое напоминание');
   await ui.fill('Например, сдать отчёт', 'Билеты на самолёт');
-  await ui.typeInto('ДД.ММ.ГГГГ', '20062026', { clear: true });
-  await ui.typeInto('ЧЧ:ММ', '1200', { clear: true });
+  await ui.pickDate('2026-06-20');
+  await ui.pickTime('12:00');
   await ui.tap('Каждый день до срока');
-  await ui.see('Каждый день в 12:00 до 20 июн — пока не отметишь «Сделано».');
+  await ui.see('Напомню каждый день в 12:00 до сб, 20 июн — пока не отметишь «Сделано».');
   await ui.tap('Сохранить');
   let data = await ui.waitData((x) => x.reminders.some((r) => r.title === 'Билеты на самолёт'), 'не сохранилось');
   let r = data.reminders.find((x) => x.title === 'Билеты на самолёт');
@@ -647,12 +649,17 @@ scenario('Напоминание: «Дата и время», важность �
   await ui.tap('Новое напоминание');
   await ui.fill('Например, сдать отчёт', 'Стоматолог');
   await ui.tap('Дата и время');
-  await ui.typeInto('ДД.ММ.ГГГГ', '20062026', { clear: true });
-  await ui.typeInto('ЧЧ:ММ', '1500', { clear: true });
-  await ui.see('Напомню 19 июн и 20 июн в 15:00.');
-  await ui.notSee('Напомнить заранее');
+  await ui.pickDate('2026-06-20');
+  await ui.pickTime('15:00');
+  await ui.see('Напомню пт, 19 июн и сб, 20 июн в 15:00.');
+  await ui.notSee('Заранее');
+  // Детали раскрываются на месте: выбрал — строка закрылась и показывает значение.
+  await ui.tap('Важность');
   await ui.tap('Важно');
+  await ui.see('Важность: Важно', { label: true });
+  await ui.tap('Сколько займёт');
   await ui.tap('1 ч');
+  await ui.see('Сколько займёт: 1 ч', { label: true });
   await ui.tap('Сохранить');
   const data = await ui.waitData((x) => x.reminders.some((r) => r.title === 'Стоматолог'), 'не сохранилось');
   const r = data.reminders.find((x) => x.title === 'Стоматолог');
@@ -671,34 +678,60 @@ scenario('Напоминание: без текста не сохраняетс�
   assert.equal((await ui.data()).reminders.length, 3);
 });
 
-scenario('Напоминание: неверное время не сохраняется молча', async ({ ui }) => {
+scenario('Напоминание: без названия — подсказка у поля; дальний срок — календарь в строке; своё время — через часы', async ({ ui }) => {
   await ui.go('/');
   await ui.tap('Новое напоминание');
-  await ui.fill('Например, сдать отчёт', 'Проверка времени');
-  await ui.typeInto('ЧЧ:ММ', '2599', { clear: true });
-  await ui.see('Нет такого времени');
+  // Без названия не сохраняем и не спрашиваем окном — подсказка прямо у поля.
   await ui.tap('Сохранить');
-  await ui.pause(800);
-  const saved = (await ui.data()).reminders.find((r) => r.title === 'Проверка времени');
-  assert.ok(!saved, `сохранено с другим временем: ${saved && saved.date + ' ' + saved.time}`);
-  assert.match(ui.dialogs.join('\n'), /Проверь время/);
-  await ui.typeInto('ЧЧ:ММ', '1930', { clear: true });
+  await ui.see('Напиши, что нужно сделать.');
+  assert.equal(ui.dialogs.length, 0, 'окна с вопросом быть не должно');
+  await ui.fill('Например, сдать отчёт', 'Продлить страховку');
+  await ui.notSee('Напиши, что нужно сделать.');
+  // Новое дело: завтра в 10:00, важность и «сколько займёт» не заданы.
+  await ui.see('Напомню завтра в 10:00.');
+  await ui.see('Важность: Не задана', { label: true });
+  await ui.see('Сколько займёт: Не задано', { label: true });
+  // Срок дальше недели: календарь раскрывается в строке, листается по месяцам и закрывается после выбора.
+  await ui.tap('Открыть календарь');
+  await ui.see('Июнь 2026');
+  await ui.tap('Следующий месяц');
+  await ui.see('Июль 2026');
+  await ui.tap('Среда, 15 июля');
+  await ui.notSee('Июль 2026');
+  await ui.see('ср, 15 июл');
+  // Своего времени в ленте нет — выбираем на часах; оно появляется в ленте выбранным.
+  await ui.pickTime('07:45');
+  await ui.see('Напомню ср, 15 июл в 7:45.');
   await ui.tap('Сохранить');
-  const data = await ui.waitData((x) => x.reminders.some((r) => r.title === 'Проверка времени'), 'исправленное время не сохранилось');
-  assert.equal(data.reminders.find((r) => r.title === 'Проверка времени').time, '19:30');
+  const data = await ui.waitData((x) => x.reminders.some((r) => r.title === 'Продлить страховку'), 'не сохранилось');
+  const r = data.reminders.find((x) => x.title === 'Продлить страховку');
+  assert.deepEqual([r.date, r.time, r.advance, 'priority' in r, 'minutes' in r], ['2026-07-15', '07:45', 0, false, false], JSON.stringify(r));
 });
 
-scenario('Напоминание: неверная дата не сохраняется молча', async ({ ui }) => {
+scenario('Умные подсказки: частое время — в ленте и выбрано сразу; свой шаблон подставляет время, «заранее» и друга', async ({ ui }) => {
   await ui.go('/');
   await ui.tap('Новое напоминание');
-  await ui.fill('Например, сдать отчёт', 'Проверка даты');
-  await ui.typeInto('ДД.ММ.ГГГГ', '31022027', { clear: true });
-  await ui.see('Нет такой даты');
+  // Дела «до срока» чаще всего стоят на 21:30 — оно в ленте с пометкой и уже выбрано.
+  await ui.see('21:30, как обычно', { label: true });
+  await ui.see('Напомню завтра в 21:30.');
+  // «Позвонить маме» заводили дважды — это свой шаблон: одно нажатие ставит всё привычное.
+  await ui.tap('Позвонить маме, как обычно');
+  await ui.see('Напомню завтра в 18:00 и в 19:00.');
+  await ui.see('Для кого: Мама', { label: true });
   await ui.tap('Сохранить');
-  await ui.pause(800);
-  const saved = (await ui.data()).reminders.find((r) => r.title === 'Проверка даты');
-  assert.ok(!saved, `сохранено на другую дату: ${saved && saved.date}`);
-  assert.match(ui.dialogs.join('\n'), /Проверь дату/);
+  const data = await ui.waitData((x) => x.reminders.filter((r) => r.title === 'Позвонить маме').length === 3, 'не сохранилось');
+  const r = data.reminders.find((x) => x.title === 'Позвонить маме' && !['h1', 'h2'].includes(x.id));
+  assert.deepEqual([r.time, r.advance, r.friendId, r.date], ['19:00', 60, 'c', d(1)]);
+}, {
+  data: seed({
+    reminders: [
+      R({ id: 'h1', title: 'Позвонить маме', friendId: 'c', date: d(-3), time: '19:00', advance: 60, done: true, createdAt: NOW.getTime() - 4 * 86400000 }),
+      R({ id: 'h2', title: 'Позвонить маме', friendId: 'c', date: d(-9), time: '19:00', advance: 60, done: true, createdAt: NOW.getTime() - 10 * 86400000 }),
+      R({ id: 'h3', title: 'Полить цветы', date: d(2), time: '21:30', createdAt: NOW.getTime() - 1 * 86400000 }),
+      R({ id: 'h4', title: 'Вынести мусор', date: d(1), time: '21:30', createdAt: NOW.getTime() - 2 * 86400000 }),
+      R({ id: 'h5', title: 'Разобрать почту', date: d(1), time: '21:30', createdAt: NOW.getTime() - 3 * 86400000 }),
+    ],
+  }),
 });
 
 scenario('Напоминания: фильтры, выбор нескольких — сделать, вернуть и удалить', async ({ ui }) => {
@@ -749,12 +782,14 @@ scenario('Напоминание: выбор друга через окно с �
   await ui.go('/');
   await ui.tap('Новое напоминание');
   await ui.fill('Например, сдать отчёт', 'Поздравить');
-  await ui.tap('Выбрать друга');
+  // Друзей больше, чем кружков: «Найти» открывает окно с поиском.
+  await ui.tap('Для кого');
+  await ui.tap('Найти друга');
   await ui.fill('Имя', 'дим');
   await ui.see('Дима Петров');
   await ui.notSee('Алина');
   await ui.tap('Дима Петров');
-  await ui.see('Другой друг');
+  await ui.see('Для кого: Дима Петров', { label: true });
   await ui.tap('Сохранить');
   const data = await ui.waitData((x) => x.reminders.some((r) => r.title === 'Поздравить'), 'не сохранилось');
   assert.equal(data.reminders.find((r) => r.title === 'Поздравить').friendId, 'm0');
@@ -1485,7 +1520,7 @@ scenario('Календарь: «Новое событие» — на выбра�
   await ui.tap('Новое событие');
   await ui.see('Новое напоминание');
   await ui.fill('Например, сдать отчёт', 'Массаж');
-  await ui.see('Напомню 18 июн и 19 июн в 10:00.');
+  await ui.see('Напомню чт, 18 июн и пт, 19 июн в 10:00.');
   await ui.tap('Сохранить');
   const data = await ui.waitData((x) => x.reminders.some((r) => r.title === 'Массаж'), 'не сохранилось');
   const r = data.reminders.find((x) => x.title === 'Массаж');
@@ -1546,9 +1581,8 @@ scenario('Умный календарь: «до срока» не бывает, 
   await ui.notSee('Купить корм'); // «до срока» — никогда
   // Звонок — не событие: убираем из календаря в самом деле.
   await ui.go('/reminder/edit?id=call');
-  await ui.see('Магия решит после сохранения', { exact: false });
+  await ui.notSee('Магия решит'); // подписи про магию у переключателя нет
   await page.getByRole('switch', { name: 'В календаре' }).click();
-  await ui.see('Выбрано вручную.');
   await ui.tap('Сохранить');
   await ui.waitData((x) => x.reminders.find((r) => r.id === 'call').calendar === false, 'выбор не сохранился');
   // Теннис — событие: добавляем.
@@ -1783,6 +1817,29 @@ function helpers(page, dialogs) {
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
       await cdp.detach();
       await page.waitForTimeout(700);
+    },
+    /** Срок в форме дела: ближняя неделя — в строке, дальше — календарь, который раскрывается на месте. */
+    async pickDate(iso) {
+      const [y, m, dd] = iso.split('-').map(Number);
+      const diff = Math.round((Date.UTC(y, m - 1, dd) - Date.UTC(2026, 5, 10)) / 86400000);
+      if (diff < 0 || diff > 6) {
+        await ui.tap('Открыть календарь');
+        const months = (y - 2026) * 12 + (m - 1) - 5;
+        for (let k = 0; k < Math.abs(months); k++) await ui.tap(months > 0 ? 'Следующий месяц' : 'Предыдущий месяц');
+      }
+      const WD = ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
+      const MG = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+      await ui.tap(`${WD[new Date(Date.UTC(y, m - 1, dd)).getUTCDay()]}, ${dd} ${MG[m - 1]}`);
+    },
+    /** Время в форме дела: таблетка в ленте, а если такой нет — системные часы (в браузере — поле времени). */
+    async pickTime(time) {
+      const short = time.replace(/^0/, '');
+      const chip = await visible(page.getByText(short, { exact: true }));
+      if (chip) await ui.tap(short);
+      else {
+        await page.getByLabel('Выбрать время').fill(time);
+        await page.waitForTimeout(250);
+      }
     },
     /** Провести пальцем вниз от этого текста на dy — так закрывают шторки. */
     async swipeDown(target, dy) {

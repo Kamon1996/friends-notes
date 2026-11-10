@@ -2,6 +2,7 @@ import { Children, useState, type ComponentProps, type ReactNode } from 'react';
 import {
   Platform,
   Pressable,
+  StyleSheet,
   Switch,
   Text,
   TextInput,
@@ -87,6 +88,8 @@ export function GrowingInput({ minLines = 1, maxLines, singleLine = false, style
   const maxH = maxLines ? Math.ceil(maxLines * line + PAD_Y * 2 + 2) : undefined;
   const [webH, setWebH] = useState(minH);
   const web = Platform.OS === 'web';
+  // Рамка сверху и снизу: у поля внутри карточки её нет.
+  const frame = 2 * (Number(StyleSheet.flatten([s.input, style])?.borderWidth) || 0);
   const change = (v: string) => {
     // В браузере поле само не сжимается: стёрли текст — начинаем с малой высоты, содержимое тут же вернёт нужную.
     if (web && v.length < (props.value?.length ?? 0)) setWebH(minH);
@@ -100,8 +103,12 @@ export function GrowingInput({ minLines = 1, maxLines, singleLine = false, style
       returnKeyType={singleLine ? 'done' : undefined}
       onChangeText={change}
       onContentSizeChange={(e) => {
-        // +2 — рамка: без неё поле на два пикселя ниже текста и прокручивается внутри.
-        if (web) setWebH(Math.min(maxH ?? Infinity, Math.max(minH, Math.ceil(e.nativeEvent.contentSize.height) + 2)));
+        if (web) {
+          // Браузер сообщает высоту текста, но не меньше внутренней высоты поля. Растём, только когда текст правда
+          // не помещается, и добавляем рамку — иначе поле росло бы от собственной высоты, шаг за шагом.
+          const text = Math.ceil(e.nativeEvent.contentSize.height);
+          setWebH((cur) => (text > cur - frame ? Math.min(maxH ?? Infinity, Math.max(minH, text + frame)) : cur));
+        }
         onContentSizeChange?.(e);
       }}
       {...props}
