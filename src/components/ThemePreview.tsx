@@ -61,7 +61,10 @@ function Body({ scheme, onSchemeChange }: { scheme: Scheme; onSchemeChange: (s: 
     <View style={{ borderRadius: 22, borderWidth: 1, borderColor: colors.hairline, backgroundColor: colors.bg, overflow: 'hidden' }}>
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, paddingHorizontal: 16, paddingTop: 16 }}>
         <View style={{ gap: 2, flex: 1 }}>
-          <Text style={[s.h1, { fontSize: 26, lineHeight: 30 }]}>Напоминания</Text>
+          {/* Рядом — переключатель темы: на узком экране длинное слово переносилось по буквам («Напоминан-ия»). */}
+          <Text style={[s.h1, { fontSize: 22, lineHeight: 28 }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
+            Напоминания
+          </Text>
           <Text style={[s.muted, { fontSize: 13 }]}>2 дела · 1 на сегодня</Text>
         </View>
         <View style={{ flexDirection: 'row', borderRadius: 999, borderWidth: 1, borderColor: colors.hairline, backgroundColor: colors.card, overflow: 'hidden' }}>
