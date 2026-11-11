@@ -10,6 +10,7 @@ import { SelectionBar } from '@/components/SelectionBar';
 import { TabSwipe } from '@/components/TabSwipe';
 import type { IconName } from '@/components/Icon';
 import { Chip, Empty, Fab, GroupedRow, IconButton, ScreenHeader, useTheme } from '@/components/ui';
+import { NoteImportToast } from '@/components/noteImport/Toast';
 import { confirm } from '@/lib/confirm';
 import { plural } from '@/lib/dates';
 import { reminderOverdue } from '@/lib/events';
@@ -211,6 +212,8 @@ export default function RemindersScreen() {
           />
         )}
         {!selecting && <Fab onPress={() => router.push('/reminder/edit')} label="Новое напоминание" />}
+        {/* Вернулись с экрана «Из заметки»: что добавилось и возможность отменить всё разом. */}
+        <NoteImportToast bottom={96} />
       </View>
     </TabSwipe>
   );

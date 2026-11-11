@@ -64,12 +64,18 @@ export interface NoteDraft {
   missing: DraftField[];
 }
 
+/** Кусок заметки, который делом не стал, и почему: уже сделано или это чужое дело. */
+export interface NoteSkipped {
+  quote: string;
+  why: 'done' | 'other';
+}
+
 export interface NoteAnswer {
   drafts: NoteDraft[];
   /** Куски заметки, которые не вошли ни в один черновик. */
   rest: string[];
-  /** Цитаты того, что модель пометила сделанным или чужим: дел из них не делаем и второй раз про них не спрашиваем. */
-  skipped: string[];
+  /** Что модель пометила сделанным или чужим: дел из этого не делаем и второй раз про это не спрашиваем. */
+  skipped: NoteSkipped[];
   /** Ответ модели оборвался на полуслове: взяли дела, которые успели дописаться, но их могло быть больше. */
   partial?: boolean;
 }
@@ -414,7 +420,7 @@ export function parseNoteAnswer(answer: string, input: NoteInput): NoteAnswer | 
   const sourceStems = new Set(words(source).map(stem));
   const today = toISODate(new Date(input.now));
   const drafts: NoteDraft[] = [];
-  const skipped: string[] = [];
+  const skipped: NoteSkipped[] = [];
   const seen = new Set<string>();
 
   for (const item of list as Record<string, unknown>[]) {
@@ -442,7 +448,7 @@ export function parseNoteAnswer(answer: string, input: NoteInput): NoteAnswer | 
     // Сделанное и чужое модель выписывает с пометкой — дел из них не делаем. «Надо» в цитате сильнее пометки «сделано».
     const needed = NEED.test(norm(quote)) && !NO_NEED.test(norm(quote));
     if (type === 'task' && (item.state === 'other' || ((item.state === 'done' || alreadyDone(title, quote)) && !needed))) {
-      if (quote) skipped.push(quote);
+      if (quote) skipped.push({ quote, why: item.state === 'other' ? 'other' : 'done' });
       continue;
     }
     if (type === 'task' && !person) person = KIN.find(([re]) => re.test(norm(quote || title)))?.[1] ?? '';
@@ -712,7 +718,7 @@ export type NoteAsk = (input: NoteInput) => Promise<NoteAnswer | null>;
 export async function draftsFromNote(input: NoteInput, ask: NoteAsk): Promise<NoteAnswer | null> {
   const first = await ask(input);
   if (!first) return null;
-  const missed = missedIntents(input.text, first.drafts, input.now, first.skipped);
+  const missed = missedIntents(input.text, first.drafts, input.now, first.skipped.map((x) => x.quote));
   if (!missed.length || first.drafts.length >= NOTE_MAX_ITEMS) return first;
   const second = await ask({ text: missed.join('\n'), now: input.now }).catch(() => null);
   const fresh = second?.drafts.filter((d) => !first.drafts.some((t) => sameDraft(t, d))) ?? [];

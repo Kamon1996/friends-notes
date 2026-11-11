@@ -1,10 +1,12 @@
 import { Stack, router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
+import { View } from 'react-native';
 
+import { NoteImport } from '@/components/noteImport/NoteImport';
 import { QuickForm } from '@/components/reminderForm/QuickForm';
 import { RowsForm } from '@/components/reminderForm/RowsForm';
 import { useReminderForm } from '@/components/reminderForm/useReminderForm';
-import { Button, Empty } from '@/components/ui';
+import { Button, Empty, Segmented, useTheme } from '@/components/ui';
 import { useStore } from '@/lib/store';
 
 export default function EditReminderScreen() {
@@ -35,10 +37,38 @@ function ReminderNotFound() {
 /**
  * Форма дела в одном из двух видов. Готовое дело всегда открывается «строками»: его читают и правят по одному
  * полю. Новое — тоже «строками», если в настройках не выбрана «быстрая» форма.
+ *
+ * У нового дела, открытого плюсом на «Напоминаниях», сверху две вкладки: «Дело» и «Из заметки» — вставить текст
+ * и получить из него сразу несколько дел. Из карточки друга и из календаря открывается только форма: там уже
+ * известно, для кого дело или на какой день.
  */
 function ReminderForm() {
   const { data } = useStore();
+  const params = useLocalSearchParams<{ id?: string; friendId?: string; date?: string }>();
   const form = useReminderForm();
+  const [tab, setTab] = useState<'task' | 'note'>('task');
   const rows = !!form.existing || data.settings.newReminderForm !== 'quick';
-  return rows ? <RowsForm form={form} /> : <QuickForm form={form} />;
+  const view = rows ? <RowsForm form={form} /> : <QuickForm form={form} />;
+  if (params.id || params.friendId || params.date) return view;
+  const tabs = <Segmented options={TABS} value={tab} onChange={setTab} />;
+  // Форма остаётся на экране и за кадром: набранное в ней не пропадает, пока человек смотрит вторую вкладку.
+  return (
+    <View style={{ flex: 1 }}>
+      <View style={{ flex: 1, display: tab === 'task' ? 'flex' : 'none' }}>
+        <TabsBar>{tabs}</TabsBar>
+        {view}
+      </View>
+      {tab === 'note' && <NoteImport tabs={tabs} />}
+    </View>
+  );
+}
+
+const TABS = [
+  { value: 'task' as const, label: 'Дело' },
+  { value: 'note' as const, label: 'Из заметки' },
+];
+
+function TabsBar({ children }: { children: ReactNode }) {
+  const { colors } = useTheme();
+  return <View style={{ paddingHorizontal: 16, paddingTop: 12, backgroundColor: colors.bg }}>{children}</View>;
 }

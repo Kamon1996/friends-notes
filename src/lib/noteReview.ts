@@ -120,11 +120,14 @@ export function decide(items: readonly ReviewItem[], id: string, state: ReviewSt
   return update(items, id, (i) => (state === 'add' && !canAdd(i) ? i : { ...i, state }));
 }
 
+/** Что можно поправить в записи: поля дела и то, к кому и куда она относится. */
+export type ItemPatch = Partial<Pick<NoteDraft, 'title' | 'date' | 'time' | 'repeat' | 'kind' | 'note' | 'person'>> & Partial<Pick<ReviewItem, 'friendId' | 'to' | 'replace'>>;
+
 /**
  * Правка записи. Поле заполнил человек — оно больше не «проверь». Запись «добавить» после правки стала неполной —
  * возвращается на проверку.
  */
-export function editItem(items: readonly ReviewItem[], id: string, patch: Partial<Pick<NoteDraft, 'title' | 'date' | 'time' | 'repeat' | 'kind' | 'note' | 'person'>> & Partial<Pick<ReviewItem, 'friendId' | 'to' | 'replace'>>): ReviewItem[] {
+export function editItem(items: readonly ReviewItem[], id: string, patch: ItemPatch): ReviewItem[] {
   return update(items, id, (i) => {
     const { friendId, to, replace, ...fields } = patch;
     const touched = Object.keys(fields) as DraftField[];
