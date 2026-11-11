@@ -4,6 +4,8 @@ name: AI probe
 # запуска, подробности — в логе. Сейчас — «соцсети и подсказки из заметок» (scripts/ai-bench/notes.ts) и «умный
 # календарь» (scripts/ai-bench/calendar.ts).
 # Запуск: коммитом со словом «[probe]» в первой строке или вручную (Actions → AI probe → Run workflow).
+# «Дела из заметки» (scripts/ai-bench/tasks.ts) — отдельным заданием: коммит со словом «[probe-tasks]» или вручную.
+# Там одна заметка — один вопрос, запросов больше, поэтому остальные пробы при этом не запускаются.
 # Ключи — те же секреты, что для сборки: GEMINI_API_KEY, OPENROUTER_API_KEY.
 on:
   workflow_dispatch:
@@ -42,3 +44,22 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           PROBE_OPENROUTER: ${{ github.event.inputs.openrouter || '6' }}
         run: npx tsx scripts/ai-bench/calendar.ts
+
+  tasks:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[probe-tasks]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Probe note-to-tasks
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          PROBE_OPENROUTER: '3'
+          TZ: Europe/Moscow
+        run: npx tsx scripts/ai-bench/tasks.ts

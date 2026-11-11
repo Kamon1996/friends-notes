@@ -16,9 +16,14 @@ import type { ProviderId } from './types';
  *
  * calendar — «Умный календарь» (src/lib/calendarAi.ts): какие напоминания — события для календаря, а какие — обычные
  *   дела. Короткие названия пачкой — Gemini первым, OpenRouter — запасной.
+ *
+ * noteTasks — «Из заметки — в дела» (src/lib/noteTasks.ts): заметка раскладывается на черновики дел. Один текст —
+ *   один вопрос, строгий JSON со сроками — Gemini первым, OpenRouter — запасной. Порядок уточним по пробе
+ *   (scripts/ai-bench/tasks.ts).
  */
 export const TASK_PROVIDERS = {
   gender: ['gemini', 'openrouter'],
   notes: ['gemini', 'openrouter'],
   calendar: ['gemini', 'openrouter'],
+  noteTasks: ['gemini', 'openrouter'],
 } satisfies Record<string, ProviderId[]>;
