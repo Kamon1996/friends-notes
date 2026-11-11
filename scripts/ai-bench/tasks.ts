@@ -305,7 +305,10 @@ async function ask(provider: ProviderId, model: string, c: Case): Promise<{ ms: 
 
 (async () => {
   const models: [ProviderId, string][] = [];
-  if (keys.gemini) for (const m of PROVIDERS.gemini.models) models.push(['gemini', m]);
+  // PROBE_GEMINI=lite — только лёгкие модели: они отвечают за пару секунд и на бесплатном тарифе не «перегружены»,
+  // с ними круг занимает несколько минут. Старшие модели — в полной пробе.
+  const lite = env.PROBE_GEMINI === 'lite';
+  if (keys.gemini) for (const m of PROVIDERS.gemini.models) if (!lite || m.includes('lite')) models.push(['gemini', m]);
   if (keys.openrouter) {
     for (const m of rankModels(RATINGS.gender).filter((r) => r.provider === 'openrouter' && (r.tier === 'S' || r.tier === 'A' || r.tier === 'B')).slice(0, maxOpenRouter)) {
       models.push(['openrouter', m.model]);

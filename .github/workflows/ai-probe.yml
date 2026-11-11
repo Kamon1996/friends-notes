@@ -6,8 +6,9 @@ name: AI probe
 # Запуск: коммитом со словом «[probe]» в первой строке или вручную (Actions → AI probe → Run workflow).
 # «Дела из заметки» (scripts/ai-bench/tasks.ts) — отдельным заданием: коммит со словом «[probe-tasks]» или вручную.
 # Там одна заметка — один вопрос, запросов больше, поэтому остальные пробы при этом не запускаются.
-# «[probe-tasks]» спрашивает только Gemini: так промпт можно править и пробовать несколько раз в день.
-# «[probe-tasks-all]» добавляет три модели OpenRouter — у него 50 бесплатных запросов в день, это одна проба.
+# «[probe-tasks]» спрашивает только лёгкие модели Gemini: круг занимает несколько минут, промпт можно править и
+# пробовать много раз в день. «[probe-tasks-all]» — все модели Gemini и три модели OpenRouter: старшие модели Gemini
+# на бесплатном тарифе часто «перегружены», а у OpenRouter 50 бесплатных запросов в день — это одна проба.
 # Ключи — те же секреты, что для сборки: GEMINI_API_KEY, OPENROUTER_API_KEY.
 on:
   workflow_dispatch:
@@ -50,7 +51,7 @@ jobs:
   tasks:
     if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[probe-tasks')
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -63,5 +64,6 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           PROBE_OPENROUTER: ${{ contains(github.event.head_commit.message, '[probe-tasks-all]') && '3' || '0' }}
+          PROBE_GEMINI: ${{ contains(github.event.head_commit.message, '[probe-tasks-all]') && 'all' || 'lite' }}
           TZ: Europe/Moscow
         run: npx tsx scripts/ai-bench/tasks.ts
