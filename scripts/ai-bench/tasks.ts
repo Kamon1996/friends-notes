@@ -1,7 +1,8 @@
 /// <reference types="node" />
 /**
  * Проба задачи «из заметки — в дела» (src/lib/noteTasks.ts) на настоящих моделях: тот же вопрос, что в приложении,
- * на наборе трудных заметок. Одна заметка — один вопрос, как в приложении. Для каждой модели — что получилось после
+ * на наборе трудных заметок. Заметку разбираем как в приложении (`draftsFromNote`): один вопрос, а если после него
+ * остались куски со словами намерения без дела — второй, только про них. Для каждой модели — что получилось после
  * проверок приложения, сравнение с ожидаемым и время. Итог — таблицей в сводке запуска (GITHUB_STEP_SUMMARY).
  * Запуск — workflow «AI probe»: коммит со словом «[probe-tasks]» в первой строке (только Gemini — так можно пробовать
  * много раз в день) или «[probe-tasks-all]» (ещё три модели OpenRouter: у него 50 запросов в день); ключи — секреты сборки.
@@ -13,7 +14,7 @@ import { PROVIDERS, classify, errorInfo } from '../../src/lib/ai/providers';
 import { RATINGS } from '../../src/lib/ai/ratings';
 import { rankModels } from '../../src/lib/ai/tiers';
 import type { ProviderId } from '../../src/lib/ai/types';
-import { NOTE_TASK, type DraftType, type NoteAnswer, type NoteDraft } from '../../src/lib/noteTasks';
+import { NOTE_TASK, draftsFromNote, type DraftType, type NoteAnswer, type NoteDraft, type NoteInput } from '../../src/lib/noteTasks';
 import type { Repeat } from '../../src/lib/types';
 
 // Среда, 11 ноября 2026, 14:30 — от этого дня считаются все «завтра» и «в пятницу» в наборе.
@@ -118,7 +119,7 @@ const CASES: Case[] = [
     name: 'переписка со временем сообщений',
     text: '[12:30] Аня: давай в субботу в 5 вечера у меня\n[12:31] Я: ок, принесу вино\n[12:45] Аня: и захвати зарядку для ноута',
     want: [
-      { keys: ['встреч', 'ане', 'ани', 'гости', 'прийти', 'аня', 'суббот', 'вечер'], date: '2026-11-14', time: '17:00' },
+      { keys: ['встреч', 'встрет', 'ане', 'ани', 'гости', 'прийти', 'аня', 'суббот', 'вечер'], date: '2026-11-14', time: '17:00' },
       { keys: ['вино'] },
       { keys: ['зарядк'] },
     ],
@@ -204,6 +205,70 @@ const CASES: Case[] = [
     // Уже сделанное делом быть не должно. Компрессионные чулки допустимы и отдельным делом, и в заметке к склеротерапии.
     no: ['рентген', 'ээг', 'вен ног', 'уход'],
   },
+  // Дальше — заметки, которых правила «не видели»: в правилах нет ни слова из них. Проверка, что правила общие.
+  {
+    name: 'итоги планёрки: свои и чужие дела',
+    text: 'Планёрка, итоги:\n— Саша доделает макеты к пятнице\n— я: отправить смету клиенту до понедельника, уточнить у бухгалтерии реквизиты\n— Маша пришлёт договор\n— следующий созвон 18 ноября в 11:00',
+    want: [{ keys: ['смет'], date: '2026-11-16' }, { keys: ['реквизит'] }, { keys: ['созвон'], date: '2026-11-18', time: '11:00' }],
+    no: ['макет', 'договор'],
+  },
+  {
+    name: 'сообщение от близкого: просьбы',
+    text: 'Зай, по дороге домой купи хлеб и молоко. И не забудь, что в четверг в 18:00 родительское собрание. Ещё надо бы наконец записать Мишу к логопеду',
+    want: [{ keys: ['хлеб', 'купить', 'молок'] }, { keys: ['собрани'], date: '2026-11-12', time: '18:00' }, { keys: ['логопед'], person: 'Миша', date: null }],
+  },
+  {
+    name: 'сборы в поездку',
+    text: 'Летим во Вьетнам 20 декабря. До этого: сделать визу, купить чемодан, забронировать отель в Ханое. Паспорт забрать 1 декабря. Кота отвезти маме на передержку',
+    want: [
+      { keys: ['вьетнам', 'вылет', 'полет', 'перелет', 'поездк'], optional: true },
+      { keys: ['виз'] },
+      { keys: ['чемодан'] },
+      { keys: ['отел'] },
+      { keys: ['паспорт'], date: '2026-12-01' },
+      { keys: ['кота', 'кот '], person: 'Мама' },
+    ],
+  },
+  {
+    name: 'чек-лист с отметками и «до 25 числа»',
+    text: 'Ремонт:\n✅ выбрать плитку\n⬜ заказать двери — до конца ноября\n⬜ вызвать электрика, тел. 8 029 111-22-33\n- показания счётчиков передавать до 25 числа каждого месяца',
+    want: [
+      { keys: ['двер'], date: '2026-11-30' },
+      { keys: ['электрик'], noteHas: '111' },
+      { keys: ['счетчик', 'показани'], kind: 'repeat', repeat: { every: 1, unit: 'month' }, date: '2026-11-25' },
+    ],
+    no: ['плитк'],
+  },
+  {
+    name: 'деньги, ссылка, размытое время',
+    text: 'Не забыть завтра до 10 оплатить садик 350 руб, ссылка https://pay.example.com/123. Вечером позвонить бабушке. На неделе отдать Лёше дрель',
+    want: [{ keys: ['садик'], date: '2026-11-12', noteHas: '350' }, { keys: ['позвонить', 'бабушк'], person: 'Бабушка' }, { keys: ['дрел'], person: 'Лёша' }],
+  },
+  {
+    name: 'планы на выходные: день недели в заголовке',
+    text: 'Суббота: в 10:00 бассейн с детьми, потом закупиться продуктами на неделю, вечером кино в 19:30 — билеты уже купил. Воскресенье: с утра генеральная уборка, в 14:00 обед у тёщи, не забыть торт',
+    want: [
+      { keys: ['бассейн'], date: '2026-11-14', time: '10:00' },
+      { keys: ['закуп', 'продукт'] },
+      { keys: ['кино'], date: '2026-11-14', time: '19:30' },
+      { keys: ['уборк'], date: '2026-11-15' },
+      { keys: ['обед'], date: '2026-11-15', time: '14:00' },
+      { keys: ['торт'] },
+    ],
+    no: ['билет'],
+  },
+  {
+    name: 'план без сроков: машина',
+    text: 'Машина: пора менять резину, всё никак не доеду до шиномонтажа. Масло меняли в сентябре. Страховка заканчивается 3 декабря, надо продлить. Раз в полгода — мойка с воском. Ещё хочу наконец разобраться со стуком в подвеске, но это не срочно. Думаю, может, продать её весной',
+    want: [
+      { keys: ['резин', 'шиномонтаж'], date: null, sure: true },
+      { keys: ['страховк'], date: '2026-12-03' },
+      { keys: ['мойк'], kind: 'repeat', repeat: { every: 6, unit: 'month' }, date: null },
+      { keys: ['подвеск', 'стук'], date: null },
+      { keys: ['продать', 'продаж'], sure: false },
+    ],
+    no: ['масл'],
+  },
 ];
 
 const env = process.env;
@@ -275,9 +340,8 @@ function score(c: Case, a: NoteAnswer): CaseScore {
   return s;
 }
 
-async function ask(provider: ProviderId, model: string, c: Case): Promise<{ ms: number; answer?: NoteAnswer; raw?: string; error?: string }> {
+async function ask(provider: ProviderId, model: string, input: NoteInput): Promise<{ ms: number; answer?: NoteAnswer; raw?: string; error?: string }> {
   const def = PROVIDERS[provider];
-  const input = { text: c.text, now: NOW };
   for (let attempt = 0; ; attempt++) {
     const req = def.request(model, keys[provider]!, NOTE_TASK.request(input));
     const t0 = Date.now();
@@ -311,6 +375,22 @@ async function ask(provider: ProviderId, model: string, c: Case): Promise<{ ms: 
   }
 }
 
+/** Заметка целиком, как в приложении: первый вопрос и, если нужно, второй взгляд. */
+async function solve(provider: ProviderId, model: string, c: Case) {
+  const asks: Awaited<ReturnType<typeof ask>>[] = [];
+  const answer = await draftsFromNote({ text: c.text, now: NOW }, async (input) => {
+    const r = await ask(provider, model, input);
+    asks.push(r);
+    // Бесплатные тарифы считают запросы в минуту: не частим.
+    await sleep(provider === 'gemini' ? 4500 : 3500);
+    return r.answer ?? null;
+  });
+  const first = asks[0]?.answer;
+  // Что добавил второй взгляд: дела, которых не было в первом ответе.
+  const added = answer && first && asks.length > 1 ? answer.drafts.filter((d) => !first.drafts.some((f) => f.title === d.title && f.quote === d.quote)) : [];
+  return { answer, ms: asks.reduce((n, a) => n + a.ms, 0), second: asks.length > 1, added, error: asks[0]?.error, raw: asks[0]?.raw };
+}
+
 (async () => {
   const models: [ProviderId, string][] = [];
   // PROBE_GEMINI=lite — только лёгкие модели: они отвечают за пару секунд и на бесплатном тарифе не «перегружены»,
@@ -327,10 +407,10 @@ async function ask(provider: ProviderId, model: string, c: Case): Promise<{ ms: 
   const wants = cases.reduce((n, c) => n + c.want.filter((w) => !w.optional).length, 0);
   const lines = [
     `Заметок: ${picked.length}${repeats > 1 ? `, каждая по ${repeats} раза` : ''}, ожидаемых находок: ${wants}. Сегодня в наборе — среда, 11 ноября 2026. Считается то, что получилось после проверок приложения.`,
-    '«Заметки целиком» — заметки без единой ошибки; «Лишнее» — уверенные дела, которых быть не должно.',
+    '«Заметки целиком» — заметки без единой ошибки; «Лишнее» — уверенные дела, которых быть не должно; «Второй взгляд» — сколько раз понадобился второй вопрос и сколько дел он добавил.',
     '',
   ];
-  const table = ['| Сервис | Модель | Среднее время | Заметки целиком | Найдено | Сроки | Поля | Лишнее | Сбои |', '|---|---|---|---|---|---|---|---|---|'];
+  const table = ['| Сервис | Модель | Среднее время | Заметки целиком | Найдено | Сроки | Поля | Лишнее | Второй взгляд | Сбои |', '|---|---|---|---|---|---|---|---|---|---|'];
   for (const [provider, model] of models) {
     let perfect = 0;
     let found = 0;
@@ -341,10 +421,15 @@ async function ask(provider: ProviderId, model: string, c: Case): Promise<{ ms: 
     let extras = 0;
     let fails = 0;
     let ms = 0;
+    let seconds = 0;
+    let secondAdded = 0;
     console.log(`\n=== ${provider} ${model}`);
     for (const c of cases) {
-      const r = await ask(provider, model, c);
+      const r = await solve(provider, model, c);
       ms += r.ms;
+      if (r.second) seconds++;
+      secondAdded += r.added.length;
+      const second = r.second ? ` · второй взгляд: ${r.added.length ? `+ ${r.added.map((d) => `«${d.title || d.person}»`).join(', ')}` : 'ничего не добавил'}` : '';
       if (!r.answer) {
         fails++;
         console.log(`  ✗ ${c.name}: ${r.error}${r.raw ? ` · RAW ${r.raw.replace(/\n/g, ' ').slice(0, 300)}` : ''}`);
@@ -357,14 +442,12 @@ async function ask(provider: ProviderId, model: string, c: Case): Promise<{ ms: 
         fieldsOk += s.fieldsOk;
         extras += s.extras;
         if (!s.problems.length) perfect++;
-        console.log(`  ${s.problems.length ? '·' : '✓'} ${c.name}: ${s.problems.join('; ') || 'всё верно'}`);
-        if (s.problems.length) console.log(`      ${r.answer.drafts.map((d) => `[${d.type[0]}${d.sure ? '' : '?'} ${d.title || d.person} | ${d.date ?? '—'} ${d.time ?? ''} ${d.kind}${d.repeat ? ` ${JSON.stringify(d.repeat)}` : ''}${d.person ? ` @${d.person}` : ''}]`).join(' ')}`);
+        console.log(`  ${s.problems.length ? '·' : '✓'} ${c.name}: ${s.problems.join('; ') || 'всё верно'}${second}`);
+        if (s.problems.length || r.second) console.log(`      ${r.answer.drafts.map((d) => `[${d.type[0]}${d.sure ? '' : '?'} ${d.title || d.person} | ${d.date ?? '—'} ${d.time ?? ''} ${d.kind}${d.repeat ? ` ${JSON.stringify(d.repeat)}` : ''}${d.person ? ` @${d.person}` : ''}${d.check.length ? ` !${d.check.join(',')}` : ''}]`).join(' ')}`);
       }
-      // Бесплатные тарифы считают запросы в минуту: не частим.
-      await sleep(provider === 'gemini' ? 4500 : 3500);
     }
     table.push(
-      `| ${provider} | \`${model}\` | ${(ms / cases.length / 1000).toFixed(1)} с | ${perfect}/${cases.length} | ${found}/${wants} | ${datesOk}/${dates} | ${fieldsOk}/${fields} | ${extras} | ${fails} |`,
+      `| ${provider} | \`${model}\` | ${(ms / cases.length / 1000).toFixed(1)} с | ${perfect}/${cases.length} | ${found}/${wants} | ${datesOk}/${dates} | ${fieldsOk}/${fields} | ${extras} | ${seconds} раз, +${secondAdded} | ${fails} |`,
     );
   }
   const md = [...lines, ...table].join('\n');

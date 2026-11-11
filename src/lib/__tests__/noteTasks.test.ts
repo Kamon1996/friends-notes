@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
-import { NOTE_MAX_ITEMS, NOTE_MAX_TEXT, NOTE_TASK, dateFromWords, notePrompt, parseNoteAnswer, timeFromWords, todayContext } from '../noteTasks';
+import { NOTE_MAX_ITEMS, NOTE_MAX_TEXT, NOTE_TASK, dateFromWords, draftsFromNote, missedIntents, notePrompt, parseNoteAnswer, timeFromWords, todayContext, type NoteInput } from '../noteTasks';
 
 const TODAY = '2026-11-11'; // среда
 const NOW = new Date(2026, 10, 11, 14, 30).getTime();
@@ -36,6 +36,9 @@ describe('дата из слов', () => {
     assert.equal(d('др у Кати 14 февраля'), '2027-02-14');
     assert.equal(d('1 мая 2027 свадьба'), '2027-05-01');
     assert.equal(d('31 ноября'), null, 'такого дня нет');
+    assert.equal(d('счётчики передать до 25 числа'), '2026-11-25');
+    assert.equal(d('5 числа каждого месяца платить за квартиру'), '2026-12-05');
+    assert.equal(d('к 20-му сдать отчёт'), '2026-11-20');
   });
   test('цифрами: «20.11», «05.03», с годом; «в 15.30» — время, а не день', () => {
     assert.equal(d('сдать до 20.11'), '2026-11-20');
@@ -144,6 +147,35 @@ describe('ответ', () => {
     const meet = parse('Аня: давай в субботу в 5 вечера у меня', [item({ title: 'Встреча у Ани', quote: 'давай в субботу в 5 вечера у меня', kind: 'at', person: 'Аня' })]);
     assert.deepEqual(meet?.drafts[0].check, [], '«встреча» — обычное слово для такого дела, а не выдумка');
   });
+  test('название из местоимений («Дойти до этого», «Встретиться у меня») — пометка «проверь название»', () => {
+    const got = parse('не прям чекап всего, но думаю я еще дойду до этого. Аня: давай у меня', [
+      item({ title: 'Дойти до этого', quote: 'думаю я еще дойду до этого', sure: false }),
+      item({ title: 'Встретиться у меня', quote: 'давай у меня', person: 'Аня' }),
+      item({ title: 'Пройти чекап', quote: 'не прям чекап всего' }),
+    ]);
+    assert.deepEqual(got?.drafts.map((d) => d.check), [['title'], ['title'], []]);
+  });
+  test('подарок без имени рядом с чьим-то днём рождения — этому человеку, с пометкой «проверь»', () => {
+    const text = 'отвезти кота к ветеринару в субботу день рождения у Игоря подарок ещё не купил надо купить и родители приезжают встретить на вокзале';
+    const got = parse(text, [
+      item({ title: 'Отвезти кота к ветеринару', quote: 'отвезти кота к ветеринару' }),
+      item({ type: 'birthday', quote: 'в субботу день рождения у Игоря', person: 'Игорь', date: '2026-11-14' }),
+      item({ title: 'Купить подарок', quote: 'подарок ещё не купил надо купить' }),
+      item({ title: 'Встретить на вокзале', quote: 'родители приезжают встретить на вокзале', person: 'Родители' }),
+    ]);
+    assert.deepEqual(got?.drafts.map((d) => [d.person, d.check]), [[null, []], ['Игорь', []], ['Игорь', ['person']], ['Родители', []]]);
+    const named = parse('др у Кати 14 февраля. купить Оле подарок', [
+      item({ type: 'birthday', quote: 'др у Кати 14 февраля', person: 'Катя' }),
+      item({ title: 'Купить подарок', quote: 'купить Оле подарок', person: 'Оля' }),
+    ]);
+    assert.deepEqual([named?.drafts[1].person, named?.drafts[1].check], ['Оля', []], 'имя названо — не трогаем');
+    const far = parse('др у Кати 14 февраля. купить хлеб. к новому году купить подарки', [
+      item({ type: 'birthday', quote: 'др у Кати 14 февраля', person: 'Катя' }),
+      item({ title: 'Купить хлеб', quote: 'купить хлеб' }),
+      item({ title: 'Купить подарки', quote: 'к новому году купить подарки' }),
+    ]);
+    assert.equal(far?.drafts[2].person, null, 'не рядом — не связываем');
+  });
   test('цитаты нет, но название из слов текста — берём без цитаты', () => {
     const got = parse('надо бы записаться к стоматологу', [item({ title: 'Записаться к стоматологу', quote: 'запишись к зубному' })]);
     assert.deepEqual([got?.drafts[0].title, got?.drafts[0].quote], ['Записаться к стоматологу', '']);
@@ -204,5 +236,80 @@ describe('ответ', () => {
     assert.deepEqual([got?.drafts.map((d) => d.title), got?.partial], [['Купить хлеб'], true]);
     assert.equal(parseNoteAnswer(full, { text: 'купить хлеб, позвонить маме', now: NOW })?.partial, undefined);
     assert.equal(parseNoteAnswer('{"items":[{"type":"task","title":"Куп', { text: 'купить хлеб', now: NOW }), null, 'ни одного целого дела — ответа нет');
+  });
+});
+
+describe('второй взгляд', () => {
+  const HEALTH = [
+    'дерматолог - подбирали уход для этого периода.',
+    'Так же наконец займусь лицом со своими прыщами, прописали крем',
+    'онколог - собираюсь проверить свои родинки, еще не дошла',
+    'узи сердца- раз в год',
+  ].join('\n');
+  const moles = item({ title: 'Проверить родинки', quote: 'собираюсь проверить свои родинки, еще не дошла' });
+  const heart = item({ title: 'Узи сердца', quote: 'узи сердца- раз в год', kind: 'repeat', repeat: { every: 1, unit: 'year' } });
+  const face = item({ title: 'Заняться лицом', quote: 'наконец займусь лицом со своими прыщами' });
+  /** ИИ понарошку: отвечает заготовленным по очереди и запоминает, о чём спросили. */
+  const fake = (answers: (unknown[] | null | Error)[]) => {
+    const asked: string[] = [];
+    const ask = async (input: NoteInput) => {
+      asked.push(input.text);
+      const a = answers.shift();
+      if (a instanceof Error) throw a;
+      return a ? parseNoteAnswer(answer(a), input) : null;
+    };
+    return { ask, asked };
+  };
+
+  test('что стоит переспросить: слово намерения вне цитат или строка, начатая с действия', () => {
+    const drafts = parse(HEALTH, [moles, heart])?.drafts ?? [];
+    assert.deepEqual(missedIntents(HEALTH, drafts), ['Так же наконец займусь лицом со своими прыщами, прописали крем']);
+    assert.deepEqual(missedIntents(HEALTH, parse(HEALTH, [moles, heart, face])?.drafts ?? []), []);
+    const list = 'Ремонт:\n✅ выбрать плитку\n[x] оплатить интернет\n⬜ заказать двери\n2. вызвать электрика\nчасть денег отдал';
+    assert.deepEqual(missedIntents(list, []), ['⬜ заказать двери', '2. вызвать электрика'], 'сделанное и «часть денег» не переспрашиваем');
+    for (const t of ['не надо звонить Пете', 'все никак не дойду на эту процедуру', 'Сегодня был хороший день, гуляли в парке', 'интересно, сколько стоит абонемент']) {
+      assert.deepEqual(missedIntents(t, []), [], t);
+    }
+    for (const t of ['надо бы поменять резину', 'не забыть про страховку', 'в отпуске схожу к окулисту', 'пора менять фильтр']) assert.deepEqual(missedIntents(t, []), [t], t);
+    const mixed = 'выявили остеохондроз, нужен курс массажа (не входит в страховку) и ещё много слов про шею, голову и рентген';
+    assert.deepEqual(missedIntents(mixed, parse(mixed, [item({ title: 'Записаться на массаж', quote: 'нужен курс массажа' })])?.drafts ?? []), [], '«нужен» уже стало делом');
+  });
+
+  test('первый ответ пропустил дело — спрашиваем про этот кусок, находка встаёт на своё место по тексту', async () => {
+    const { ask, asked } = fake([[moles, heart], [face]]);
+    const got = await draftsFromNote({ text: HEALTH, now: NOW }, ask);
+    assert.deepEqual(got?.drafts.map((d) => d.title), ['Заняться лицом', 'Проверить родинки', 'Узи сердца']);
+    assert.deepEqual(asked, [HEALTH, 'Так же наконец займусь лицом со своими прыщами, прописали крем']);
+    assert.deepEqual(got?.rest, ['дерматолог - подбирали уход для этого периода.']);
+  });
+
+  test('переспрашивать нечего — один вопрос; второй не удался или пуст — остаётся первый ответ', async () => {
+    const all = fake([[moles, heart, face]]);
+    assert.equal((await draftsFromNote({ text: HEALTH, now: NOW }, all.ask))?.drafts.length, 3);
+    assert.equal(all.asked.length, 1);
+    for (const second of [null, new Error('нет сети'), []]) {
+      const { ask, asked } = fake([[moles, heart], second]);
+      const got = await draftsFromNote({ text: HEALTH, now: NOW }, ask);
+      assert.deepEqual([got?.drafts.map((d) => d.title), asked.length], [['Проверить родинки', 'Узи сердца'], 2]);
+    }
+    assert.equal(await draftsFromNote({ text: HEALTH, now: NOW }, fake([null]).ask), null, 'первого ответа нет — нет и разбора');
+  });
+
+  test('второй взгляд не дублирует: то же название или цитата из того же места — не берём', async () => {
+    const text = 'так надо успеть отвезти кота к ветеринару потом ещё всякое разное про работу и отпуск и погоду и надо купить корм и больше ничего';
+    const vet = item({ title: 'Отвезти кота к ветеринару', quote: 'отвезти кота к ветеринару' });
+    const { ask } = fake([[vet], [item({ title: 'Отвезти кота', quote: 'надо успеть отвезти кота к ветеринару' }), item({ title: 'Отвезти кота к ветеринару', quote: '' }), item({ title: 'Купить корм', quote: 'надо купить корм' })]]);
+    const got = await draftsFromNote({ text, now: NOW }, ask);
+    assert.deepEqual(got?.drafts.map((d) => d.title), ['Отвезти кота к ветеринару', 'Купить корм']);
+  });
+
+  test('подарок, найденный вторым взглядом без имени, получает именинника из первого ответа', async () => {
+    const text = 'в субботу день рождения у Игоря.\nподарок ещё не купил, надо купить\nв воскресенье встретить родителей';
+    const { ask } = fake([
+      [item({ type: 'birthday', quote: 'в субботу день рождения у Игоря', person: 'Игорь' }), item({ title: 'Встретить родителей', quote: 'в воскресенье встретить родителей' })],
+      [item({ title: 'Купить подарок', quote: 'подарок ещё не купил, надо купить' })],
+    ]);
+    const got = await draftsFromNote({ text, now: NOW }, ask);
+    assert.deepEqual(got?.drafts.map((d) => [d.title, d.person]), [['', 'Игорь'], ['Купить подарок', 'Игорь'], ['Встретить родителей', null]]);
   });
 });
