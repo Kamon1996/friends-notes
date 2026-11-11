@@ -35,6 +35,8 @@ interface Want {
   plainTitle?: boolean;
   /** Уверена ли модель, что это дело: «нужно, но откладываю» — да, «может, съездить» — нет. */
   sure?: boolean;
+  /** Как дело должно быть названо: «нужен курс массажа» — «Записаться на массаж». */
+  titleHas?: string;
   /** Находка допустима, но не обязательна: нет — не ошибка, есть — не лишнее. */
   optional?: boolean;
 }
@@ -193,8 +195,8 @@ const CASES: Case[] = [
       { keys: ['железо'], kind: 'repeat', date: null },
       { keys: ['анализ'], date: null },
       { keys: ['прививк'], date: null },
-      { keys: ['массаж'], date: null },
-      { keys: ['склеротерап'], date: null, sure: true },
+      { keys: ['массаж'], date: null, titleHas: 'записаться' },
+      { keys: ['склеротерап'], date: null, sure: true, titleHas: 'записаться' },
       { keys: ['лиц'], date: null },
       { keys: ['родинк'], date: null, sure: true },
       { keys: ['гинеколог'], kind: 'repeat', repeat: { every: 1, unit: 'year' }, date: null, plainTitle: true },
@@ -327,6 +329,7 @@ function score(c: Case, a: NoteAnswer): CaseScore {
     if (w.noteHas) check('заметка', low(`${d.note} ${d.quote}`).includes(low(w.noteHas)), d.note);
     if (w.sure !== undefined) check('уверенность', d.sure === w.sure, d.sure);
     if (w.plainTitle) check('название без выдумки', !d.check.includes('title'), d.title);
+    if (w.titleHas) check('название', low(d.title).includes(low(w.titleHas)), d.title);
   }
   for (const d of a.drafts) {
     if (c.noTime?.includes(d.time ?? '')) s.problems.push(`время сообщения стало сроком: «${d.title}» ${d.time}`);
@@ -368,7 +371,7 @@ async function ask(provider: ProviderId, model: string, input: NoteInput): Promi
       if (kind) return { ms, error: `${kind}: ${errorInfo(body).message.slice(0, 120)}` };
       const text = def.text(body);
       const answer = text === null ? null : NOTE_TASK.parse(text, input);
-      return { ms, answer: answer ?? undefined, raw: (text ?? '').slice(0, 2500), error: answer ? undefined : 'ответ не разобрать' };
+      return { ms, answer: answer ?? undefined, raw: (text ?? '').slice(0, 9000), error: answer ? undefined : 'ответ не разобрать' };
     } catch (e) {
       return { ms: Date.now() - t0, error: e instanceof Error ? e.message : String(e) };
     }
