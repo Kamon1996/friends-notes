@@ -375,6 +375,16 @@ async function ask(provider: ProviderId, model: string, input: NoteInput): Promi
   }
 }
 
+/** Ответ модели одной строкой: по каждому делу — пометка, название и цитата. */
+function briefRaw(raw: string): string {
+  try {
+    const json = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1)) as { items?: Record<string, unknown>[] };
+    return (json.items ?? []).map((i) => `[${String(i.state ?? '?')}${i.sure === false ? '?' : ''} ${String(i.title || i.type)} ← «${String(i.quote ?? '').slice(0, 70)}»]`).join(' ') || 'пусто';
+  } catch {
+    return raw.replace(/\s+/g, ' ').slice(0, 600);
+  }
+}
+
 /** Заметка целиком, как в приложении: первый вопрос и, если нужно, второй взгляд. */
 async function solve(provider: ProviderId, model: string, c: Case) {
   const asks: Awaited<ReturnType<typeof ask>>[] = [];
@@ -390,7 +400,7 @@ async function solve(provider: ProviderId, model: string, c: Case) {
   const first = asks[0]?.answer;
   // Что добавил второй взгляд: дела, которых не было в первом ответе.
   const added = answer && first && asks.length > 1 ? answer.drafts.filter((d) => !first.drafts.some((f) => f.title === d.title && f.quote === d.quote)) : [];
-  return { answer, ms: asks.reduce((n, a) => n + a.ms, 0), second: asks.length > 1, asked: texts[1] ?? '', added, error: asks[0]?.error, raw: asks[0]?.raw };
+  return { answer, ms: asks.reduce((n, a) => n + a.ms, 0), second: asks.length > 1, asked: texts[1] ?? '', added, error: asks[0]?.error, raw: asks[0]?.raw, raws: asks.map((a) => a.raw ?? '') };
 }
 
 (async () => {
@@ -445,6 +455,8 @@ async function solve(provider: ProviderId, model: string, c: Case) {
         extras += s.extras;
         if (!s.problems.length) perfect++;
         console.log(`  ${s.problems.length ? '·' : '✓'} ${c.name}: ${s.problems.join('; ') || 'всё верно'}${second}`);
+        // При ошибке — что ответила модель до проверок приложения: видно, чья это ошибка.
+        if (s.problems.length) for (const [k, raw] of r.raws.entries()) console.log(`      ОТВЕТ ${k + 1}: ${briefRaw(raw)}`);
         if (s.problems.length || r.second) console.log(`      ${r.answer.drafts.map((d) => `[${d.type[0]}${d.sure ? '' : '?'} ${d.title || d.person} | ${d.date ?? '—'} ${d.time ?? ''} ${d.kind}${d.repeat ? ` ${JSON.stringify(d.repeat)}` : ''}${d.person ? ` @${d.person}` : ''}${d.check.length ? ` !${d.check.join(',')}` : ''}]`).join(' ')}`);
       }
     }

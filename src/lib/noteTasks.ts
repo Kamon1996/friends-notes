@@ -17,7 +17,9 @@ import type { ISODate, Repeat, RepeatUnit, TimeOfDay } from './types';
  * - чего в тексте нет, того не ставим: срок (а у привычки — «как часто») остаётся пустым и попадает в `missing` —
  *   человек дополнит сам;
  * - лучше предложить лишнее, чем пропустить нужное: по каждому черновику человек всё равно принимает решение.
- *   Поэтому привычки («пью железо») и сомнительное берём; уже сделанное — нет;
+ *   Поэтому привычки («пью железо») и сомнительное берём; уже сделанное и чужие дела — нет. Отсеивает их приложение:
+ *   модель выписывает и их, с пометкой (`state`). Выбрать пометку модели проще, чем промолчать, — и рядом
+ *   с «билеты уже купил» не теряется само «кино в 19:30»;
  * - человека модель называет именем из текста; с друзьями его сопоставляет приложение, список друзей наружу не уходит;
  * - что не вошло ни в одно дело, возвращаем отдельно (`rest`): ничего не пропадает молча;
  * - модель может проглядеть дело в середине длинного абзаца. Если в неразобранном куске есть слова намерения
@@ -66,6 +68,8 @@ export interface NoteAnswer {
   drafts: NoteDraft[];
   /** Куски заметки, которые не вошли ни в один черновик. */
   rest: string[];
+  /** Цитаты того, что модель пометила сделанным или чужим: дел из них не делаем и второй раз про них не спрашиваем. */
+  skipped: string[];
   /** Ответ модели оборвался на полуслове: взяли дела, которые успели дописаться, но их могло быть больше. */
   partial?: boolean;
 }
@@ -215,7 +219,7 @@ export const NOTE_RULES = [
   '',
   'Найди в тексте всё, что человеку нужно сделать или не пропустить. Дело — и то, что он только собирается сделать: «нужно», «надо», «планирую», «собираюсь», «займусь», «хочу», «не забыть». Прочитай текст до конца: дела бывают в середине длинного абзаца. Правила:',
   '1. Одно действие — одно дело. «Позвонить маме и записаться к врачу» — два дела. Список покупок или пункты одного действия — одно дело, пункты положи в note. Договорённость о встрече («Аня: давай в субботу в 5 у меня») — тоже дело: событие «Встреча», person — с кем.',
-  '2. title — коротко, с глагола в неопределённой форме, словами из текста: «Забрать торт», «Стоматолог»; «разберу шкаф» — «Разобрать шкаф». В названии — действие и его предмет: «Перезвонить в банк», а не «Перезвонить». Вместо «это», «этого», «туда» напиши, о чём речь: «съезжу туда» про дачу — «Съездить на дачу». Короткое условие оставь в названии: «Сдать отчёт после проверки». Если на процедуру, курс или к мастеру сначала нужно записаться — начни с «Записаться на…»: «нужен курс уколов» — «Записаться на уколы», «нужно делать УЗИ почек» — «Записаться на УЗИ почек». Имя человека и лишние уточнения в title не пиши. Кроме глагола действия, в title только слова из текста: «стоматолог раз в полгода» — «Стоматолог», а не «Чистка у стоматолога».',
+  '2. title — коротко, с глагола в неопределённой форме, словами из текста: «Забрать торт», «Стоматолог»; «разберу шкаф» — «Разобрать шкаф». В названии — действие и его предмет: «Перезвонить в банк», а не «Перезвонить». Вместо «это», «этого», «туда» напиши, о чём речь: «съезжу туда» про дачу — «Съездить на дачу». Короткое условие оставь в названии: «Сдать отчёт после проверки». Если процедура, курс или мастер только нужны, а записи ещё нет — начни с «Записаться на…»: «нужен курс уколов» — «Записаться на уколы», «нужно делать УЗИ почек» — «Записаться на УЗИ почек». Время уже назначено («окулист во вторник в 10») — называй само дело: «Окулист». Имя человека и лишние уточнения в title не пиши. Кроме глагола действия, в title только слова из текста: «стоматолог раз в полгода» — «Стоматолог», а не «Чистка у стоматолога».',
   '3. quote — кусок текста, из которого взято дело, слово в слово, вместе со словами о сроке и времени.',
   '4. date — ГГГГ-ММ-ДД, только если в тексте сказано когда: «завтра», «в пятницу», «25 декабря», «через неделю». Дату бери из списка ближайших дней. День недели — ближайший такой день, не сегодня. Дата без года — ближайшая в будущем. Не сказано когда — null. Не угадывай.',
   '5. time — ЧЧ:ММ, только если время названо. «В семь вечера» — 19:00, «утром» — 09:00, «в обед» — 13:00, «вечером» — 19:00. Иначе null.',
@@ -226,22 +230,25 @@ export const NOTE_RULES = [
   '9. note — детали из текста: адрес, сумма, список, телефон, ссылка. Нет — "".',
   '10. sure — false, только если человек сам не решил, делать ли: мысль, вопрос, «может быть», «думаю», «было бы неплохо». «Нужно, но всё откладываю», «собираюсь, ещё не дошёл» — sure true: дело есть. Мысль о деле на потом («думаю, ещё доберусь до ремонта») тоже бери: sure false, название по предмету — «Заняться ремонтом». Сомневаешься, дело ли это, — возьми с sure false: человек решит сам.',
   '11. type: "task" — дело; "birthday" — день рождения человека («ДР у Кати 14 февраля»): person — чей, date — ближайший такой день, title ""; "date" — годовщина или другая ежегодная дата человека: title — что за дата. Для них kind "due", repeat null.',
-  '12. Не бери: уже сделанное — отметки («✓», «[x]») и прошедшее время («купил», «сходила к окулисту», «выбирали обои»); чужие дела; факты без действия; время отправки сообщений в переписке. Сделана только подготовка («в пятницу в 9 приём у нотариуса, документы уже собрал») — само событие бери.',
-  `13. Не больше ${NOTE_MAX_ITEMS} дел. Дел нет — {"items":[]}.`,
+  '12. state: "todo" — дело предстоит автору заметки; "done" — уже сделано: отметки («✓», «[x]») и прошедшее время («купил», «сходила к окулисту», «выбирали обои»); "other" — дело делает кто-то другой («Олег пришлёт счёт»). Сделанное и чужое тоже выпиши — с этой пометкой. Просьба к автору («забери посылку») — его дело: "todo". У события сделана только подготовка («стоматолог 20-го, снимок уже сделал») — событие "todo", подготовка "done".',
+  '13. Не бери вовсе: факты без действия; время отправки сообщений в переписке.',
+  `14. Не больше ${NOTE_MAX_ITEMS} дел. Дел нет — {"items":[]}.`,
   '',
   'Ответ — только JSON без пояснений, в том же порядке, что в тексте.',
   '',
-  'Пример (для него сегодня — среда, 11 ноября 2026). Текст: «в пятницу забрать торт до 12. купить Ане цветы. стоматолог 20го в 15:30. по вт и чт бассейн в 7 утра. пью витамины. всё-таки разберу антресоли. может съездить к родителям. др у Кати 14 февраля, надо купить подарок»',
+  'Пример (для него сегодня — среда, 11 ноября 2026). Текст: «в пятницу забрать торт до 12. купить Ане цветы. стоматолог 20го в 15:30, снимок уже сделал. по вт и чт бассейн в 7 утра. пью витамины. всё-таки разберу антресоли. может съездить к родителям. Олег пришлёт счёт. др у Кати 14 февраля, надо купить подарок»',
   '{"items":[',
-  '{"type":"task","title":"Забрать торт","quote":"в пятницу забрать торт до 12","kind":"due","date":"2026-11-13","time":"12:00","repeat":null,"person":null,"note":"","sure":true},',
-  '{"type":"task","title":"Купить цветы","quote":"купить Ане цветы","kind":"due","date":null,"time":null,"repeat":null,"person":"Аня","note":"","sure":true},',
-  '{"type":"task","title":"Стоматолог","quote":"стоматолог 20го в 15:30","kind":"at","date":"2026-11-20","time":"15:30","repeat":null,"person":null,"note":"","sure":true},',
-  '{"type":"task","title":"Бассейн","quote":"по вт и чт бассейн в 7 утра","kind":"repeat","date":"2026-11-12","time":"07:00","repeat":{"every":1,"unit":"week","days":[2,4]},"person":null,"note":"","sure":true},',
-  '{"type":"task","title":"Выпить витамины","quote":"пью витамины","kind":"repeat","date":null,"time":null,"repeat":null,"person":null,"note":"","sure":true},',
-  '{"type":"task","title":"Разобрать антресоли","quote":"всё-таки разберу антресоли","kind":"due","date":null,"time":null,"repeat":null,"person":null,"note":"","sure":true},',
-  '{"type":"task","title":"Съездить к родителям","quote":"может съездить к родителям","kind":"due","date":null,"time":null,"repeat":null,"person":null,"note":"","sure":false},',
-  '{"type":"birthday","title":"","quote":"др у Кати 14 февраля","kind":"due","date":"2027-02-14","time":null,"repeat":null,"person":"Катя","note":"","sure":true},',
-  '{"type":"task","title":"Купить подарок","quote":"надо купить подарок","kind":"due","date":null,"time":null,"repeat":null,"person":"Катя","note":"","sure":true}]}',
+  '{"type":"task","state":"todo","title":"Забрать торт","quote":"в пятницу забрать торт до 12","kind":"due","date":"2026-11-13","time":"12:00","repeat":null,"person":null,"note":"","sure":true},',
+  '{"type":"task","state":"todo","title":"Купить цветы","quote":"купить Ане цветы","kind":"due","date":null,"time":null,"repeat":null,"person":"Аня","note":"","sure":true},',
+  '{"type":"task","state":"todo","title":"Стоматолог","quote":"стоматолог 20го в 15:30","kind":"at","date":"2026-11-20","time":"15:30","repeat":null,"person":null,"note":"","sure":true},',
+  '{"type":"task","state":"done","title":"Сделать снимок","quote":"снимок уже сделал","kind":"due","date":null,"time":null,"repeat":null,"person":null,"note":"","sure":true},',
+  '{"type":"task","state":"todo","title":"Бассейн","quote":"по вт и чт бассейн в 7 утра","kind":"repeat","date":"2026-11-12","time":"07:00","repeat":{"every":1,"unit":"week","days":[2,4]},"person":null,"note":"","sure":true},',
+  '{"type":"task","state":"todo","title":"Выпить витамины","quote":"пью витамины","kind":"repeat","date":null,"time":null,"repeat":null,"person":null,"note":"","sure":true},',
+  '{"type":"task","state":"todo","title":"Разобрать антресоли","quote":"всё-таки разберу антресоли","kind":"due","date":null,"time":null,"repeat":null,"person":null,"note":"","sure":true},',
+  '{"type":"task","state":"todo","title":"Съездить к родителям","quote":"может съездить к родителям","kind":"due","date":null,"time":null,"repeat":null,"person":null,"note":"","sure":false},',
+  '{"type":"task","state":"other","title":"Прислать счёт","quote":"Олег пришлёт счёт","kind":"due","date":null,"time":null,"repeat":null,"person":"Олег","note":"","sure":true},',
+  '{"type":"birthday","state":"todo","title":"","quote":"др у Кати 14 февраля","kind":"due","date":"2027-02-14","time":null,"repeat":null,"person":"Катя","note":"","sure":true},',
+  '{"type":"task","state":"todo","title":"Купить подарок","quote":"надо купить подарок","kind":"due","date":null,"time":null,"repeat":null,"person":"Катя","note":"","sure":true}]}',
 ].join('\n');
 
 /** «Сегодня: среда, 11 ноября 2026, 14:30» и ближайшие две недели: модель ищет дату в списке, а не вычисляет. */
@@ -311,6 +318,23 @@ const FIRST_PERSON: Record<string, string> = {
   проверю: 'Проверить', закажу: 'Заказать', отправлю: 'Отправить', верну: 'Вернуть', начну: 'Начать', разберу: 'Разобрать',
 };
 
+/** Родные в тексте — тоже люди дела, даже если модель их не назвала: «позвонить бабушке» — Бабушка. */
+const KIN: [RegExp, string][] = [
+  [/(?<![а-я])мам(?:а|е|у|ы|ой|очка|очке|очку)(?![а-я])/, 'Мама'],
+  [/(?<![а-я])пап(?:а|е|у|ы|ой|очка|очке)(?![а-я])/, 'Папа'],
+  [/(?<![а-я])бабушк(?:а|е|у|и|ой)(?![а-я])/, 'Бабушка'],
+  [/(?<![а-я])дедушк(?:а|е|у|и|ой)(?![а-я])/, 'Дедушка'],
+  [/(?<![а-я])тещ(?:а|е|у|и|ей)(?![а-я])/, 'Тёща'],
+  [/(?<![а-я])свекров(?:ь|и|ью)(?![а-я])/, 'Свекровь'],
+  [/(?<![а-я])жен(?:а|е|у|ы|ой)(?![а-я])/, 'Жена'],
+  [/(?<![а-я])муж(?:у|а|ем)?(?![а-я])/, 'Муж'],
+  [/(?<![а-я])сын(?:у|а|ом)?(?![а-я])/, 'Сын'],
+  [/(?<![а-я])доч(?:ь|ке|ку|ка|ери|ерью)(?![а-я])/, 'Дочь'],
+  [/(?<![а-я])брат(?:у|а|ом)?(?![а-я])/, 'Брат'],
+  [/(?<![а-я])сестр(?:а|е|у|ы|ой)(?![а-я])/, 'Сестра'],
+  [/(?<![а-я])родител(?:и|ям|ей|ями)(?![а-я])/, 'Родители'],
+];
+
 /** Ближайший день повтора не раньше сегодня: у повтора по дням недели его можно назвать без модели. */
 function nearestRepeatDay(repeat: Repeat, today: ISODate): ISODate | null {
   if (!repeat.days?.length) return null;
@@ -372,6 +396,7 @@ export function parseNoteAnswer(answer: string, input: NoteInput): NoteAnswer | 
   const sourceStems = new Set(words(source).map(stem));
   const today = toISODate(new Date(input.now));
   const drafts: NoteDraft[] = [];
+  const skipped: string[] = [];
   const seen = new Set<string>();
 
   for (const item of list as Record<string, unknown>[]) {
@@ -394,6 +419,13 @@ export function parseNoteAnswer(answer: string, input: NoteInput): NoteAnswer | 
     if (!quoteOk && !titleOk) continue;
     if (title) title = title[0].toUpperCase() + title.slice(1);
     const quote = quoteOk ? rawQuote : '';
+    // Сделанное и чужое модель выписывает с пометкой — дел из них не делаем. «Надо» в цитате сильнее пометки «сделано».
+    const needed = NEED.test(norm(quote)) && !NO_NEED.test(norm(quote));
+    if (type === 'task' && (item.state === 'other' || (item.state === 'done' && !needed))) {
+      if (quote) skipped.push(quote);
+      continue;
+    }
+    if (type === 'task' && !person) person = KIN.find(([re]) => re.test(norm(quote || title)))?.[1] ?? '';
     const hintText = quote || title;
 
     const check: DraftField[] = [];
@@ -430,13 +462,53 @@ export function parseNoteAnswer(answer: string, input: NoteInput): NoteAnswer | 
     const key = `${type}|${titleKey(title)}|${norm(person)}|${date ?? ''}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    const said = norm(quote);
-    const sure = item.sure !== false || (NEED.test(said) && !NO_NEED.test(said) && !DOUBT.test(said));
+    const sure = item.sure !== false || (needed && !DOUBT.test(norm(quote)));
     drafts.push({ type, title, quote, kind, date, time, repeat, person: person || null, note, sure, check, missing });
   }
 
-  const linked = linkGifts(drafts);
-  return { drafts: linked, rest: leftovers(input.text, linked), ...(partial && { partial: true }) };
+  const done = tidyDrafts(input.text, drafts);
+  return { drafts: done, rest: leftovers(input.text, done), skipped, ...(partial && { partial: true }) };
+}
+
+/** Последние правки списка: покупки из одной фразы — одним делом, подарок — имениннику. */
+const tidyDrafts = (text: string, drafts: NoteDraft[]) => linkGifts(mergeShopping(text, drafts));
+
+const BUY = /^купить\s+(.+)$/i;
+
+/**
+ * «Купи хлеб и молоко» модель через раз делит на два дела. Покупки из одной фразы без своих сроков и людей —
+ * одно дело: «Купить хлеб и молоко».
+ */
+function mergeShopping(text: string, drafts: NoteDraft[]): NoteDraft[] {
+  const parts = noteParts(text).map((p) => norm(p));
+  const partOf = (d: NoteDraft) => (d.quote ? parts.findIndex((p) => p.includes(quoteKey(d.quote))) : -1);
+  const plain = (d: NoteDraft) => d.type === 'task' && d.kind === 'due' && !d.repeat && BUY.test(d.title);
+  const out: NoteDraft[] = [];
+  for (const d of drafts) {
+    const prev = out[out.length - 1];
+    const same = prev && plain(prev) && plain(d) && partOf(d) >= 0 && partOf(prev) === partOf(d) && prev.date === d.date && prev.time === d.time && prev.person === d.person;
+    if (!same) {
+      out.push(d);
+      continue;
+    }
+    const items = [prev, d].flatMap((x) => (BUY.exec(x.title)?.[1] ?? '').split(/\s*,\s*|\s+и\s+/)).filter(Boolean);
+    const title = `Купить ${items.length > 1 ? `${items.slice(0, -1).join(', ')} и ${items[items.length - 1]}` : items[0]}`.slice(0, TITLE_MAX);
+    // Цитата — от начала первой покупки до конца последней, как в тексте.
+    const part = noteParts(text)[partOf(d)];
+    const from = quoteRe(quoteKey(prev.quote)).exec(part);
+    const to = quoteRe(quoteKey(d.quote)).exec(part);
+    const quote = from && to && to.index >= from.index ? part.slice(from.index, Math.max(from.index + from[0].length, to.index + to[0].length)) : prev.quote;
+    out[out.length - 1] = {
+      ...prev,
+      title,
+      quote,
+      note: [...new Set([prev.note, d.note].filter(Boolean))].join('; ').slice(0, NOTE_FIELD_MAX),
+      sure: prev.sure && d.sure,
+      check: [...new Set([...prev.check, ...d.check])],
+      missing: [...new Set([...prev.missing, ...d.missing])],
+    };
+  }
+  return out;
 }
 
 const GIFT = /(?<![а-я])(?:подар|поздрав)/;
@@ -516,6 +588,9 @@ function sharedEdge(part: string, quote: string): string | null {
   return null;
 }
 
+/** Слова о времени и связки: сами по себе они не дело. */
+const TIME_WORD = /^(?:потом|затем|еще|также|тоже|это|этой|этот|эта|будет|уже|недел[а-я]*|понедельник[а-я]*|вторник[а-я]*|сред[уаые]|четверг[а-я]*|пятниц[а-я]*|суббот[а-я]*|воскресень[а-я]*|завтра|послезавтра|сегодня|утром|утра|днем|дня|вечером|вечера|ночью|ночи|числа|январ[а-я]*|феврал[а-я]*|март[а-я]*|апрел[а-я]*|ма[яйе]|июн[а-я]*|июл[а-я]*|август[а-я]*|сентябр[а-я]*|октябр[а-я]*|ноябр[а-я]*|декабр[а-я]*)$/;
+
 /** Похоже ли то, что осталось вне цитат, на пропущенное дело. */
 function looksMissed(seg: string, first: boolean, last: boolean, today: ISODate): boolean {
   const said = seg.replace(NO_INTENT, ' ');
@@ -528,9 +603,10 @@ function looksMissed(seg: string, first: boolean, last: boolean, today: ISODate)
   }
   const action = first ? STARTS_WITH_ACTION.exec(seg)?.[1] : undefined;
   if (action && !NOT_ACTION.test(action) && words(seg).length >= 2) return true;
-  // Названное время или день вне цитат — скорее всего, пропущенное событие. Время сообщения в переписке не в счёт.
+  // Названное время или день вне цитат — скорее всего, пропущенное событие. Время сообщения в переписке не в счёт,
+  // обрывок из одних слов о времени («потом в субботу») — тоже.
   const body = seg.replace(/^[^\p{L}\p{N}]*\[?\d{1,2}:\d{2}\]?/u, '');
-  if (words(body).filter((w) => w.length >= 3 && !/^\d+$/.test(w)).length < 2) return false;
+  if (words(body).filter((w) => w.length >= 3 && !/^\d+$/.test(w) && !TIME_WORD.test(w)).length < 2) return false;
   const day = dateFromWords(body, today);
   return !!timeFromWords(body) || (!!day && day !== today);
 }
@@ -540,9 +616,10 @@ function looksMissed(seg: string, first: boolean, last: boolean, today: ISODate)
  * («нужно», «займусь»), строка начата с действия («заказать двери») или названо время или день («кино в 19:30»).
  * Про них стоит спросить ещё раз. Возвращаем только то, что осталось вне цитат: уже найденное не переспрашиваем.
  */
-export function missedIntents(text: string, drafts: NoteDraft[], now: number): string[] {
+export function missedIntents(text: string, drafts: NoteDraft[], now: number, skipped: string[] = []): string[] {
   const today = toISODate(new Date(now));
-  const quotes = drafts.map((d) => quoteKey(d.quote)).filter(Boolean);
+  // Сделанное и чужое модель уже видела и пометила — это тоже «разобрано».
+  const quotes = [...drafts.map((d) => d.quote), ...skipped].map(quoteKey).filter(Boolean);
   const titleStems = drafts.filter((d) => !d.quote).map((d) => words(d.title).map(stem));
   const CUT = '\u0001';
   const missed: string[] = [];
@@ -610,13 +687,13 @@ export type NoteAsk = (input: NoteInput) => Promise<NoteAnswer | null>;
 export async function draftsFromNote(input: NoteInput, ask: NoteAsk): Promise<NoteAnswer | null> {
   const first = await ask(input);
   if (!first) return null;
-  const missed = missedIntents(input.text, first.drafts, input.now);
+  const missed = missedIntents(input.text, first.drafts, input.now, first.skipped);
   if (!missed.length || first.drafts.length >= NOTE_MAX_ITEMS) return first;
   const second = await ask({ text: missed.join('\n'), now: input.now }).catch(() => null);
   const fresh = second?.drafts.filter((d) => !first.drafts.some((t) => sameDraft(t, d))) ?? [];
   if (!fresh.length) return first;
-  const drafts = linkGifts(inTextOrder(input.text, [first.drafts, fresh])).slice(0, NOTE_MAX_ITEMS);
-  return { drafts, rest: leftovers(input.text, drafts), ...((first.partial || second?.partial) && { partial: true }) };
+  const drafts = tidyDrafts(input.text, inTextOrder(input.text, [first.drafts, fresh])).slice(0, NOTE_MAX_ITEMS);
+  return { drafts, rest: leftovers(input.text, drafts), skipped: [...first.skipped, ...(second?.skipped ?? [])], ...((first.partial || second?.partial) && { partial: true }) };
 }
 
 /** Задача «дела из заметки» для модуля ИИ. */
