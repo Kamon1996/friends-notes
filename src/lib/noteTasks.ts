@@ -224,9 +224,9 @@ export const NOTE_RULES = [
   '   Привычка или то, что человек делает регулярно («пью витамины», «хожу в зал»), — тоже дело с kind "repeat". Не сказано, как часто, — repeat null: человек укажет сам.',
   '8. person — имя человека, с которым связано дело, в именительном падеже: «Ане» — «Аня», «маме» — «Мама». Подарок или поздравление к чьему-то дню рождения — person этот человек, даже если имя названо в соседней фразе. Нет человека — null.',
   '9. note — детали из текста: адрес, сумма, список, телефон, ссылка. Нет — "".',
-  '10. sure — false, только если человек сам не решил, делать ли: мысль, вопрос, «может быть», «думаю», «было бы неплохо». «Нужно, но всё откладываю», «собираюсь, ещё не дошёл» — sure true: дело есть. Сомневаешься, дело ли это, — возьми с sure false: человек решит сам.',
+  '10. sure — false, только если человек сам не решил, делать ли: мысль, вопрос, «может быть», «думаю», «было бы неплохо». «Нужно, но всё откладываю», «собираюсь, ещё не дошёл» — sure true: дело есть. Мысль о деле на потом («думаю, ещё доберусь до ремонта») тоже бери: sure false, название по предмету — «Заняться ремонтом». Сомневаешься, дело ли это, — возьми с sure false: человек решит сам.',
   '11. type: "task" — дело; "birthday" — день рождения человека («ДР у Кати 14 февраля»): person — чей, date — ближайший такой день, title ""; "date" — годовщина или другая ежегодная дата человека: title — что за дата. Для них kind "due", repeat null.',
-  '12. Не бери: уже сделанное — отметки («✓», «[x]») и прошедшее время («купил», «сходила к окулисту», «выбирали обои»); чужие дела; факты без действия; время отправки сообщений в переписке.',
+  '12. Не бери: уже сделанное — отметки («✓», «[x]») и прошедшее время («купил», «сходила к окулисту», «выбирали обои»); чужие дела; факты без действия; время отправки сообщений в переписке. Сделана только подготовка («в пятницу в 9 приём у нотариуса, документы уже собрал») — само событие бери.',
   `13. Не больше ${NOTE_MAX_ITEMS} дел. Дел нет — {"items":[]}.`,
   '',
   'Ответ — только JSON без пояснений, в том же порядке, что в тексте.',
@@ -297,6 +297,19 @@ function inventedWords(title: string, sourceStems: Set<string>): string[] {
 /** «Дойти до этого», «Встретиться у меня» — по такому названию через неделю не понять, о чём оно. */
 const VAGUE_TITLE = /(?<![а-я])(?:это|этого|этому|этим|этом|эту|эти|этих|того|туда|там|него|нее|ней|них|меня|мне|нас|нам)(?![а-я])/;
 const GENERIC_NOUNS = new Set(['встреча', 'созвон', 'звонок', 'визит', 'прием', 'поездка', 'покупки', 'оплата', 'запись', 'подарок', 'поздравление', 'день', 'рождения'].map(stem));
+
+/** День рождения — только если в тексте он так и назван: «8 марта купить маме тюльпаны» — не день рождения мамы. */
+const BIRTHDAY = /(?<![а-я])(?:др(?![а-я])|д\.\s?р\.?|д\/р|(?:день|дня|дню|днем|дне) рождени|днюх|родил(?:ся|ась|ись)|юбиле|именин|исполня)/;
+/** «Нужно», «надо» без сомнений рядом — человек решил, что дело есть, что бы ни ответила модель. */
+const NEED = /(?<![а-я])(?:нужно|нужен|нужна|нужны|надо|необходимо|обязательно)(?![а-я])/;
+const NO_NEED = /(?<![а-я])не\s+(?:нужно|нужен|нужна|нужны|надо|обязательно)(?![а-я])/;
+const DOUBT = /(?<![а-я])(?:может|наверное|возможно|думаю|вдруг|бы|ли)(?![а-я])|\?/;
+/** «Займусь лицом» — дело называем действием: «Заняться лицом». */
+const FIRST_PERSON: Record<string, string> = {
+  займусь: 'Заняться', запишусь: 'Записаться', схожу: 'Сходить', съезжу: 'Съездить', куплю: 'Купить', позвоню: 'Позвонить', напишу: 'Написать',
+  сделаю: 'Сделать', дойду: 'Дойти', пройду: 'Пройти', сдам: 'Сдать', заберу: 'Забрать', оплачу: 'Оплатить', отвезу: 'Отвезти', отнесу: 'Отнести',
+  проверю: 'Проверить', закажу: 'Заказать', отправлю: 'Отправить', верну: 'Вернуть', начну: 'Начать', разберу: 'Разобрать',
+};
 
 /** Ближайший день повтора не раньше сегодня: у повтора по дням недели его можно назвать без модели. */
 function nearestRepeatDay(repeat: Repeat, today: ISODate): ISODate | null {
@@ -371,8 +384,11 @@ export function parseNoteAnswer(answer: string, input: NoteInput): NoteAnswer | 
     let person = typeof item.person === 'string' ? item.person.trim().replace(/\s+/g, ' ').slice(0, 40) : '';
     // Человек — только тот, кто есть в тексте (по началу имени).
     if (person && !sourceNorm.includes(norm(person).slice(0, Math.max(2, norm(person).length - 2)))) person = '';
-    if (type === 'birthday') title = '';
-    else if (!title) continue;
+    if (type === 'birthday') {
+      if (!BIRTHDAY.test(quoteOk ? norm(rawQuote) : sourceNorm)) continue;
+      title = '';
+    } else if (!title) continue;
+    title = title.replace(/^[а-яё]+/i, (w) => FIRST_PERSON[norm(w)] ?? w);
     // Дело должно опираться на текст: цитатой или хотя бы словами названия.
     const titleOk = type === 'birthday' ? !!person : grounded(title, sourceStems, 0.5);
     if (!quoteOk && !titleOk) continue;
@@ -414,7 +430,9 @@ export function parseNoteAnswer(answer: string, input: NoteInput): NoteAnswer | 
     const key = `${type}|${titleKey(title)}|${norm(person)}|${date ?? ''}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    drafts.push({ type, title, quote, kind, date, time, repeat, person: person || null, note, sure: item.sure !== false, check, missing });
+    const said = norm(quote);
+    const sure = item.sure !== false || (NEED.test(said) && !NO_NEED.test(said) && !DOUBT.test(said));
+    drafts.push({ type, title, quote, kind, date, time, repeat, person: person || null, note, sure, check, missing });
   }
 
   const linked = linkGifts(drafts);
@@ -453,7 +471,7 @@ const noteParts = (text: string) =>
     .map((p) => p.trim())
     .filter((p) => words(p).length > 0);
 /** Кусок без маркера списка в начале. */
-const bare = (part: string) => norm(part).replace(/^[-•*–—\d.)\s]+/, '');
+const bare = (part: string) => norm(part).replace(/^(?:[^\p{L}\p{N}]+|\d{1,3}[.)]\s+)+/u, '');
 
 function leftoverParts(text: string, drafts: NoteDraft[]): string[] {
   const quotes = drafts.map((d) => quoteKey(d.quote)).filter(Boolean);
@@ -486,36 +504,69 @@ const NOT_ACTION = /^(?:мать|часть|память|ночь|дочь|ре�
 /** Отметка «сделано» в строке: такое мы не взяли нарочно. */
 const DONE_MARK = /[✓✔✅☑]|\[[xх]\]/i;
 
+/** Цитата как образец для поиска в исходном тексте: без учёта регистра, «ё» и числа пробелов. */
+const quoteRe = (key: string) => new RegExp(key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/е/g, '[её]').replace(/ /g, '\\s+'), 'giu');
+
+/** Цитата началась в этом куске, а кончилась в следующем (или наоборот) — общий край. */
+function sharedEdge(part: string, quote: string): string | null {
+  for (let k = Math.min(part.length, quote.length) - 1; k >= 8; k--) {
+    if (part.endsWith(quote.slice(0, k))) return quote.slice(0, k).trim();
+    if (part.startsWith(quote.slice(-k))) return quote.slice(-k).trim();
+  }
+  return null;
+}
+
+/** Похоже ли то, что осталось вне цитат, на пропущенное дело. */
+function looksMissed(seg: string, first: boolean, last: boolean, today: ISODate): boolean {
+  const said = seg.replace(NO_INTENT, ' ');
+  const m = INTENT.exec(said);
+  if (m) {
+    // После слова намерения должно быть само дело: два слова, а в конце куска хватит и одного («не забыть торт»).
+    // «Надо успеть» прямо перед цитатой — начало уже найденного дела.
+    const after = words(said.slice(m.index + m[0].length)).filter((w) => w.length >= 3).length;
+    if (after >= 2 || (after === 1 && last)) return true;
+  }
+  const action = first ? STARTS_WITH_ACTION.exec(seg)?.[1] : undefined;
+  if (action && !NOT_ACTION.test(action) && words(seg).length >= 2) return true;
+  // Названное время или день вне цитат — скорее всего, пропущенное событие. Время сообщения в переписке не в счёт.
+  const body = seg.replace(/^[^\p{L}\p{N}]*\[?\d{1,2}:\d{2}\]?/u, '');
+  if (words(body).filter((w) => w.length >= 3 && !/^\d+$/.test(w)).length < 2) return false;
+  const day = dateFromWords(body, today);
+  return !!timeFromWords(body) || (!!day && day !== today);
+}
+
 /**
  * Куски заметки, где дело, судя по словам, есть, а черновика из него не вышло: вне цитат осталось слово намерения
- * («нужно», «займусь») или кусок начат с действия («заказать двери»). Про них стоит спросить ещё раз.
- * «Надо успеть» прямо перед цитатой — не пропуск: это начало уже найденного дела.
+ * («нужно», «займусь»), строка начата с действия («заказать двери») или названо время или день («кино в 19:30»).
+ * Про них стоит спросить ещё раз. Возвращаем только то, что осталось вне цитат: уже найденное не переспрашиваем.
  */
-export function missedIntents(text: string, drafts: NoteDraft[]): string[] {
+export function missedIntents(text: string, drafts: NoteDraft[], now: number): string[] {
+  const today = toISODate(new Date(now));
   const quotes = drafts.map((d) => quoteKey(d.quote)).filter(Boolean);
   const titleStems = drafts.filter((d) => !d.quote).map((d) => words(d.title).map(stem));
   const CUT = '\u0001';
-  return noteParts(text).filter((part) => {
-    if (DONE_MARK.test(part)) return false;
+  const missed: string[] = [];
+  for (const part of noteParts(text)) {
+    if (DONE_MARK.test(part)) continue;
     const n = bare(part);
-    if (!n || quotes.some((q) => q.includes(n))) return false;
+    if (!n || quotes.some((q) => q.includes(n))) continue;
     const stems = new Set(words(part).map(stem));
-    if (titleStems.some((ts) => ts.length && ts.every((s) => stems.has(s)))) return false;
-    let marked = n;
-    for (const q of quotes) marked = marked.split(q).join(CUT);
-    const free = marked.split(CUT);
-    return free.some((seg, i) => {
-      const said = seg.replace(NO_INTENT, ' ');
-      const m = INTENT.exec(said);
-      if (m) {
-        // После слова намерения должно быть само дело: два слова, а в конце куска хватит и одного («не забыть торт»).
-        const after = words(said.slice(m.index + m[0].length)).filter((w) => w.length >= 3).length;
-        if (after >= 2 || (after === 1 && i === free.length - 1)) return true;
-      }
-      const action = i === 0 ? STARTS_WITH_ACTION.exec(seg)?.[1] : undefined;
-      return !!action && !NOT_ACTION.test(action) && words(seg).length >= 2;
-    });
-  });
+    if (titleStems.some((ts) => ts.length && ts.every((s) => stems.has(s)))) continue;
+    let rest = part;
+    for (const q of quotes) {
+      const piece = n.includes(q) ? q : sharedEdge(n, q);
+      if (piece) rest = rest.replace(quoteRe(piece), CUT);
+    }
+    const free = rest.split(CUT);
+    if (!free.some((seg, i) => looksMissed(norm(seg), i === 0, i === free.length - 1, today))) continue;
+    missed.push(
+      free
+        .map((seg) => seg.replace(/^[\s,;.!?—–-]+|[\s,;—–-]+$/g, ''))
+        .filter((seg) => words(seg).length > 0)
+        .join(' … '),
+    );
+  }
+  return missed;
 }
 
 /** То же дело, что уже есть: такое же название или цитата из того же места. */
@@ -552,14 +603,14 @@ function inTextOrder(text: string, lists: NoteDraft[][]): NoteDraft[] {
 export type NoteAsk = (input: NoteInput) => Promise<NoteAnswer | null>;
 
 /**
- * Разбор заметки в два взгляда. Первый — вся заметка. Если после него остались куски со словами намерения, из которых
- * дело не вышло, — второй вопрос только про них: в коротком тексте модель дел не теряет. Найденное вторым взглядом
+ * Разбор заметки в два взгляда. Первый — вся заметка. Если после него остались куски, похожие на пропущенное дело
+ * (`missedIntents`), — второй вопрос только про них: в коротком тексте модель дел не теряет. Найденное вторым взглядом
  * встаёт на своё место по тексту. Второй вопрос не удался — остаётся ответ первого.
  */
 export async function draftsFromNote(input: NoteInput, ask: NoteAsk): Promise<NoteAnswer | null> {
   const first = await ask(input);
   if (!first) return null;
-  const missed = missedIntents(input.text, first.drafts);
+  const missed = missedIntents(input.text, first.drafts, input.now);
   if (!missed.length || first.drafts.length >= NOTE_MAX_ITEMS) return first;
   const second = await ask({ text: missed.join('\n'), now: input.now }).catch(() => null);
   const fresh = second?.drafts.filter((d) => !first.drafts.some((t) => sameDraft(t, d))) ?? [];

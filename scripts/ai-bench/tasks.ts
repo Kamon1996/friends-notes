@@ -21,7 +21,7 @@ import type { Repeat } from '../../src/lib/types';
 const NOW = new Date(2026, 10, 11, 14, 30).getTime();
 
 interface Want {
-  /** Любое из этих слов должно быть в названии; для дня рождения и даты без названия — ищем по типу и человеку. */
+  /** Любое из этих слов должно быть в названии (' то ' — отдельным словом); для дня рождения и даты без названия — ищем по типу и человеку. */
   keys?: string[];
   type?: DraftType[];
   /** Поля проверяются, только если названы. */
@@ -63,7 +63,7 @@ const CASES: Case[] = [
     name: 'относительные и размытые сроки',
     text: 'через неделю ТО машины. на выходных разобрать балкон, как-нибудь позвонить Диме. послезавтра в 10 утра созвон с заказчиком',
     want: [
-      { keys: ['машин', 'техосмотр'], date: '2026-11-18' },
+      { keys: ['машин', 'техосмотр', ' то '], date: '2026-11-18' },
       { keys: ['балкон'] },
       { keys: ['позвонить'], person: 'Дима', date: null },
       { keys: ['созвон'], date: '2026-11-13', time: '10:00' },
@@ -301,7 +301,7 @@ function score(c: Case, a: NoteAnswer): CaseScore {
       (x) =>
         !used.has(x) &&
         (!w.type || w.type.includes(x.type)) &&
-        (w.keys ? w.keys.some((k) => low(x.title).includes(low(k)) || (!x.title && low(x.quote).includes(low(k)))) : low(x.person ?? '').startsWith(low(w.person ?? '').slice(0, 3))),
+        (w.keys ? w.keys.some((k) => ` ${low(x.title)} `.includes(low(k)) || (!x.title && low(x.quote).includes(low(k)))) : low(x.person ?? '').startsWith(low(w.person ?? '').slice(0, 3))),
     );
     if (!d) {
       if (!w.optional) s.problems.push(`нет «${label}»`);
@@ -378,9 +378,11 @@ async function ask(provider: ProviderId, model: string, input: NoteInput): Promi
 /** Заметка целиком, как в приложении: первый вопрос и, если нужно, второй взгляд. */
 async function solve(provider: ProviderId, model: string, c: Case) {
   const asks: Awaited<ReturnType<typeof ask>>[] = [];
+  const texts: string[] = [];
   const answer = await draftsFromNote({ text: c.text, now: NOW }, async (input) => {
     const r = await ask(provider, model, input);
     asks.push(r);
+    texts.push(input.text);
     // Бесплатные тарифы считают запросы в минуту: не частим.
     await sleep(provider === 'gemini' ? 4500 : 3500);
     return r.answer ?? null;
@@ -388,7 +390,7 @@ async function solve(provider: ProviderId, model: string, c: Case) {
   const first = asks[0]?.answer;
   // Что добавил второй взгляд: дела, которых не было в первом ответе.
   const added = answer && first && asks.length > 1 ? answer.drafts.filter((d) => !first.drafts.some((f) => f.title === d.title && f.quote === d.quote)) : [];
-  return { answer, ms: asks.reduce((n, a) => n + a.ms, 0), second: asks.length > 1, added, error: asks[0]?.error, raw: asks[0]?.raw };
+  return { answer, ms: asks.reduce((n, a) => n + a.ms, 0), second: asks.length > 1, asked: texts[1] ?? '', added, error: asks[0]?.error, raw: asks[0]?.raw };
 }
 
 (async () => {
@@ -429,7 +431,7 @@ async function solve(provider: ProviderId, model: string, c: Case) {
       ms += r.ms;
       if (r.second) seconds++;
       secondAdded += r.added.length;
-      const second = r.second ? ` · второй взгляд: ${r.added.length ? `+ ${r.added.map((d) => `«${d.title || d.person}»`).join(', ')}` : 'ничего не добавил'}` : '';
+      const second = r.second ? ` · второй взгляд (${r.asked.replace(/\n/g, ' ⏎ ').slice(0, 160)}): ${r.added.length ? `+ ${r.added.map((d) => `«${d.title || d.person}»`).join(', ')}` : 'ничего не добавил'}` : '';
       if (!r.answer) {
         fails++;
         console.log(`  ✗ ${c.name}: ${r.error}${r.raw ? ` · RAW ${r.raw.replace(/\n/g, ' ').slice(0, 300)}` : ''}`);
