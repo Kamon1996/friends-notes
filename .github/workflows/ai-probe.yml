@@ -65,5 +65,7 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           PROBE_OPENROUTER: ${{ contains(github.event.head_commit.message, '[probe-tasks-all]') && '3' || '0' }}
           PROBE_GEMINI: ${{ contains(github.event.head_commit.message, '[probe-tasks-all]') && 'all' || 'lite' }}
+          # Лёгкие модели спрашиваем дважды: результат должен быть устойчивым, а не удачным.
+          PROBE_REPEAT: ${{ contains(github.event.head_commit.message, '[probe-tasks-all]') && '1' || '2' }}
           TZ: Europe/Moscow
         run: npx tsx scripts/ai-bench/tasks.ts

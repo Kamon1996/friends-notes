@@ -30,6 +30,10 @@ interface Want {
   repeat?: Repeat;
   person?: string | null;
   noteHas?: string;
+  /** Название — только словами заметки (плюс глагол действия): выдуманных уточнений быть не должно. */
+  plainTitle?: boolean;
+  /** Уверена ли модель, что это дело: «нужно, но откладываю» — да, «может, съездить» — нет. */
+  sure?: boolean;
   /** Находка допустима, но не обязательна: нет — не ошибка, есть — не лишнее. */
   optional?: boolean;
 }
@@ -96,7 +100,7 @@ const CASES: Case[] = [
   {
     name: 'мысли, вопросы, условия',
     text: 'может, съездить в Питер на новый год? если будет дождь — взять зонт. надо наконец разобрать почту. интересно, сколько стоит абонемент в бассейн',
-    want: [{ keys: ['почт'], date: null }],
+    want: [{ keys: ['почт'], date: null, sure: true }],
     no: ['питер', 'абонемент'],
   },
   {
@@ -189,13 +193,13 @@ const CASES: Case[] = [
       { keys: ['анализ'], date: null },
       { keys: ['прививк'], date: null },
       { keys: ['массаж'], date: null },
-      { keys: ['склеротерап'], date: null },
+      { keys: ['склеротерап'], date: null, sure: true },
       { keys: ['лиц'], date: null },
-      { keys: ['родинк'], date: null },
-      { keys: ['гинеколог'], kind: 'repeat', repeat: { every: 1, unit: 'year' }, date: null },
-      { keys: ['сердц'], kind: 'repeat', repeat: { every: 1, unit: 'year' }, date: null },
+      { keys: ['родинк'], date: null, sure: true },
+      { keys: ['гинеколог'], kind: 'repeat', repeat: { every: 1, unit: 'year' }, date: null, plainTitle: true },
+      { keys: ['сердц'], kind: 'repeat', repeat: { every: 1, unit: 'year' }, date: null, plainTitle: true },
       // «Думаю, я ещё дойду до этого» — мысль, но берём: человек быстро отметит ненужное.
-      { keys: ['чекап'], date: null },
+      { keys: ['чекап'], date: null, sure: false },
     ],
     // Уже сделанное делом быть не должно. Компрессионные чулки допустимы и отдельным делом, и в заметке к склеротерапии.
     no: ['рентген', 'ээг', 'вен ног', 'уход'],
@@ -206,6 +210,8 @@ const env = process.env;
 const keys: Partial<Record<ProviderId, string>> = { gemini: env.GEMINI_API_KEY || undefined, openrouter: env.OPENROUTER_API_KEY || undefined };
 const maxOpenRouter = env.PROBE_OPENROUTER === undefined || env.PROBE_OPENROUTER === '' ? 3 : Number(env.PROBE_OPENROUTER) || 0;
 const only = env.PROBE_CASES ? env.PROBE_CASES.split(',').map(Number) : null;
+// Сколько раз спросить про каждую заметку: модель не обязана отвечать одинаково, а нам нужен устойчивый результат.
+const repeats = Math.max(1, Number(env.PROBE_REPEAT) || 1);
 
 const low = (s: string) => s.toLowerCase().replace(/ё/g, 'е');
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -254,6 +260,8 @@ function score(c: Case, a: NoteAnswer): CaseScore {
     if (w.repeat) check('повтор', sameRepeat(d.repeat, w.repeat), d.repeat);
     if ('person' in w) check('человек', w.person === null ? d.person === null : low(d.person ?? '').startsWith(low(w.person ?? '').slice(0, 3)), d.person);
     if (w.noteHas) check('заметка', low(`${d.note} ${d.quote}`).includes(low(w.noteHas)), d.note);
+    if (w.sure !== undefined) check('уверенность', d.sure === w.sure, d.sure);
+    if (w.plainTitle) check('название без выдумки', !d.check.includes('title'), d.title);
   }
   for (const d of a.drafts) {
     if (c.noTime?.includes(d.time ?? '')) s.problems.push(`время сообщения стало сроком: «${d.title}» ${d.time}`);
@@ -314,10 +322,11 @@ async function ask(provider: ProviderId, model: string, c: Case): Promise<{ ms: 
       models.push(['openrouter', m.model]);
     }
   }
-  const cases = CASES.filter((_, i) => !only || only.includes(i));
+  const picked = CASES.filter((_, i) => !only || only.includes(i));
+  const cases = Array.from({ length: repeats }, (_, k) => picked.map((c) => (repeats > 1 ? { ...c, name: `${c.name} · прогон ${k + 1}` } : c))).flat();
   const wants = cases.reduce((n, c) => n + c.want.filter((w) => !w.optional).length, 0);
   const lines = [
-    `Заметок: ${cases.length}, ожидаемых находок: ${wants}. Сегодня в наборе — среда, 11 ноября 2026. Считается то, что получилось после проверок приложения.`,
+    `Заметок: ${picked.length}${repeats > 1 ? `, каждая по ${repeats} раза` : ''}, ожидаемых находок: ${wants}. Сегодня в наборе — среда, 11 ноября 2026. Считается то, что получилось после проверок приложения.`,
     '«Заметки целиком» — заметки без единой ошибки; «Лишнее» — уверенные дела, которых быть не должно.',
     '',
   ];

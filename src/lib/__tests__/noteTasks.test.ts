@@ -135,6 +135,15 @@ describe('ответ', () => {
     assert.equal(got?.drafts.length, 1);
     assert.deepEqual([got?.drafts[0].person, got?.drafts[0].date, got?.drafts[0].time, got?.drafts[0].note], [null, null, null, '']);
   });
+  test('слово в названии не из текста — пометка «проверь название»; глагол действия добавить можно', () => {
+    const got = parse('гинеколог - раз в год мастхев. нужен курс массажа', [
+      item({ title: 'Мазок у гинеколога', quote: 'гинеколог - раз в год', kind: 'repeat', repeat: { every: 1, unit: 'year' } }),
+      item({ title: 'Записаться на массаж', quote: 'нужен курс массажа' }),
+    ]);
+    assert.deepEqual(got?.drafts.map((d) => d.check), [['title'], []]);
+    const meet = parse('Аня: давай в субботу в 5 вечера у меня', [item({ title: 'Встреча у Ани', quote: 'давай в субботу в 5 вечера у меня', kind: 'at', person: 'Аня' })]);
+    assert.deepEqual(meet?.drafts[0].check, [], '«встреча» — обычное слово для такого дела, а не выдумка');
+  });
   test('цитаты нет, но название из слов текста — берём без цитаты', () => {
     const got = parse('надо бы записаться к стоматологу', [item({ title: 'Записаться к стоматологу', quote: 'запишись к зубному' })]);
     assert.deepEqual([got?.drafts[0].title, got?.drafts[0].quote], ['Записаться к стоматологу', '']);
