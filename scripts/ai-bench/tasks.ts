@@ -3,7 +3,8 @@
  * Проба задачи «из заметки — в дела» (src/lib/noteTasks.ts) на настоящих моделях: тот же вопрос, что в приложении,
  * на наборе трудных заметок. Одна заметка — один вопрос, как в приложении. Для каждой модели — что получилось после
  * проверок приложения, сравнение с ожидаемым и время. Итог — таблицей в сводке запуска (GITHUB_STEP_SUMMARY).
- * Запуск — workflow «AI probe», коммит со словом «[probe-tasks]» в первой строке или вручную; ключи — секреты сборки.
+ * Запуск — workflow «AI probe»: коммит со словом «[probe-tasks]» в первой строке (только Gemini — так можно пробовать
+ * много раз в день) или «[probe-tasks-all]» (ещё три модели OpenRouter: у него 50 запросов в день); ключи — секреты сборки.
  * Локально: GEMINI_API_KEY=… OPENROUTER_API_KEY=… npx tsx scripts/ai-bench/tasks.ts
  */
 import fs from 'node:fs';
@@ -158,7 +159,7 @@ const CASES: Case[] = [
 
 const env = process.env;
 const keys: Partial<Record<ProviderId, string>> = { gemini: env.GEMINI_API_KEY || undefined, openrouter: env.OPENROUTER_API_KEY || undefined };
-const maxOpenRouter = Number(env.PROBE_OPENROUTER) || 3;
+const maxOpenRouter = env.PROBE_OPENROUTER === undefined || env.PROBE_OPENROUTER === '' ? 3 : Number(env.PROBE_OPENROUTER) || 0;
 const only = env.PROBE_CASES ? env.PROBE_CASES.split(',').map(Number) : null;
 
 const low = (s: string) => s.toLowerCase().replace(/ё/g, 'е');
