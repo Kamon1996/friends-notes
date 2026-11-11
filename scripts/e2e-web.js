@@ -1896,7 +1896,7 @@ function helpers(page, dialogs) {
     }
     return parts.join(' ').replace(/\s+/g, ' ');
   });
-  const labels = () => page.evaluate(() => [...document.querySelectorAll('[aria-label]')].filter((e) => !e.closest('[aria-hidden="true"]') && e.getBoundingClientRect().width > 0).map((e) => e.getAttribute('aria-label')).join(' | '));
+  const labels = () => page.evaluate(() => [...document.querySelectorAll('[aria-label]')].filter((e) => !e.closest('[aria-hidden="true"]') && e.getBoundingClientRect().width > 0).map((e) => e.getAttribute('aria-label')).join(' | ').replace(/\u00a0/g, ' '));
   const until = async (check, ms, onFail) => {
     const end = Date.now() + ms;
     for (;;) {

@@ -324,7 +324,8 @@ export default function ImportScreen() {
 function ContactRow({ candidate: c, checked, onToggle }: { candidate: ImportCandidate; checked: boolean; onToggle: () => void }) {
   const { s: styles, colors } = useTheme();
   const dup = !!c.duplicateOf;
-  const details = [c.birthday && `ДР ${formatDateCompact(c.birthday, hasYear(c.birthday))}`, ...c.dates.map((d) => d.title)].filter(Boolean);
+  // Неразрывные пробелы: на узкой строке дата переносится целиком, а не рвётся посреди («ДР 12 / апр 1997»).
+  const details = [c.birthday && `ДР ${formatDateCompact(c.birthday, hasYear(c.birthday))}`.replace(/ /g, '\u00A0'), ...c.dates.map((d) => d.title)].filter(Boolean);
   const messengers = [c.links.telegramId && 'send', c.links.whatsapp && 'bubble', c.links.viber && 'bubble2'].filter(Boolean) as ('send' | 'bubble' | 'bubble2')[];
 
   return (

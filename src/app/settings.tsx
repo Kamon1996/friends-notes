@@ -420,7 +420,7 @@ export default function SettingsScreen() {
           <ListRow leading={<IconCircle icon="send" />} title="Сообщить о проблеме" subtitle="Написать разработчику в Telegram" chevron onPress={() => router.push('/diagnostics')} />
         </Group>
         <Card style={{ paddingVertical: 4 }}>
-          <SwitchRow icon="warning" label="Отправлять отчёты о сбоях" sub="Автоматически, через Sentry: стек ошибки, версия и модель телефона. Без имён, номеров и заметок." value={settings.crashReports} onChange={(v) => updateSettings({ crashReports: v })} />
+          <SwitchRow icon="warning" label={'Отправлять отчёты о\u00A0сбоях'} sub="Автоматически, через Sentry: стек ошибки, версия и модель телефона. Без имён, номеров и заметок." value={settings.crashReports} onChange={(v) => updateSettings({ crashReports: v })} />
         </Card>
       </View>
 

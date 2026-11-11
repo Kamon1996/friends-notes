@@ -43,7 +43,7 @@ const FRIENDS = [
     notes: 'Любит походы и настолки. Дочку зовут Соня',
     dates: [{ id: 'd1', title: 'Годовщина свадьбы', date: `2019-${d(16).slice(5)}`, yearly: true }],
     socials: [
-      { id: 's1', network: 'instagram', url: 'https://instagram.com/anya.smirnova', handle: 'anya.smirnova', source: 'manual' },
+      { id: 's1', network: 'vk', url: 'https://vk.com/anya.smirnova', handle: 'anya.smirnova', source: 'manual' },
       { id: 's2', network: 'telegram', url: 'https://t.me/anya_smirnova', handle: 'anya_smirnova', source: 'manual' },
     ],
   }),
