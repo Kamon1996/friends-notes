@@ -39,7 +39,7 @@ const R = (o) => ({ note: '', friendId: null, time: '10:00', repeat: null, advan
 const FRIENDS = [
   F({
     id: 'anya', name: 'Аня Смирнова', gender: 'f', favorite: true, birthday: bday(0, 1995), phone: '+7 916 204-18-36', telegramId: 111, whatsapp: '79162041836',
-    food: 'Суши и тирамису. Не ест острое', flowers: 'Пионы и белые розы', gifts: 'Керамика ручной работы, билеты в театр, настольные игры',
+    food: 'Суши и тирамису. Не ест острое', flowers: 'Пионы и белые розы', gifts: 'Керамика, билеты в театр',
     notes: 'Любит походы и настолки. Дочку зовут Соня',
     dates: [{ id: 'd1', title: 'Годовщина свадьбы', date: `2019-${d(16).slice(5)}`, yearly: true }],
     socials: [
@@ -81,7 +81,7 @@ const seed = (settings = {}) => ({ version: 1, settings: { ...SETTINGS, ...setti
 const SHOTS = [
   {
     name: '01-birthdays', url: '/friends', tone: 'brand',
-    title: 'Дни рождения близких —\nвсегда вовремя', sub: 'Кто именинник сегодня и кто на подходе',
+    title: 'Дни рождения близких\nвсегда под рукой', sub: 'Кто празднует сегодня и на этой неделе',
     act: async (p) => { await p.getByText('Скоро день рождения', { exact: true }).click(); },
   },
   {
@@ -97,15 +97,28 @@ const SHOTS = [
     title: 'Напоминания\nо важных делах', sub: 'Срок, важность, повтор по дням недели',
   },
   {
-    name: '05-form', url: '/reminder/edit?id=r5', tone: 'brand',
+    // Импорт — сразу после главного: снимает вопрос «неужели всех вводить руками».
+    name: '05-import', url: '/import', tone: 'brand',
+    title: 'Импорт из контактов\nза минуту', sub: 'С днями рождения и фото. Из Telegram — тоже',
+  },
+  {
+    name: '06-advance', url: '/reminder/edit?id=r5', tone: 'cream',
     title: 'Напомнит заранее:\nза день и за два часа', sub: 'Разовые дела, встречи и повторы',
   },
   {
-    name: '06-import', url: '/import', tone: 'cream',
-    title: 'Импорт из контактов\nи Telegram', sub: 'Имена, дни рождения и фото — за минуту',
+    name: '07-dark', url: '/appearance', tone: 'dark', settings: { theme: 'dark' },
+    title: 'Тёмная тема\nи шесть цветов', sub: 'Оформление на свой вкус',
+    // Чуть вниз: в кадре и живой пример, и выбор темы, и все шесть цветов.
+    act: async (p) => {
+      await p.getByText('Цвет светлой темы', { exact: true }).evaluate((el) => {
+        for (let n = el.parentElement; n; n = n.parentElement) {
+          if (n.scrollHeight > n.clientHeight + 40 && getComputedStyle(n).overflowY !== 'visible') { n.scrollTop = 150; break; }
+        }
+      });
+    },
   },
   {
-    name: '07-private', url: '/settings', tone: 'cream',
+    name: '08-private', url: '/settings', tone: 'cream',
     title: 'Без регистрации\nи рекламы', sub: 'Записи хранятся на телефоне, копия — в файл',
     // «Резервная копия» — к самому верху экрана: остальные настройки к подписи не относятся. Экран короткий и так
     // высоко не прокручивается, поэтому под содержимое подкладываем пустое место (в кадр оно не попадает).
@@ -118,18 +131,6 @@ const SHOTS = [
         spacer.style.cssText = 'height:400px;flex-shrink:0';
         (box.firstElementChild || box).appendChild(spacer);
         box.scrollTop += el.getBoundingClientRect().top - box.getBoundingClientRect().top - 28;
-      });
-    },
-  },
-  {
-    name: '08-dark', url: '/appearance', tone: 'dark', settings: { theme: 'dark' },
-    title: 'Тёмная тема\nи шесть цветов', sub: 'Оформление на свой вкус',
-    // Чуть вниз: в кадре и живой пример, и выбор темы, и все шесть цветов.
-    act: async (p) => {
-      await p.getByText('Цвет светлой темы', { exact: true }).evaluate((el) => {
-        for (let n = el.parentElement; n; n = n.parentElement) {
-          if (n.scrollHeight > n.clientHeight + 40 && getComputedStyle(n).overflowY !== 'visible') { n.scrollTop = 150; break; }
-        }
       });
     },
   },
@@ -190,7 +191,7 @@ const TONES = {
 };
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
 
-function frameHtml(shot, rawFile) {
+function frameHtml(shot, rawFile, size) {
   const t = TONES[shot.tone];
   const img = `data:image/png;base64,${fs.readFileSync(rawFile).toString('base64')}`;
   // Телефон шире кадра не делаем: 820 px экрана + рамка. Он уходит за нижний край — так интерфейс крупнее и читается в ленте магазина.
@@ -201,8 +202,8 @@ function frameHtml(shot, rawFile) {
     html, body { width: 1080px; height: 1920px; overflow: hidden; }
     body { background: ${t.bg}; position: relative; }
     header { position: absolute; left: 0; right: 0; top: 0; height: 436px; padding: 34px 60px 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 26px; }
-    h1 { font: 600 84px/1.12 Lora, serif; letter-spacing: -1px; color: ${t.title}; white-space: pre; text-align: center; }
-    p { font: 500 37px/1.3 Golos, sans-serif; color: ${t.sub}; white-space: nowrap; text-align: center; }
+    h1 { font: 600 ${size.title}px/1.12 Lora, serif; letter-spacing: -1px; color: ${t.title}; white-space: pre; text-align: center; }
+    p { font: 500 ${size.sub}px/1.3 Golos, sans-serif; color: ${t.sub}; white-space: nowrap; text-align: center; }
     .phone { position: absolute; left: 50%; top: 436px; width: 856px; margin-left: -428px; padding: 18px; border-radius: 84px; background: ${t.bezel}; box-shadow: 0 40px 90px ${t.glow}, inset 0 0 0 2px rgba(255,255,255,0.08); }
     .phone img { display: block; width: 820px; border-radius: 66px; }
   </style></head><body>
@@ -211,27 +212,46 @@ function frameHtml(shot, rawFile) {
   </body></html>`;
 }
 
+/**
+ * Размер подписей — один на весь набор: самую длинную строку вписываем в поля кадра, и под неё равняются остальные.
+ * Иначе заголовки соседних кадров выходят разной величины, и лента смотрится неряшливо.
+ */
+async function captionSize(browser) {
+  const ctx = await browser.newContext({ viewport: { width: 1080, height: 1920 } });
+  const page = await ctx.newPage();
+  const lines = (key) => SHOTS.flatMap((x) => x[key].split('\n'));
+  await page.setContent(`<!doctype html><meta charset="utf-8"><style>
+    @font-face { font-family: Lora; src: url(${FONT('lora', '600SemiBold/Lora_600SemiBold.ttf')}) format('truetype'); font-weight: 600; }
+    @font-face { font-family: Golos; src: url(${FONT('golos-text', '500Medium/GolosText_500Medium.ttf')}) format('truetype'); font-weight: 500; }
+    span { white-space: pre; position: absolute; }
+    .t { font: 600 84px Lora; letter-spacing: -1px; } .s { font: 500 40px Golos; }
+  </style>${lines('title').map((l) => `<span class="t">${esc(l)}</span>`).join('')}${lines('sub').map((l) => `<span class="s">${esc(l)}</span>`).join('')}`);
+  const widest = await page.evaluate(async () => {
+    await Promise.all([document.fonts.load('600 84px Lora'), document.fonts.load('500 40px Golos')]);
+    await document.fonts.ready;
+    const max = (sel) => Math.max(...[...document.querySelectorAll(sel)].map((el) => el.getBoundingClientRect().width));
+    return { title: max('.t'), sub: max('.s') };
+  });
+  await ctx.close();
+  const MAX = 944; // ширина кадра минус поля
+  return { title: Math.floor(84 * Math.min(1, MAX / widest.title)), sub: Math.floor(40 * Math.min(1, MAX / widest.sub)) };
+}
+
 (async () => {
   await new Promise((r) => server.listen(0, r));
   const port = server.address().port;
   const browser = await chromium.launch();
   const only = process.env.ONLY ? process.env.ONLY.split(',') : null;
+  const size = await captionSize(browser);
   for (const shot of SHOTS) {
     if (only && !only.some((x) => shot.name.includes(x))) continue;
     const raw = await capture(browser, port, shot);
     const ctx = await browser.newContext({ viewport: { width: 1080, height: 1920 }, deviceScaleFactor: 1 });
     const page = await ctx.newPage();
-    await page.setContent(frameHtml(shot, raw), { waitUntil: 'load' });
+    await page.setContent(frameHtml(shot, raw, size), { waitUntil: 'load' });
     await page.evaluate(async () => {
-      await Promise.all([document.fonts.load('600 84px Lora'), document.fonts.load('500 37px Golos')]);
+      await Promise.all([document.fonts.load('600 84px Lora'), document.fonts.load('500 40px Golos')]);
       await document.fonts.ready;
-      // Строки подписи не переносим: длинную уменьшаем, пока не встанет в поля кадра.
-      const fit = (el, max, min) => {
-        let size = parseFloat(getComputedStyle(el).fontSize);
-        while (el.getBoundingClientRect().width > max && size > min) el.style.fontSize = `${(size -= 2)}px`;
-      };
-      fit(document.querySelector('h1'), 960, 60);
-      fit(document.querySelector('p'), 960, 28);
     });
     await page.screenshot({ path: path.join(out, `${shot.name}.png`) });
     await ctx.close();
