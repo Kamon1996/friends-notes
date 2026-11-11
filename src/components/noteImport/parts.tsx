@@ -15,7 +15,7 @@ const RING = 44;
 const SKIP_BG = '#6B5D52';
 
 /** Чего не хватает записи — словом для таблетки справа и подписи кнопки. */
-export const MISSING_LABEL: Record<string, string> = { date: 'Срок', repeat: 'Как часто', person: 'Кто', title: 'Название' };
+export const MISSING_LABEL: Record<string, string> = { date: 'Срок', repeat: 'Как часто', person: 'Кто', title: 'Название', conflict: 'Другая дата' };
 
 /**
  * Слева в строке — срок, как в «Напоминаниях»: сколько дней осталось. Срока нет — пунктир с календарём (у привычки

@@ -173,14 +173,14 @@ export function ItemSheet({
     setOpenRow(null);
   };
   const pickWho = (id: string | null) => {
-    onEdit({ friendId: id, ...(task ? {} : { to: id ? 'friend' : shown.to }) });
+    onEdit({ friendId: id, known: friends.find((f) => f.id === id)?.birthday ?? null, ...(task ? {} : { to: id ? 'friend' : shown.to }) });
     setOpenRow(null);
   };
   const body = (children: ReactNode) => <View style={{ paddingHorizontal: 14, paddingBottom: 14, gap: 12 }}>{children}</View>;
 
   const whoValue = friend ? friend.name : d.person ? `${d.person} · нет в друзьях` : task ? 'Для себя' : null;
-  const conflict = birthdayConflict(shown, friends);
-  const addTitle = canAdd(shown) ? (shown.state === 'add' ? 'Готово' : 'Добавить') : `Сначала: ${MISSING_LABEL[missing[0]].toLowerCase()}`;
+  const conflict = birthdayConflict(shown);
+  const addTitle = canAdd(shown) ? (shown.state === 'add' ? 'Готово' : 'Добавить') : missing[0] === 'conflict' ? 'Сначала реши с датой' : `Сначала: ${MISSING_LABEL[missing[0]].toLowerCase()}`;
 
   return (
     <>
@@ -255,7 +255,16 @@ export function ItemSheet({
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
                     <SmallChip label="Нет" selected={d.kind !== 'repeat'} onPress={() => onEdit({ repeat: null })} />
                     {REPEAT_PRESETS.map((p) => (
-                      <SmallChip key={p.label} label={p.label} selected={sameRepeat(p.repeat, d.repeat)} onPress={() => onEdit({ repeat: p.repeat })} />
+                      <SmallChip
+                        key={p.label}
+                        label={p.label}
+                        selected={sameRepeat(p.repeat, d.repeat)}
+                        onPress={() => {
+                          onEdit({ repeat: p.repeat });
+                          // «Как часто» выбрано, а срока ещё нет — раскрываем его: это следующее, чего не хватает.
+                          if (!d.date) setOpenRow('date');
+                        }}
+                      />
                     ))}
                   </View>,
                 )}
@@ -311,7 +320,7 @@ export function ItemSheet({
           {conflict && friend && (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.warnSoft, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10 }}>
               <Text style={{ flex: 1, fontFamily: fonts.body, fontSize: 13.5, lineHeight: 19, color: colors.text }}>
-                У друга «{friend.name}» уже записан день рождения: {formatDate(conflict, false)}. Заменить на {d.date ? dayMonth(d.date) : ''}?
+                В карточке «{friend.name}» уже записан день рождения: {formatDate(conflict, false)}. Заменить на {d.date ? dayMonth(d.date) : ''}? Или положи дату напоминанием.
               </Text>
               <Switch value={!!shown.replace} onValueChange={(replace) => onEdit({ replace })} accessibilityLabel="Заменить день рождения" />
             </View>

@@ -152,13 +152,22 @@ describe('записи → дела и даты', () => {
     assert.deepEqual(got.reminders.map((r) => [r.title, r.date, r.repeat, r.friendId, r.time]), [['День рождения: Аня', '2027-05-05', { every: 1, unit: 'year' }, 'anya', '10:00']]);
   });
 
-  test('у друга уже другой день рождения — не трогаем без явного решения; тот же день — нечего менять', () => {
-    const friends = [F('oleg', 'Олег', { birthday: '1990-07-07' }), F('ira', 'Ира', { birthday: '1904-03-01' })];
-    const items = added(review([D({ type: 'birthday', title: '', person: 'Олег', date: '2027-03-01' }), D({ type: 'birthday', title: '', person: 'Ира', date: '2027-03-01' })], friends));
-    assert.deepEqual([birthdayConflict(items[0], friends), birthdayConflict(items[1], friends)], ['1990-07-07', null]);
-    assert.deepEqual(buildChanges(items, ctx({ friends })).updated, []);
-    const replaced = buildChanges([{ ...items[0], replace: true }], ctx({ friends }));
+  test('у друга уже другой день рождения — добавить нельзя без явного решения; тот же день — нечего менять', () => {
+    const friends = [F('oleg', 'Олег', { birthday: '1990-07-07' }), F('ira', 'Ира', { birthday: '1904-03-01' }), F('vika', 'Вика')];
+    let items = review([D({ type: 'birthday', title: '', person: 'Олег', date: '2027-03-01' }), D({ type: 'birthday', title: '', person: 'Ира', date: '2027-03-01' })], friends);
+    assert.deepEqual([birthdayConflict(items[0]), birthdayConflict(items[1])], ['1990-07-07', null]);
+    assert.deepEqual([missingOf(items[0]), missingOf(items[1])], [['conflict'], []]);
+    items = decide(decide(items, items[0].id, 'add'), items[1].id, 'add');
+    assert.deepEqual(items.map((i) => i.state), ['todo', 'add'], 'пока не решено — остаётся на проверке');
+    assert.deepEqual(buildChanges(items, ctx({ friends })).updated, [], 'у Иры тот же день — менять нечего');
+    items = decide(editItem(items, items[0].id, { replace: true }), items[0].id, 'add');
+    const replaced = buildChanges(items, ctx({ friends }));
     assert.deepEqual([replaced.updated[0].birthday, replaced.before[0].birthday], ['1904-03-01', '1990-07-07']);
+    // Другой друг — прежнее решение не действует; у нового друга даты нет — спрашивать не о чем.
+    const moved = editItem(items, items[0].id, { friendId: 'vika', known: null });
+    assert.deepEqual([moved[0].replace, missingOf(moved[0]), moved[0].state], [false, [], 'add']);
+    // Напоминанием — карточку друга не трогаем вовсе.
+    assert.deepEqual(missingOf(editItem(review([D({ type: 'birthday', title: '', person: 'Олег', date: '2027-03-01' })], friends), `id${n}`, { to: 'reminder' })[0]), []);
   });
 
   test('важная дата — в «Важные даты» друга, каждый год; та же дата второй раз не добавляется', () => {

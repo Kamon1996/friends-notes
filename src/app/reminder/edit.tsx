@@ -47,18 +47,25 @@ function ReminderForm() {
   const params = useLocalSearchParams<{ id?: string; friendId?: string; date?: string }>();
   const form = useReminderForm();
   const [tab, setTab] = useState<'task' | 'note'>('task');
+  // Вторая вкладка появляется, когда её открыли в первый раз, и дальше живёт за кадром — как и форма.
+  const [noteOpened, setNoteOpened] = useState(false);
+  if (tab === 'note' && !noteOpened) setNoteOpened(true);
   const rows = !!form.existing || data.settings.newReminderForm !== 'quick';
   const view = rows ? <RowsForm form={form} /> : <QuickForm form={form} />;
   if (params.id || params.friendId || params.date) return view;
   const tabs = <Segmented options={TABS} value={tab} onChange={setTab} />;
-  // Форма остаётся на экране и за кадром: набранное в ней не пропадает, пока человек смотрит вторую вкладку.
+  // Обе вкладки остаются на экране и за кадром: набранное не пропадает, пока человек смотрит соседнюю.
   return (
     <View style={{ flex: 1 }}>
       <View style={{ flex: 1, display: tab === 'task' ? 'flex' : 'none' }}>
         <TabsBar>{tabs}</TabsBar>
         {view}
       </View>
-      {tab === 'note' && <NoteImport tabs={tabs} />}
+      {noteOpened && (
+        <View style={{ flex: 1, display: tab === 'note' ? 'flex' : 'none' }}>
+          <NoteImport tabs={tabs} />
+        </View>
+      )}
     </View>
   );
 }

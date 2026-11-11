@@ -30,9 +30,14 @@ export interface ReviewItem {
   friendId: string | null;
   /** Только у дня рождения и важной даты. */
   to: DateTo;
-  /** У друга уже записан другой день рождения — заменить его можно только по явному решению. */
+  /** День рождения, который у выбранного друга уже записан (на момент выбора друга). */
+  known?: ISODate | null;
+  /** У друга записан другой день рождения — заменить его можно только по явному решению. */
   replace?: boolean;
 }
+
+/** Чего не хватает записи: пустое обязательное поле или решение о чужой дате (`conflict`). */
+export type Missing = DraftField | 'conflict';
 
 // ---------- друг по имени из заметки ----------
 
@@ -75,12 +80,15 @@ export function matchFriend(name: string | null, friends: readonly Friend[]): st
   return found.length === 1 ? found[0].id : null;
 }
 
+const sameDay = (a: ISODate, b: ISODate) => a.slice(5) === b.slice(5);
+
 // ---------- список ----------
 
 export function createReview(answer: NoteAnswer, friends: readonly Friend[], makeId: () => string): ReviewItem[] {
   return answer.drafts.map((draft) => {
     const friendId = matchFriend(draft.person, friends);
-    return { id: makeId(), draft, state: 'todo' as const, friendId, to: friendId ? ('friend' as const) : ('new' as const) };
+    const known = friends.find((f) => f.id === friendId)?.birthday ?? null;
+    return { id: makeId(), draft, state: 'todo' as const, friendId, to: friendId ? ('friend' as const) : ('new' as const), known };
   });
 }
 
@@ -95,9 +103,9 @@ export function itemFromRest(text: string, makeId: () => string): ReviewItem {
 }
 
 /** Чего не хватает, чтобы запись можно было добавить. */
-export function missingOf(item: ReviewItem): DraftField[] {
+export function missingOf(item: ReviewItem): Missing[] {
   const d = item.draft;
-  const out: DraftField[] = [];
+  const out: Missing[] = [];
   if (d.type === 'task') {
     if (!d.title.trim()) out.push('title');
     if (d.kind === 'repeat' && !d.repeat) out.push('repeat');
@@ -108,6 +116,8 @@ export function missingOf(item: ReviewItem): DraftField[] {
   if (d.type === 'date' && !d.title.trim()) out.push('title');
   // В карточку — нужен друг; новым другом или напоминанием — хотя бы имя.
   if (item.to === 'friend' ? !item.friendId : !(d.person ?? '').trim()) out.push('person');
+  // У друга записан другой день рождения: чужую запись молча не меняем — нужно решение.
+  if (birthdayConflict(item) && !item.replace) out.push('conflict');
   return out;
 }
 
@@ -121,7 +131,7 @@ export function decide(items: readonly ReviewItem[], id: string, state: ReviewSt
 }
 
 /** Что можно поправить в записи: поля дела и то, к кому и куда она относится. */
-export type ItemPatch = Partial<Pick<NoteDraft, 'title' | 'date' | 'time' | 'repeat' | 'kind' | 'note' | 'person'>> & Partial<Pick<ReviewItem, 'friendId' | 'to' | 'replace'>>;
+export type ItemPatch = Partial<Pick<NoteDraft, 'title' | 'date' | 'time' | 'repeat' | 'kind' | 'note' | 'person'>> & Partial<Pick<ReviewItem, 'friendId' | 'to' | 'replace' | 'known'>>;
 
 /**
  * Правка записи. Поле заполнил человек — оно больше не «проверь». Запись «добавить» после правки стала неполной —
@@ -129,13 +139,16 @@ export type ItemPatch = Partial<Pick<NoteDraft, 'title' | 'date' | 'time' | 'rep
  */
 export function editItem(items: readonly ReviewItem[], id: string, patch: ItemPatch): ReviewItem[] {
   return update(items, id, (i) => {
-    const { friendId, to, replace, ...fields } = patch;
+    const { friendId, to, replace, known, ...fields } = patch;
     const touched = Object.keys(fields) as DraftField[];
     let draft: NoteDraft = { ...i.draft, ...fields, check: i.draft.check.filter((f) => !touched.includes(f) && !(f === 'person' && friendId !== undefined)) };
     // Повтор выбран — это повторяющееся дело; повтор сняли — обычное дело до срока.
     if ('repeat' in fields) draft = { ...draft, kind: fields.repeat ? 'repeat' : draft.kind === 'repeat' ? 'due' : draft.kind };
     if (fields.kind && fields.kind !== 'repeat') draft = { ...draft, repeat: null };
-    const next: ReviewItem = { ...i, draft, ...(friendId !== undefined && { friendId }), ...(to !== undefined && { to }), ...(replace !== undefined && { replace }) };
+    // Сменили друга — решение «заменить его день рождения» относилось к прежнему.
+    const next: ReviewItem = {
+      ...i, draft, ...(friendId !== undefined && { friendId, known: known ?? null, replace: false }), ...(to !== undefined && { to }), ...(replace !== undefined && { replace }),
+    };
     return next.state === 'add' && !canAdd(next) ? { ...next, state: 'todo' } : next;
   });
 }
@@ -194,14 +207,12 @@ export function addedText(items: readonly ReviewItem[]): string {
 
 /** День и месяц без года: так в приложении хранится день рождения, когда год неизвестен. */
 const yearless = (date: ISODate): ISODate => `${UNKNOWN_YEAR}-${date.slice(5)}`;
-const sameDay = (a: ISODate, b: ISODate) => a.slice(5) === b.slice(5);
 const YEARLY: Repeat = { every: 1, unit: 'year' };
 
 /** У друга уже записан другой день рождения — какой. Нет или тот же — null. */
-export function birthdayConflict(item: ReviewItem, friends: readonly Friend[]): ISODate | null {
-  if (item.draft.type !== 'birthday' || item.to !== 'friend' || !item.draft.date) return null;
-  const friend = friends.find((f) => f.id === item.friendId);
-  return friend?.birthday && !sameDay(friend.birthday, item.draft.date) ? friend.birthday : null;
+export function birthdayConflict(item: ReviewItem): ISODate | null {
+  if (item.draft.type !== 'birthday' || item.to !== 'friend' || !item.friendId || !item.draft.date) return null;
+  return item.known && !sameDay(item.known, item.draft.date) ? item.known : null;
 }
 
 export interface ReviewContext {

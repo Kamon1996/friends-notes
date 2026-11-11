@@ -3,6 +3,9 @@
 //
 //   node scripts/e2e-web.js <папка веб-сборки> <папка для снимков сбоев> [--grep текст] [--workers N]
 //
+// Сборку делай с тестовым ключом магии: `node scripts/e2e-key.js` перед экспортом (и верни app.json после).
+// Без ключа экран «Из заметки» закрыт, и его сценарии упадут. Ключ ненастоящий: запросы перехватывает тест.
+//
 // Сценарий с пометкой `known` описывает правильное поведение для известной ошибки: пока ошибка есть,
 // он отмечается как «известная ошибка» и не валит прогон; когда начнёт проходить — прогон упадёт,
 // чтобы пометку сняли и тест стал обычным.
@@ -954,6 +957,158 @@ scenario('Напоминание: выбор друга через окно с �
   const data = await ui.waitData((x) => x.reminders.some((r) => r.title === 'Поздравить'), 'не сохранилось');
   assert.equal(data.reminders.find((r) => r.title === 'Поздравить').friendId, 'm0');
 }, { data: seed({ friends: [ANYA, IGOR, MAMA, ...MORE_FRIENDS] }) });
+
+// ===== Из заметки — в дела =====
+// Магия отвечает заготовленным: наружу сценарии не ходят. Ключ в сборке тестовый (scripts/e2e-key.js).
+const CORS = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'POST, OPTIONS' };
+const noteItem = (o) => ({ type: 'task', state: 'todo', title: '', quote: '', kind: 'due', date: null, time: null, repeat: null, person: null, note: '', sure: true, ...o });
+async function magicAnswers(page, items) {
+  const asked = [];
+  await page.context().route(/generativelanguage\.googleapis\.com/, (route) => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: CORS });
+    asked.push(route.request().postData() || '');
+    return route.fulfill({ status: 200, headers: { ...CORS, 'content-type': 'application/json' }, body: JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify({ items }) }] } }] }) });
+  });
+  return asked;
+}
+const NOTE_TEXT = ['в пятницу забрать торт до 12', 'купить Ане цветы', 'стоматолог 20го в 15:30, снимок уже сделал', 'пью железо', 'др у Кати 14 февраля, надо купить подарок', 'Олег пришлёт счёт'].join('\n');
+const NOTE_ITEMS = [
+  noteItem({ title: 'Забрать торт', quote: 'в пятницу забрать торт до 12', date: d(2), time: '12:00' }),
+  noteItem({ title: 'Купить цветы', quote: 'купить Ане цветы', person: 'Аня' }),
+  noteItem({ title: 'Стоматолог', quote: 'стоматолог 20го в 15:30', kind: 'at', date: '2026-06-20', time: '15:30' }),
+  noteItem({ title: 'Сделать снимок', quote: 'снимок уже сделал', state: 'done' }),
+  noteItem({ title: 'Пить железо', quote: 'пью железо', kind: 'repeat' }),
+  noteItem({ type: 'birthday', quote: 'др у Кати 14 февраля', date: '2027-02-14', person: 'Катя' }),
+  noteItem({ title: 'Купить подарок', quote: 'надо купить подарок' }),
+  noteItem({ title: 'Прислать счёт', quote: 'Олег пришлёт счёт', person: 'Олег', state: 'other' }),
+];
+const KATYA = F({ id: 'k', name: 'Катя' });
+const openNote = async (ui, page, text) => {
+  await ui.go('/');
+  await ui.tap('Новое напоминание');
+  await ui.tap('Из заметки');
+  await page.getByLabel('Текст заметки').fill(text);
+};
+
+scenario('Из заметки: разбор, решения свайпами, добавление дел и дня рождения, отмена', async ({ ui, page }) => {
+  const asked = await magicAnswers(page, NOTE_ITEMS);
+  await openNote(ui, page, NOTE_TEXT);
+  await ui.see('Текст уйдёт на разбор в облачный сервис');
+  await ui.tap('Разобрать');
+  await ui.see('На проверку · 6');
+  assert.equal(asked.length, 1, 'один вопрос на заметку');
+  assert.ok(asked[0].includes('забрать торт'), 'текст заметки ушёл на разбор');
+  assert.ok(!asked[0].includes('Смирнова') && !asked[0].includes('999 123') && !asked[0].includes('Ветров'), 'друзья и их данные наружу не уходят');
+  const text = await ui.text();
+  assert.ok(!/gemini|google|openrouter|нейросет|\bии\b/i.test(text), 'в интерфейсе не называем, как это устроено');
+  // Сделанное и чужое делами не стали; чужое лежит отдельно, с причиной.
+  await ui.notSee('Сделать снимок');
+  await ui.see('Не вошло в дела · 1');
+  await ui.see('похоже, чужое дело');
+  // Подарок без имени — имениннице, с пометкой «проверь».
+  await ui.see('проверь');
+
+  // Пока не всё проверено — кнопка ничего не добавляет и ведёт наверх.
+  await ui.tap(/Осталось проверить 6/);
+  await ui.see('Пока ничего не добавлено');
+  assert.equal((await ui.data()).reminders.length, 3);
+
+  await ui.swipe('Забрать торт', 170);
+  await ui.see('Добавить · 1');
+  // Без срока «Добавить» спрашивает «когда».
+  await ui.swipe('Купить цветы', 170);
+  await ui.see('Купить цветы — когда?');
+  await ui.tap('Завтра');
+  await ui.see('Добавить · 2');
+  // Убрать — не насовсем.
+  await ui.swipe('Пить железо', -170);
+  await ui.see('Убрать · 1');
+  await ui.tap('Вернуть');
+  await ui.notSee('Убрать · 1');
+  // Привычка: сначала «как часто», потом срок — в шторке записи.
+  await ui.tap('Пить железо');
+  await ui.see('Сначала: как часто');
+  await ui.tap('Каждый день');
+  await ui.see('Сначала: срок');
+  await ui.tap('Завтра');
+  await ui.tap('Добавить');
+  await ui.see('Добавить · 3');
+  // После свайпа строка переезжает в свой раздел — ждём этого, прежде чем вести по следующей.
+  await ui.swipe('Стоматолог', 170);
+  await ui.see('Добавить · 4');
+  await ui.swipe('День рождения — Катя', 170);
+  await ui.see('Добавить · 5');
+  await ui.swipe('Купить подарок', 170);
+  await ui.see('Купить подарок — когда?');
+  await ui.tap('Через неделю');
+  await ui.see('Всё проверено');
+
+  await ui.tap(/Добавить 5 дел и 1 дату/);
+  await ui.see('Добавлено 5 дел и 1 дата');
+  const data = await ui.waitData((x) => x.reminders.length === 8, 'дела из заметки не добавились');
+  const by = (title) => data.reminders.find((r) => r.title === title);
+  assert.deepEqual([by('Забрать торт').date, by('Забрать торт').time], [d(2), '12:00']);
+  assert.deepEqual([by('Купить цветы').date, by('Купить цветы').friendId], [d(1), 'a'], 'друг найден по имени из заметки');
+  assert.deepEqual([by('Стоматолог').kind, by('Стоматолог').date, by('Стоматолог').time], ['at', '2026-06-20', '15:30']);
+  assert.deepEqual([by('Пить железо').repeat, by('Пить железо').date], [{ every: 1, unit: 'day' }, d(1)]);
+  assert.deepEqual([by('Купить подарок').date, by('Купить подарок').friendId], [d(7), 'k']);
+  assert.equal(data.friends.find((f) => f.id === 'k').birthday, '1904-02-14', 'день рождения — в карточке, без года');
+
+  await ui.tap('Отменить');
+  await ui.waitData((x) => x.reminders.length === 3 && x.friends.find((f) => f.id === 'k').birthday === null, '«Отменить» не убрало добавленное');
+}, { data: seed({ friends: [ANYA, IGOR, MAMA, KATYA] }) });
+
+scenario('Из заметки: магия недоступна или дел нет — понятное сообщение, текст на месте', async ({ ui, page }) => {
+  await openNote(ui, page, 'купить хлеб');
+  await ui.tap('Разобрать');
+  await ui.see('Сейчас не получается');
+  assert.equal(await page.getByLabel('Текст заметки').inputValue(), 'купить хлеб');
+  await magicAnswers(page, []);
+  await page.getByLabel('Текст заметки').fill('Сегодня был хороший день');
+  await ui.tap('Разобрать');
+  await ui.see('Дел в этом тексте не нашлось');
+  assert.equal((await ui.data()).reminders.length, 3);
+});
+
+scenario('Из заметки: у друга уже другой день рождения — без явного решения не меняем', async ({ ui, page }) => {
+  await magicAnswers(page, [noteItem({ type: 'birthday', quote: 'др у Игоря 14 февраля', date: '2027-02-14', person: 'Игорь' })]);
+  await openNote(ui, page, 'др у Игоря 14 февраля');
+  await ui.tap('Разобрать');
+  await ui.see('Другая дата');
+  // «Добавить» по такой записи открывает её: нужно решение.
+  await ui.swipe('День рождения — Игорь Ветров', 170);
+  await ui.see('уже записан день рождения');
+  await ui.see('Сначала реши с датой');
+  await ui.tap('Заменить день рождения');
+  await ui.tap('Добавить');
+  await ui.tap(/Добавить 1 дату/);
+  await ui.waitData((x) => x.friends.find((f) => f.id === 'b').birthday === '1904-02-14', 'день рождения не заменился после явного решения');
+  await ui.tap('Отменить');
+  await ui.waitData((x) => x.friends.find((f) => f.id === 'b').birthday === IGOR.birthday, '«Отменить» не вернуло прежний день рождения');
+});
+
+scenario('Из заметки: вкладка — только у плюса на «Напоминаниях»; набранное в «Деле» не теряется; «Назад» из списка — к тексту', async ({ ui, page }) => {
+  await magicAnswers(page, [noteItem({ title: 'Купить хлеб', quote: 'купить хлеб' })]);
+  await ui.go('/');
+  await ui.tap('Новое напоминание');
+  await ui.fill('Например, сдать отчёт', 'Позвонить в банк');
+  await ui.tap('Из заметки');
+  await page.getByLabel('Текст заметки').fill('купить хлеб');
+  await ui.tap('Дело');
+  assert.equal(await (await ui.field('Например, сдать отчёт')).inputValue(), 'Позвонить в банк');
+  await ui.tap('Из заметки');
+  assert.equal(await page.getByLabel('Текст заметки').inputValue(), 'купить хлеб');
+  await ui.tap('Разобрать');
+  await ui.see('На проверку · 1');
+  // «Назад» не закрывает экран, а возвращает к тексту: разбор не теряется от случайного нажатия.
+  await page.goBack();
+  await ui.see('Разобрать');
+  assert.equal(await page.getByLabel('Текст заметки').inputValue(), 'купить хлеб');
+  // Из карточки друга — только форма: там уже известно, для кого дело.
+  await ui.go('/reminder/edit?friendId=a');
+  await ui.see('Сохранить');
+  await ui.notSee('Из заметки');
+});
 
 // ===== Импорт =====
 scenario('Импорт: дубликат не выбирается, добавляются 7, повторный импорт не плодит дублей', async ({ ui }) => {

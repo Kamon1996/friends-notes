@@ -175,6 +175,8 @@ export function NoteImport({ tabs }: { tabs: ReactNode }) {
     );
     return (
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        {/* Заголовок экрана — общий с формой дела: после возврата из списка он снова «Новое напоминание». */}
+        <Stack.Screen options={{ title: 'Новое напоминание' }} />
         <ScrollView style={s.screen} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 24 }} keyboardShouldPersistTaps="handled">
           {tabs}
           <FormCard style={{ marginTop: 14 }}>
