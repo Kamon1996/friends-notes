@@ -86,7 +86,8 @@ describe('вопрос', () => {
     assert.ok(!notePrompt({ text: 'x'.repeat(NOTE_MAX_TEXT + 50), now: NOW }).includes('x'.repeat(NOTE_MAX_TEXT + 1)));
     assert.equal(NOTE_TASK.id, 'noteTasks');
     assert.equal(NOTE_TASK.request({ text: 'a', now: NOW }).json, true);
-    assert.ok((NOTE_TASK.request({ text: 'x'.repeat(50_000), now: NOW }).maxTokens ?? 0) <= 4000);
+    assert.ok((NOTE_TASK.request({ text: 'x'.repeat(50_000), now: NOW }).maxTokens ?? 0) <= 8000);
+    assert.ok((NOTE_TASK.request({ text: 'купить хлеб', now: NOW }).maxTokens ?? 0) >= 1500, 'короткой заметке тоже нужен запас: ответ длиннее вопроса');
   });
 });
 
@@ -144,9 +145,13 @@ describe('ответ', () => {
     const past = parse('в 2025 году обещал вернуть книгу', [item({ title: 'Вернуть книгу', quote: 'в 2025 году обещал вернуть книгу', date: '2025-06-01' })]);
     assert.deepEqual([past?.drafts[0].date, past?.drafts[0].missing], [null, ['date']]);
   });
-  test('повтор: негодный — дело становится обычным с пометкой; без дней недели срок ждёт человека', () => {
+  test('повтор без «как часто» остаётся повтором с пустым полем: привычка «пью железо», негодный ответ модели', () => {
+    const habit = parse('пью железо', [item({ title: 'Выпить железо', quote: 'пью железо', kind: 'repeat', repeat: null })]);
+    assert.deepEqual([habit?.drafts[0].kind, habit?.drafts[0].repeat, habit?.drafts[0].missing], ['repeat', null, ['repeat', 'date']]);
     const bad = parse('иногда поливать цветы', [item({ title: 'Поливать цветы', quote: 'иногда поливать цветы', kind: 'repeat', repeat: { every: 0, unit: 'sometimes' } })]);
-    assert.deepEqual([bad?.drafts[0].kind, bad?.drafts[0].repeat, bad?.drafts[0].check], ['due', null, ['repeat']]);
+    assert.deepEqual([bad?.drafts[0].kind, bad?.drafts[0].repeat, bad?.drafts[0].missing], ['repeat', null, ['repeat', 'date']]);
+    const book = parse('нужен курс массажа', [item({ title: 'Записаться на массаж', quote: 'нужен курс массажа' })]);
+    assert.equal(book?.drafts[0].title, 'Записаться на массаж', '«Записаться на…» — допустимое первое действие: само дело из текста');
     const monthly = parse('каждый месяц платить за интернет', [item({ title: 'Платить за интернет', quote: 'каждый месяц платить за интернет', kind: 'repeat', repeat: { every: 1, unit: 'month' } })]);
     assert.deepEqual([monthly?.drafts[0].kind, monthly?.drafts[0].repeat, monthly?.drafts[0].missing], ['repeat', { every: 1, unit: 'month' }, ['date']]);
     const fifth = parse('каждый месяц 5-го платить за квартиру', [item({ title: 'Платить за квартиру', quote: 'каждый месяц 5-го платить за квартиру', kind: 'repeat', repeat: { every: 1, unit: 'month' }, date: '2026-11-05' })]);
@@ -182,5 +187,13 @@ describe('ответ', () => {
     assert.equal(parseNoteAnswer('не знаю', { text: 'купить хлеб', now: NOW }), null);
     assert.equal(parseNoteAnswer('{"foo":1}', { text: 'купить хлеб', now: NOW }), null);
     assert.deepEqual(parse('просто мысль о жизни', []), { drafts: [], rest: ['просто мысль о жизни'] });
+  });
+  test('ответ оборвался на полуслове — берём дела, которые успели дописаться, и помечаем, что это не всё', () => {
+    const full = answer([item({ title: 'Купить хлеб', quote: 'купить хлеб' }), item({ title: 'Позвонить маме', quote: 'позвонить маме', note: 'скобки } и " в тексте' })]);
+    const cut = full.slice(0, full.indexOf('Позвонить маме') + 5);
+    const got = parseNoteAnswer(cut, { text: 'купить хлеб, позвонить маме', now: NOW });
+    assert.deepEqual([got?.drafts.map((d) => d.title), got?.partial], [['Купить хлеб'], true]);
+    assert.equal(parseNoteAnswer(full, { text: 'купить хлеб, позвонить маме', now: NOW })?.partial, undefined);
+    assert.equal(parseNoteAnswer('{"items":[{"type":"task","title":"Куп', { text: 'купить хлеб', now: NOW }), null, 'ни одного целого дела — ответа нет');
   });
 });
