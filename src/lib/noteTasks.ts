@@ -592,6 +592,9 @@ const INTENT = new RegExp(`(?<![а-я])(?:${INTENT_WORDS}|не забыть|не
 const NO_INTENT = new RegExp(`(?<![а-я])не\\s+(?:${INTENT_WORDS})(?![а-я])`, 'g');
 /** Строка списка начинается с действия: «заказать двери», «2. вызвать электрика». */
 const STARTS_WITH_ACTION = /^[^а-яa-z]*([а-я]{2,}(?:ть|ться|ти|тись|чь|чься))(?![а-я])/;
+/** В заметке бывают и английские строки: «buy tickets to Berlin by Friday». */
+const STARTS_WITH_ACTION_EN =
+  /^[^a-zа-я]*(?:buy|call|pay|send|book|get|pick up|email|order|renew|return|schedule|cancel|check|fix|clean|bring|take|write|finish|submit|prepare|remember to|don't forget|need to|todo|to do)(?![a-z])/;
 /** Существительные и числа, похожие на глагол окончанием. */
 const NOT_ACTION = /^(?:мать|часть|память|ночь|дочь|речь|печь|кровать|зять|опять|пять|шесть|девять|десять)$|(?:ость|есть|дцать)$/;
 /** Отметка «сделано» в строке: такое мы не взяли нарочно. */
@@ -624,6 +627,7 @@ function looksMissed(seg: string, first: boolean, last: boolean, today: ISODate)
   }
   const action = first ? STARTS_WITH_ACTION.exec(seg)?.[1] : undefined;
   if (action && !NOT_ACTION.test(action) && words(seg).length >= 2) return true;
+  if (first && STARTS_WITH_ACTION_EN.test(seg) && words(seg).length >= 2) return true;
   // Названное время или день вне цитат — скорее всего, пропущенное событие. Время сообщения в переписке не в счёт,
   // обрывок из одних слов о времени («потом в субботу») — тоже.
   const body = seg.replace(/^[^\p{L}\p{N}]*\[?\d{1,2}:\d{2}\]?/u, '');

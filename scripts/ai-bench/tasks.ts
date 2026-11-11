@@ -438,6 +438,7 @@ async function solve(provider: ProviderId, model: string, c: Case) {
     let ms = 0;
     let seconds = 0;
     let secondAdded = 0;
+    let limited = 0;
     console.log(`\n=== ${provider} ${model}`);
     for (const c of cases) {
       const r = await solve(provider, model, c);
@@ -448,7 +449,16 @@ async function solve(provider: ProviderId, model: string, c: Case) {
       if (!r.answer) {
         fails++;
         console.log(`  ✗ ${c.name}: ${r.error}${r.raw ? ` · RAW ${r.raw.replace(/\n/g, ' ').slice(0, 300)}` : ''}`);
+        // Дневной лимит модели кончился: ждать по минуте на каждую оставшуюся заметку незачем.
+        limited = (r.error ?? '').startsWith('rate-limit') ? limited + 1 : 0;
+        if (limited >= 3) {
+          const left = cases.length - cases.indexOf(c) - 1;
+          fails += left;
+          console.log(`  … лимит запросов исчерпан, пропущено заметок: ${left}`);
+          break;
+        }
       } else {
+        limited = 0;
         const s = score(c, r.answer);
         found += s.found;
         dates += s.dates;
