@@ -67,5 +67,7 @@ jobs:
           PROBE_GEMINI: ${{ contains(github.event.head_commit.message, '[probe-tasks-all]') && 'all' || 'lite' }}
           # Лёгкие модели спрашиваем дважды: результат должен быть устойчивым, а не удачным.
           PROBE_REPEAT: ${{ contains(github.event.head_commit.message, '[probe-tasks-all]') && '1' || '2' }}
+          # «cases=21,22» в первой строке сообщения — только эти заметки набора.
+          PROBE_MESSAGE: ${{ github.event.head_commit.message }}
           TZ: Europe/Moscow
         run: npx tsx scripts/ai-bench/tasks.ts

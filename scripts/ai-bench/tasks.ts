@@ -37,6 +37,10 @@ interface Want {
   sure?: boolean;
   /** Как дело должно быть названо: «нужен курс массажа» — «Записаться на массаж». */
   titleHas?: string;
+  /** То же, но с учётом регистра: «минск ереван» в названии — «Минск», «Ереван». */
+  titleExact?: string;
+  /** Что должно быть именно в заметке дела (а не только в цитате): период поездки, детали. */
+  inNote?: string;
   /** Находка допустима, но не обязательна: нет — не ошибка, есть — не лишнее. */
   optional?: boolean;
 }
@@ -271,12 +275,44 @@ const CASES: Case[] = [
     ],
     no: ['масл'],
   },
+  {
+    // Настоящая заметка: период поездки — не срок ни для билетов, ни для отпуска.
+    name: 'поездка: период — не срок',
+    text: 'Нужно купить билеты с 16 по 23 августа самолет минск ереван и взять отпуск на работе в эти числа',
+    want: [
+      { keys: ['билет'], date: null, inNote: '23', titleExact: 'Ереван' },
+      { keys: ['отпуск'], date: null, inNote: '16' },
+    ],
+  },
+  {
+    name: 'командировка: период в соседней фразе и настоящий срок',
+    text: 'Командировка в Новосибирск 3–7 марта. Надо забронировать гостиницу и оформить командировочные. Отчёт сдать до 10 марта',
+    want: [
+      { keys: ['командировк', 'новосибирск'], optional: true },
+      { keys: ['гостиниц'], date: null },
+      { keys: ['командировочн'], date: null },
+      { keys: ['отчет', 'отчёт'], date: '2027-03-10' },
+    ],
+  },
+  {
+    name: 'гости на несколько дней и событие с датой',
+    text: 'Гости приезжают с 5 по 8 декабря, надо убраться и купить продукты. Концерт 12 декабря в 19:00',
+    want: [
+      { keys: ['гост'], optional: true },
+      { keys: ['убрат', 'уборк'], date: null },
+      { keys: ['продукт', 'купить'], date: null },
+      { keys: ['концерт'], date: '2026-12-12', time: '19:00' },
+    ],
+  },
 ];
 
 const env = process.env;
 const keys: Partial<Record<ProviderId, string>> = { gemini: env.GEMINI_API_KEY || undefined, openrouter: env.OPENROUTER_API_KEY || undefined };
 const maxOpenRouter = env.PROBE_OPENROUTER === undefined || env.PROBE_OPENROUTER === '' ? 3 : Number(env.PROBE_OPENROUTER) || 0;
-const only = env.PROBE_CASES ? env.PROBE_CASES.split(',').map(Number) : null;
+// Только некоторые заметки: PROBE_CASES=21,22 или «cases=21,22» в первой строке сообщения коммита — быстрый круг
+// по новому случаю, чтобы не тратить дневной лимит на весь набор.
+const fromMessage = /\bcases=([\d,]+)/.exec((env.PROBE_MESSAGE ?? '').split('\n')[0])?.[1];
+const only = env.PROBE_CASES || fromMessage ? (env.PROBE_CASES || fromMessage || '').split(',').map(Number) : null;
 // Сколько раз спросить про каждую заметку: модель не обязана отвечать одинаково, а нам нужен устойчивый результат.
 const repeats = Math.max(1, Number(env.PROBE_REPEAT) || 1);
 
@@ -330,6 +366,8 @@ function score(c: Case, a: NoteAnswer): CaseScore {
     if (w.sure !== undefined) check('уверенность', d.sure === w.sure, d.sure);
     if (w.plainTitle) check('название без выдумки', !d.check.includes('title'), d.title);
     if (w.titleHas) check('название', low(d.title).includes(low(w.titleHas)), d.title);
+    if (w.titleExact) check('название (регистр)', d.title.includes(w.titleExact), d.title);
+    if (w.inNote) check('в заметке дела', low(d.note).includes(low(w.inNote)), d.note);
   }
   for (const d of a.drafts) {
     if (c.noTime?.includes(d.time ?? '')) s.problems.push(`время сообщения стало сроком: «${d.title}» ${d.time}`);
