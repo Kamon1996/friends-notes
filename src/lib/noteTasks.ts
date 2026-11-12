@@ -247,15 +247,58 @@ function withoutPeriods(text: string, periods: Period[]): string {
 /** Названы ли в тексте оба дня периода: «16–23 августа», «с 16 по 23». */
 const hasPeriod = (text: string, p: Period) => [p.start, p.end].every((d) => new RegExp(`(?<!\\d)${Number(d.slice(8))}(?!\\d)`).test(text));
 
+/** Текст для сравнения, но с переносами строк: длина та же, что у `norm`, поэтому места периодов совпадают. */
+const normLines = (s: string) => s.toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, (w) => (w.includes('\n') ? '\n' : ' ')).trim();
+
+/** Часть фразы: от знака до знака или до «и» перед новым действием («…и взять отпуск»). */
+interface Clause {
+  text: string;
+  from: number;
+  to: number;
+}
+const CLAUSE_END = /[,.;!?\n]|\sи\s+(?=(?:(?:надо|нужно|еще|потом|также)\s+)?[а-я]+(?:ть|ться|ти|тись|чь|чься)(?![а-я]))/g;
+const MONTH_WORD = new RegExp(`^(?:${MONTH_STEMS.join('|')})[а-я]{0,2}$`);
+
+function clausesOf(text: string, periods: Period[]): Clause[] {
+  // Период прячем: в «с 16.08 по 23.08» точка — не конец фразы.
+  let q = normLines(text);
+  for (const p of periods) q = `${q.slice(0, p.at)}${'§'.repeat(p.len)}${q.slice(p.at + p.len)}`;
+  const out: Clause[] = [];
+  let from = 0;
+  for (const m of q.matchAll(CLAUSE_END)) {
+    const at = m.index ?? 0;
+    out.push({ text: q.slice(from, at), from, to: at });
+    from = at + m[0].length;
+  }
+  out.push({ text: q.slice(from), from, to: q.length });
+  return out;
+}
+
 /**
- * Дело — об этом периоде, если названо в той же части фразы: «купить билеты с 16 по 23 августа» — да, а в «гости
- * приезжают с 5 по 8 декабря, надо убраться» уборка не «с 5 по 8».
+ * Часть фразы, о которой дело, — та, где больше всего слов названия (глагол считаем, только если других слов нет:
+ * «купить» есть в каждой второй фразе). По ней решаем, про это ли дело период: «купить билеты с 16 по 23 августа» —
+ * да, а в «гости приезжают с 5 по 8 декабря, надо убраться» уборка не «с 5 по 8». Цитате здесь не верим: модель
+ * то берёт её шире, то переписывает.
  */
-function sameClause(text: string, p: Period, title: string): boolean {
-  const q = norm(text);
-  const clause = `${q.slice(0, p.at)} § ${q.slice(p.at + p.len)}`.split(/[,.;!?]|\sи\s/).find((c) => c.includes('§')) ?? '';
-  const stems = new Set(words(clause).filter((w) => w.length >= 4).map(stem));
-  return words(title).some((w) => w.length >= 4 && stems.has(stem(w)));
+function homeClause(clauses: Clause[], title: string): Clause | null {
+  const ws = words(title).filter((w) => w.length >= 4 && !/^\d+$/.test(w) && !MONTH_WORD.test(w));
+  const things = ws.filter((w) => !INFINITIVE.test(w));
+  const stems = new Set((things.length ? things : ws).map(stem));
+  let best: Clause | null = null;
+  let most = 0;
+  for (const c of clauses) {
+    const n = new Set(words(c.text).map(stem).filter((x) => stems.has(x))).size;
+    if (n > most) [best, most] = [c, n];
+  }
+  return best;
+}
+
+/** Период этой части фразы: назван в ней самой или ссылкой («в эти числа») — тогда ближайший названный раньше. */
+function clausePeriod(c: Clause, said: Period[]): Period | null {
+  const own = said.find((p) => p.at >= c.from && p.at < c.to);
+  if (own) return own;
+  if (!new RegExp(PERIOD_REF.source).test(c.text)) return null;
+  return [...said].reverse().find((p) => p.at <= c.from) ?? said[0] ?? null;
 }
 
 /**
@@ -270,13 +313,13 @@ function withPeriod(title: string, p: Period, kind: TaskKind): string {
   return ref.test(title) ? title.replace(ref, said) : `${title} ${said}`;
 }
 
-/** Заметка дела без периода, который уже стоит в названии: «самолёт, с 16 по 23 августа» — «самолёт». */
+/** Текст без этого периода: заметка дела, когда период уже в названии («самолёт, с 16 по 23 августа» — «самолёт»), или название, когда период не про это дело. */
 function dropPeriod(note: string, p: Period, today: ISODate): string {
   let out = note;
   for (const x of periodsIn(note, today)) {
     if (x.start !== p.start || x.end !== p.end) continue;
     const at = out.indexOf(x.phrase);
-    if (at >= 0) out = `${out.slice(0, at).replace(/(?<![а-яё])на\s+$/i, '')} ${out.slice(at + x.phrase.length)}`;
+    if (at >= 0) out = `${out.slice(0, at).replace(/(?<![а-яё])(?:на|к)\s+$/i, '')} ${out.slice(at + x.phrase.length)}`;
   }
   return out.replace(/\s*[,;](?:\s*[,;])+/g, ';').replace(/\s+([,;])/g, '$1').replace(/\s+/g, ' ').replace(/^[\s,;.:—–-]+|[\s,;:—–-]+$/g, '');
 }
@@ -432,6 +475,20 @@ function alreadyDone(title: string, quote: string): boolean {
   return past && !said.some((w) => w.startsWith(root) && INFINITIVE.test(w));
 }
 
+/**
+ * «Вечером кино в 19:30 — билеты уже купил»: сделана подготовка, а само событие впереди. Модель через раз помечает
+ * сделанным всё вместе. Если часть цитаты со словами названия — без прошедшего времени и отметок, а «сделано» стоит
+ * в другой части, дело остаётся.
+ */
+function preparedOnly(title: string, quote: string): boolean {
+  const parts = norm(quote).split(/[,;.()]|\s[—–-]\s/).map((p) => p.trim()).filter(Boolean);
+  if (parts.length < 2) return false;
+  const stems = new Set(words(title).filter((w) => w.length >= 4).map(stem));
+  const isDone = (p: string) => DONE_MARK.test(p) || words(p).some((w, i, all) => w.length >= 5 && PAST.test(w) && all[i - 1] !== 'не');
+  const mine = parts.filter((p) => words(p).some((w) => stems.has(stem(w))));
+  return mine.length > 0 && !mine.some(isDone) && parts.some((p) => !mine.includes(p) && isDone(p));
+}
+
 /** Родные в тексте — тоже люди дела, даже если модель их не назвала: «позвонить бабушке» — Бабушка. */
 const KIN: [RegExp, string][] = [
   [/(?<![а-я])мам(?:а|е|у|ы|ой|очка|очке|очку)(?![а-я])/, 'Мама'],
@@ -512,6 +569,8 @@ export function parseNoteAnswer(answer: string, input: NoteInput): NoteAnswer | 
   const drafts: NoteDraft[] = [];
   const skipped: NoteSkipped[] = [];
   const seen = new Set<string>();
+  const said = periodsIn(source, today);
+  const clauses = clausesOf(source, said);
 
   for (const item of list as Record<string, unknown>[]) {
     if (drafts.length >= NOTE_MAX_ITEMS) break;
@@ -537,7 +596,8 @@ export function parseNoteAnswer(answer: string, input: NoteInput): NoteAnswer | 
     const quote = quoteOk ? rawQuote : '';
     // Сделанное и чужое модель выписывает с пометкой — дел из них не делаем. «Надо» в цитате сильнее пометки «сделано».
     const needed = NEED.test(norm(quote)) && !NO_NEED.test(norm(quote));
-    if (type === 'task' && (item.state === 'other' || ((item.state === 'done' || alreadyDone(title, quote)) && !needed))) {
+    const done = (item.state === 'done' && !preparedOnly(title, quote)) || alreadyDone(title, quote);
+    if (type === 'task' && (item.state === 'other' || (done && !needed))) {
       if (quote) skipped.push({ quote, why: item.state === 'other' ? 'other' : 'done' });
       continue;
     }
@@ -556,12 +616,23 @@ export function parseNoteAnswer(answer: string, input: NoteInput): NoteAnswer | 
     // Период в цитате («с 16 по 23 августа») или ссылка на него («в эти числа») — время поездки, а не срок дела.
     const own = periodsIn(hintText, today);
     const refers = new RegExp(PERIOD_REF.source).test(norm(hintText));
-    const said = periodsIn(source, today);
     const at = quote ? sourceNorm.indexOf(quoteKey(quote)) : -1;
     const period: Period | null = own[0] ?? (refers ? ([...said].reverse().find((p) => at < 0 || p.at <= at) ?? said[0] ?? null) : null);
     // Дело об этом периоде — период стоит в названии: модель его не вписала (или оставила «в эти числа») — впишем сами.
-    const about = type === 'task' && !!period && (refers || sameClause(hintText, period, title));
-    if (about && period) title = withPeriod(title, period, kind).slice(0, TITLE_MAX);
+    // Про это ли дело период, решаем по заметке: в какой части фразы стоят слова названия. Модель вписала в название
+    // период из соседней части («Убраться с 5 по 8 декабря» — это гости приезжают) — убираем: он уйдёт в заметку дела.
+    const home = type === 'task' ? homeClause(clauses, title) : null;
+    const mine = type !== 'task' ? null : home ? clausePeriod(home, said) : refers ? period : null;
+    let foreign: Period | null = null;
+    if (mine) title = withPeriod(title, mine, kind).slice(0, TITLE_MAX);
+    else if (type === 'task') {
+      for (const p of periodsIn(title, today)) {
+        const bare = dropPeriod(title, p, today);
+        if (!bare) continue;
+        foreign = p;
+        title = bare;
+      }
+    }
     if (title && (inventedWords(title, sourceStems).length || VAGUE_TITLE.test(norm(title)))) check.push('title');
     // Срок: сначала читаем сами — мимо периода. У повтора по дням недели ближайший раз называем сами; у остальных
     // читаем из слов («каждый месяц 5-го»). Не вышло — берём у модели и просим человека проверить.
@@ -592,10 +663,9 @@ export function parseNoteAnswer(answer: string, input: NoteInput): NoteAnswer | 
     let note = rawNote && grounded(rawNote, sourceStems, 0.6) ? rawNote : '';
     // Период уже в названии — в заметке дела его не повторяем. Период из соседней части фразы («гости приезжают
     // с 5 по 8 декабря, надо убраться») — не про само дело: в название не идёт, но и не теряется — остаётся в заметке.
-    if (type === 'task' && period) {
-      if (about) note = dropPeriod(note, period, today);
-      else if (!hasPeriod(note, period)) note = (note ? `${note}; ${period.phrase}` : period.phrase).slice(0, NOTE_FIELD_MAX);
-    }
+    if (mine) note = dropPeriod(note, mine, today);
+    const aside = mine || type !== 'task' ? null : (foreign ?? period);
+    if (aside && !hasPeriod(note, aside)) note = (note ? `${note}; ${aside.phrase}` : aside.phrase).slice(0, NOTE_FIELD_MAX);
     const key = `${type}|${titleKey(title)}|${norm(person)}|${date ?? ''}`;
     if (seen.has(key)) continue;
     seen.add(key);

@@ -487,12 +487,13 @@ async function solve(provider: ProviderId, model: string, c: Case) {
       if (!r.answer) {
         fails++;
         console.log(`  ✗ ${c.name}: ${r.error}${r.raw ? ` · RAW ${r.raw.replace(/\n/g, ' ').slice(0, 300)}` : ''}`);
-        // Дневной лимит модели кончился: ждать по минуте на каждую оставшуюся заметку незачем.
-        limited = (r.error ?? '').startsWith('rate-limit') ? limited + 1 : 0;
+        // Три сбоя подряд — дневной лимит кончился или модель перегружена: ждать по минуте-две на каждую оставшуюся
+        // заметку незачем, иначе проба не успевает дойти до остальных моделей.
+        limited++;
         if (limited >= 3) {
           const left = cases.length - cases.indexOf(c) - 1;
           fails += left;
-          console.log(`  … лимит запросов исчерпан, пропущено заметок: ${left}`);
+          console.log(`  … ${(r.error ?? '').startsWith('rate-limit') ? 'лимит запросов исчерпан' : 'модель не отвечает'}, пропущено заметок: ${left}`);
           break;
         }
       } else {
