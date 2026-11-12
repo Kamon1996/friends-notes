@@ -7,8 +7,9 @@ name: AI probe
 # «Дела из заметки» (scripts/ai-bench/tasks.ts) — отдельным заданием: коммит со словом «[probe-tasks]» или вручную.
 # Там одна заметка — один вопрос, запросов больше, поэтому остальные пробы при этом не запускаются.
 # «[probe-tasks]» спрашивает только лёгкие модели Gemini: круг занимает несколько минут, промпт можно править и
-# пробовать много раз в день. «[probe-tasks-all]» — все модели Gemini и три модели OpenRouter: старшие модели Gemini
-# на бесплатном тарифе часто «перегружены», а у OpenRouter 50 бесплатных запросов в день — это одна проба.
+# пробовать много раз в день. «[probe-tasks-all]» — все модели Gemini и одна модель OpenRouter: старшие модели Gemini
+# на бесплатном тарифе часто «перегружены», а у OpenRouter 50 бесплатных запросов в день на все модели — заметок 24,
+# бывают вторые вопросы, и что-то должно остаться приложению.
 # Ключи — те же секреты, что для сборки: GEMINI_API_KEY, OPENROUTER_API_KEY.
 on:
   workflow_dispatch:
@@ -63,7 +64,7 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          PROBE_OPENROUTER: ${{ contains(github.event.head_commit.message, '[probe-tasks-all]') && '3' || '0' }}
+          PROBE_OPENROUTER: ${{ contains(github.event.head_commit.message, '[probe-tasks-all]') && '1' || '0' }}
           PROBE_GEMINI: ${{ contains(github.event.head_commit.message, '[probe-tasks-all]') && 'all' || 'lite' }}
           # Лёгкие модели спрашиваем дважды: результат должен быть устойчивым, а не удачным.
           PROBE_REPEAT: ${{ contains(github.event.head_commit.message, '[probe-tasks-all]') && '1' || '2' }}
