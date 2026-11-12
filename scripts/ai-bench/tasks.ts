@@ -39,8 +39,8 @@ interface Want {
   titleHas?: string;
   /** То же, но с учётом регистра: «минск ереван» в названии — «Минск», «Ереван». */
   titleExact?: string;
-  /** Что должно быть именно в заметке дела (а не только в цитате): период поездки, детали. */
-  inNote?: string;
+  /** Чего в названии быть не должно: период из соседней фразы — не про это дело. */
+  titleNot?: string;
   /** Находка допустима, но не обязательна: нет — не ошибка, есть — не лишнее. */
   optional?: boolean;
 }
@@ -276,12 +276,12 @@ const CASES: Case[] = [
     no: ['масл'],
   },
   {
-    // Настоящая заметка: период поездки — не срок ни для билетов, ни для отпуска.
+    // Настоящая заметка: период поездки — не срок ни для билетов, ни для отпуска, но стоит в названии обоих дел.
     name: 'поездка: период — не срок',
     text: 'Нужно купить билеты с 16 по 23 августа самолет минск ереван и взять отпуск на работе в эти числа',
     want: [
-      { keys: ['билет'], date: null, inNote: '23', titleExact: 'Ереван' },
-      { keys: ['отпуск'], date: null, inNote: '16' },
+      { keys: ['билет'], date: null, titleHas: '23', titleExact: 'Ереван' },
+      { keys: ['отпуск'], date: null, titleHas: '16' },
     ],
   },
   {
@@ -299,8 +299,8 @@ const CASES: Case[] = [
     text: 'Гости приезжают с 5 по 8 декабря, надо убраться и купить продукты. Концерт 12 декабря в 19:00',
     want: [
       { keys: ['гост'], optional: true },
-      { keys: ['убрат', 'уборк'], date: null },
-      { keys: ['продукт', 'купить'], date: null },
+      { keys: ['убрат', 'уборк'], date: null, titleNot: 'по 8' },
+      { keys: ['продукт', 'купить'], date: null, titleNot: 'по 8' },
       { keys: ['концерт'], date: '2026-12-12', time: '19:00' },
     ],
   },
@@ -367,7 +367,7 @@ function score(c: Case, a: NoteAnswer): CaseScore {
     if (w.plainTitle) check('название без выдумки', !d.check.includes('title'), d.title);
     if (w.titleHas) check('название', low(d.title).includes(low(w.titleHas)), d.title);
     if (w.titleExact) check('название (регистр)', d.title.includes(w.titleExact), d.title);
-    if (w.inNote) check('в заметке дела', low(d.note).includes(low(w.inNote)), d.note);
+    if (w.titleNot) check('название без лишнего', !low(d.title).includes(low(w.titleNot)), d.title);
   }
   for (const d of a.drafts) {
     if (c.noTime?.includes(d.time ?? '')) s.problems.push(`время сообщения стало сроком: «${d.title}» ${d.time}`);

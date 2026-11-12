@@ -145,7 +145,7 @@ export function NoteRow({
       accessibilityActions={item.state === 'todo' ? [{ name: 'add', label: 'Добавить' }, { name: 'skip', label: 'Убрать' }] : [{ name: 'skip', label: 'Убрать' }]}
       onAccessibilityAction={(e) => (e.nativeEvent.actionName === 'add' ? onAdd() : onSkip())}
       title={
-        <Text style={s.title} numberOfLines={1}>
+        <Text style={s.title} numberOfLines={2}>
           {title}
         </Text>
       }
