@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { FlatList, Modal, Text, View } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { NETWORKS, NETWORK_GROUPS, searchNetworks, type Network } from '@/lib/socials';
@@ -30,7 +31,8 @@ export function NetworkPicker({ visible, onClose, onSelect }: { visible: boolean
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <View style={[s.screen, { paddingTop: insets.top }]}>
+      {/* Список кончается над клавиатурой: пока ищешь, до последних строк можно долистать. */}
+      <KeyboardAvoidingView behavior="padding" automaticOffset keyboardVerticalOffset={-insets.bottom} style={[s.screen, { paddingTop: insets.top }]}>
         <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 6 }}>
           <IconButton icon="close" label="Закрыть" onPress={onClose} />
           <Text style={{ flex: 1, textAlign: 'center', fontFamily: fonts.display, fontSize: 18, color: colors.text }}>Какая сеть?</Text>
@@ -64,7 +66,7 @@ export function NetworkPicker({ visible, onClose, onSelect }: { visible: boolean
             )
           }
         />
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

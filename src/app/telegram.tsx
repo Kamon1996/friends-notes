@@ -1,11 +1,12 @@
 import { Stack, router } from 'expo-router';
 import { useState, type ReactNode } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
 
 import { QrCode } from '@/components/QrCode';
 import { Icon, type IconName } from '@/components/Icon';
+import { KeyboardScreen } from '@/components/KeyboardScreen';
 import { Stepper, TG_STEPS } from '@/components/Stepper';
 import { Sheet, SheetHandle } from '@/components/Sheet';
 import { Button, Card, Field, IconCircle, useTheme } from '@/components/ui';
@@ -384,18 +385,21 @@ export default function TelegramImportScreen() {
   }
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <>
       <Stack.Screen options={{ title: 'Импорт из Telegram' }} />
       <View style={s.screen}>
         <View style={{ paddingHorizontal: 20, paddingTop: 10, paddingBottom: 6 }}>
           <Stepper steps={TG_STEPS} active={step} />
         </View>
-        <ScrollView contentContainerStyle={[s.content, { paddingTop: 8 }]} keyboardShouldPersistTaps="handled">
+        {/* Номер, код и пароль видны над клавиатурой, а кнопка снизу — прямо над ней. */}
+        <KeyboardScreen
+          contentContainerStyle={[s.content, { paddingTop: 8 }]}
+          footer={<View style={{ padding: 16, paddingBottom: 16 + insets.bottom, borderTopWidth: 1, borderTopColor: colors.hairline, backgroundColor: colors.bg }}>{bottom}</View>}
+        >
           {step === 2 ? loadStep : started ? loginStep : introStep}
-        </ScrollView>
-        <View style={{ padding: 16, paddingBottom: 16 + insets.bottom, borderTopWidth: 1, borderTopColor: colors.hairline, backgroundColor: colors.bg }}>{bottom}</View>
+        </KeyboardScreen>
       </View>
       <AccessSheet visible={access} onClose={() => setAccess(false)} />
-    </KeyboardAvoidingView>
+    </>
   );
 }

@@ -1,9 +1,11 @@
 import { Stack } from 'expo-router';
-import { useRef, type ComponentRef, type ReactNode } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
+import { useRef, type ReactNode } from 'react';
+import { Pressable, Switch, Text, TextInput, View } from 'react-native';
+import type { KeyboardAwareScrollViewRef } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { FriendPickerModal } from '@/components/FriendPicker';
+import { KeyboardScreen } from '@/components/KeyboardScreen';
 import { PRIORITY_ICON } from '@/components/ReminderRow';
 import { ChipStrip, FormCard, SmallChip } from '@/components/form/parts';
 import { Button, GrowingInput, useTheme } from '@/components/ui';
@@ -11,28 +13,37 @@ import { formatRepeat } from '@/lib/dates';
 import { DURATIONS, formatMinutes } from '@/lib/reminderList';
 import { PRIORITIES, UNITS, WEEK_DAYS, type ReminderFormModel } from './useReminderForm';
 
-/** Общее у обоих видов формы: шапка, название с шаблонами, «Удалить», «Сохранить» внизу и окно поиска друга. */
+/**
+ * Общее у обоих видов формы: шапка, название с шаблонами, «Удалить», «Сохранить» внизу и окно поиска друга.
+ * Пока печатаешь, «Сохранить» стоит над клавиатурой, а поле — над кнопкой.
+ */
 export function FormScaffold({ form, children, onPickFriend }: { form: ReminderFormModel; children: ReactNode; onPickFriend?: (id: string | null) => void }) {
   const { s, colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
+  const scrollRef = useRef<KeyboardAwareScrollViewRef>(null);
   const save = () => {
     // Названия нет — показываем подсказку у поля, а оно наверху.
     if (!form.save()) scrollRef.current?.scrollTo({ y: 0, animated: true });
   };
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <>
       <Stack.Screen options={{ title: form.existing ? 'Напоминание' : 'Новое напоминание' }} />
-      <ScrollView ref={scrollRef} style={s.screen} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 24 }} keyboardShouldPersistTaps="handled">
+      <KeyboardScreen
+        ref={scrollRef}
+        style={s.screen}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 24 }}
+        footer={
+          <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 12 + insets.bottom, backgroundColor: colors.bg }}>
+            <Button title="Сохранить" onPress={save} />
+          </View>
+        }
+      >
         <TitleCard form={form} />
         {children}
         {form.existing && <Button title="Удалить" variant="danger" onPress={form.remove} style={{ marginTop: 12 }} />}
-      </ScrollView>
-      <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 12 + insets.bottom, backgroundColor: colors.bg }}>
-        <Button title="Сохранить" onPress={save} />
-      </View>
+      </KeyboardScreen>
       <FriendPickerModal open={form.searching} friends={form.friends} value={form.r.friendId} onPick={onPickFriend ?? form.pickFriend} onClose={() => form.setSearching(false)} />
-    </KeyboardAvoidingView>
+    </>
   );
 }
 

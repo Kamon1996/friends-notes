@@ -189,7 +189,7 @@ export function ItemSheet({
         <View style={{ paddingHorizontal: 20, paddingBottom: 6 }}>
           <SheetHead title={task ? 'Запись из заметки' : d.type === 'birthday' ? 'День рождения' : 'Важная дата'} onClose={onClose} />
         </View>
-        <ScrollView style={{ maxHeight: height * 0.62 }} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 6, gap: 10 }} keyboardShouldPersistTaps="handled">
+        <ScrollView style={{ maxHeight: height * 0.62, flexShrink: 1 }} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 6, gap: 10 }} keyboardShouldPersistTaps="handled">
           {!!d.quote && <Quote text={d.quote} />}
           {d.type !== 'birthday' && (
             <FormCard style={missing.includes('title') ? { borderColor: colors.danger, borderWidth: 1.5 } : undefined}>

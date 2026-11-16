@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Animated, Easing, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, useWindowDimensions, type StyleProp, type ViewStyle } from 'react-native';
+import { Animated, Easing, Modal, Platform, Pressable, StyleSheet, useWindowDimensions, type StyleProp, type ViewStyle } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useTheme } from './ui';
 
@@ -43,6 +45,7 @@ export function Sheet({
   swipeToClose?: boolean;
 }) {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const { height: screen } = useWindowDimensions();
   const [mounted, setMounted] = useState(visible);
   const [ready, setReady] = useState(false);
@@ -110,7 +113,12 @@ export function Sheet({
       }}
     >
       <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: `rgba(0,0,0,${dim})`, opacity: dimOpacity }]} />
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      {/*
+        Клавиатура поднимает шторку целиком: поле и кнопки под ним остаются над ней. Нижний отступ шторки под
+        системную полоску над клавиатурой не нужен — его закрывает клавиатура. Не влезает по высоте — шторка
+        ужимается, а прокрутка внутри сама держит на виду поле, в котором печатаешь.
+      */}
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" automaticOffset keyboardVerticalOffset={-insets.bottom}>
         <Pressable style={{ flex: 1 }} onPress={onClose} accessibilityLabel={closeLabel} />
         <Animated.View
           // Запоминаем начало касания, но само касание не забираем: кнопки и поля внутри работают как обычно.
@@ -153,7 +161,7 @@ export function Sheet({
             gate.current.measured = true;
             arm();
           }}
-          style={[{ backgroundColor: colors.card, borderTopLeftRadius: 24, borderTopRightRadius: 24 }, style, { transform: [{ translateY }] }]}
+          style={[{ backgroundColor: colors.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, flexShrink: 1 }, style, { transform: [{ translateY }] }]}
         >
           {children}
         </Animated.View>

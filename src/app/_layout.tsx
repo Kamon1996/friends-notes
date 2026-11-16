@@ -12,6 +12,7 @@ import { handleNotificationResponse, setupNotifications } from '@/lib/notificati
 import { StoreProvider, useStore } from '@/lib/store';
 import { TelegramSessionProvider } from '@/lib/telegramSession';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 
 import { warmContacts } from '@/lib/contactsCache';
 
@@ -119,13 +120,16 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <StoreProvider>
-        <ThemeProvider>
-          <TelegramSessionProvider>
-            <AppShell />
-          </TelegramSessionProvider>
-        </ThemeProvider>
-      </StoreProvider>
+      {/* Клавиатура: поля, в которых печатаешь, и кнопки под ними поднимаются над ней (KeyboardScreen, Sheet). */}
+      <KeyboardProvider>
+        <StoreProvider>
+          <ThemeProvider>
+            <TelegramSessionProvider>
+              <AppShell />
+            </TelegramSessionProvider>
+          </ThemeProvider>
+        </StoreProvider>
+      </KeyboardProvider>
     </GestureHandlerRootView>
   );
 }

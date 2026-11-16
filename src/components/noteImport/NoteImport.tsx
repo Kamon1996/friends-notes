@@ -1,10 +1,11 @@
 import * as Clipboard from 'expo-clipboard';
 import { Stack, router, usePreventRemove } from 'expo-router';
 import { useMemo, useRef, useState, type ComponentRef, type ReactNode } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon, type IconName } from '@/components/Icon';
+import { KeyboardScreen } from '@/components/KeyboardScreen';
 import { FormCard, FormSection, SmallChip } from '@/components/form/parts';
 import { Button, GrowingInput, Group, useTheme } from '@/components/ui';
 import { ai, hasAiKeys } from '@/lib/ai';
@@ -173,11 +174,30 @@ export function NoteImport({ tabs }: { tabs: ReactNode }) {
         <Text style={[s.muted, { flex: 1 }]}>{label}</Text>
       </View>
     );
+    // Кнопка снизу: пока печатаешь, стоит над клавиатурой.
+    const footer = (
+      <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 12 + insets.bottom, backgroundColor: colors.bg }}>
+        {loading ? (
+          <Pressable
+            onPress={cancel}
+            accessibilityRole="button"
+            accessibilityLabel="Читаю заметку. Отменить"
+            style={[s.button, { backgroundColor: colors.chip, flexDirection: 'row', gap: 10 }]}
+          >
+            <ActivityIndicator size="small" color={colors.accent} />
+            <Text style={[s.buttonText, { color: colors.text }]}>Читаю заметку…</Text>
+            <Text style={[s.buttonText, { color: colors.text2, fontFamily: fonts.medium }]}>Отмена</Text>
+          </Pressable>
+        ) : (
+          <Button title="Разобрать" icon="stars" onPress={parse} disabled={!text.trim() || !hasAiKeys} />
+        )}
+      </View>
+    );
     return (
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <>
         {/* Заголовок экрана — общий с формой дела: после возврата из списка он снова «Новое напоминание». */}
         <Stack.Screen options={{ title: 'Новое напоминание' }} />
-        <ScrollView style={s.screen} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 24 }} keyboardShouldPersistTaps="handled">
+        <KeyboardScreen style={s.screen} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 24 }} footer={footer}>
           {tabs}
           <FormCard style={{ marginTop: 14 }}>
             <GrowingInput
@@ -225,24 +245,8 @@ export function NoteImport({ tabs }: { tabs: ReactNode }) {
               ? 'Текст уйдёт на разбор в облачный сервис — только когда нажмёшь «Разобрать». Не вставляй пароли и номера карт.'
               : 'В этой сборке разбор заметок недоступен.'}
           </Text>
-        </ScrollView>
-        <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 12 + insets.bottom, backgroundColor: colors.bg }}>
-          {loading ? (
-            <Pressable
-              onPress={cancel}
-              accessibilityRole="button"
-              accessibilityLabel="Читаю заметку. Отменить"
-              style={[s.button, { backgroundColor: colors.chip, flexDirection: 'row', gap: 10 }]}
-            >
-              <ActivityIndicator size="small" color={colors.accent} />
-              <Text style={[s.buttonText, { color: colors.text }]}>Читаю заметку…</Text>
-              <Text style={[s.buttonText, { color: colors.text2, fontFamily: fonts.medium }]}>Отмена</Text>
-            </Pressable>
-          ) : (
-            <Button title="Разобрать" icon="stars" onPress={parse} disabled={!text.trim() || !hasAiKeys} />
-          )}
-        </View>
-      </KeyboardAvoidingView>
+        </KeyboardScreen>
+      </>
     );
   }
 

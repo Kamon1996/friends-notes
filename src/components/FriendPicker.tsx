@@ -1,5 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { FlatList, Modal, Pressable, ScrollView, Text, View } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { formatDate, hasYear } from '@/lib/dates';
@@ -31,7 +32,8 @@ export function FriendPickerModal({ open, friends, value, onPick, onClose }: { o
 
   return (
       <Modal visible={open} animationType="slide" onRequestClose={close}>
-      <View style={[s.screen, { paddingTop: insets.top }]}>
+      {/* Список кончается над клавиатурой: пока ищешь, до последних строк можно долистать. */}
+      <KeyboardAvoidingView behavior="padding" automaticOffset keyboardVerticalOffset={-insets.bottom} style={[s.screen, { paddingTop: insets.top }]}>
         <View style={{ flexDirection: 'row', alignItems: 'center', paddingLeft: 20, paddingRight: 8, paddingVertical: 6, gap: 8 }}>
           <Text style={[s.h2, { flex: 1 }]}>Для кого</Text>
           <IconButton icon="close" label="Закрыть" onPress={close} />
@@ -73,7 +75,7 @@ export function FriendPickerModal({ open, friends, value, onPick, onClose }: { o
           )}
           ListEmptyComponent={<Text style={[s.muted, { textAlign: 'center', paddingTop: 24 }]}>Никого не нашлось</Text>}
         />
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

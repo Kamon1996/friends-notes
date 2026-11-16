@@ -1,9 +1,11 @@
 import { Stack, router, useLocalSearchParams } from 'expo-router';
-import { useRef, useState, type ComponentRef } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { useRef, useState } from 'react';
+import { Platform, Pressable, Text, View } from 'react-native';
+import type { KeyboardAwareScrollViewRef } from 'react-native-keyboard-controller';
 
 import { AvatarPicker } from '@/components/AvatarPicker';
 import { BirthdayField } from '@/components/BirthdayField';
+import { KeyboardScreen } from '@/components/KeyboardScreen';
 import { NetworkBadge } from '@/components/NetworkBadge';
 import { SocialLinkSheet } from '@/components/SocialLinkSheet';
 import { Button, Card, Chip, Field, GrowingInput, IconButton, Label, ListRow, SectionTitle, SwitchRow, useTheme } from '@/components/ui';
@@ -61,7 +63,7 @@ function FriendForm() {
   // Поля дат, где набранное нельзя сохранить, и где они на экране — чтобы не сохранить молча другую дату и показать, что поправить.
   const [invalid, setInvalid] = useState<Record<string, boolean>>({});
   const [attempted, setAttempted] = useState(false);
-  const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
+  const scrollRef = useRef<KeyboardAwareScrollViewRef>(null);
   // Экран уже закрывается: второе нажатие «Сохранить» не должно уйти назад ещё на экран.
   const leaving = useRef(false);
   const positions = useRef<Record<string, number>>({});
@@ -106,7 +108,7 @@ function FriendForm() {
   };
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <>
       <Stack.Screen
         options={{
           title: existing ? 'Редактировать' : 'Новый друг',
@@ -117,7 +119,8 @@ function FriendForm() {
           ),
         }}
       />
-      <ScrollView ref={scrollRef} style={s.screen} contentContainerStyle={[s.content, { gap: 0 }]} keyboardShouldPersistTaps="handled">
+      {/* «Сохранить» — в шапке, её клавиатура не закрывает; поле, в котором печатаешь, поднимается над клавиатурой. */}
+      <KeyboardScreen ref={scrollRef} style={s.screen} contentContainerStyle={[s.content, { gap: 0 }]}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 14 }}>
           <AvatarPicker
             friend={{ id: f.id, name: f.name || '?', phone: f.phone, photoUri: f.photoUri, thumbUri: f.thumbUri }}
@@ -236,8 +239,8 @@ function FriendForm() {
 
         <Button title="Сохранить" onPress={save} style={{ marginTop: 24 }} />
         {existing && <Button title="Удалить друга" variant="danger" onPress={remove} style={{ marginTop: 8 }} />}
-      </ScrollView>
-    </KeyboardAvoidingView>
+      </KeyboardScreen>
+    </>
   );
 }
 
